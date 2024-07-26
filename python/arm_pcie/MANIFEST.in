@@ -1,0 +1,2 @@
+include sophon/*.so
+include sophon/*.pyi

@@ -1,0 +1,2 @@
+include sophon/*.pyd
+include sophon/*.pyi

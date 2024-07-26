@@ -1,0 +1,664 @@
+Python SAIL的编译与安装
+_______________________
+
+.. |ver| replace:: 3.8.0
+
+编译可被Python3接口调用的Wheel文件
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+*注意: BM1688和CV186AH处理器仅支持SOC MODE章节,BM1684和BM1684X处理器无此限制。对于BM1688或者CV186AH处理器,下列命令中的sophon-mw应改为sophon-media。*
+
+
+PCIE MODE
+:::::::::::
+
+**.安装libsophon,sophon-ffmpeg,sophon-opencv的SAIL**
+
+libsophon,sophon-ffmpeg,sophon-opencv的安装方式可参考算能官方文档
+
+**.编译包含多媒体模块的SAIL**
+
+使用默认安装路径,编译包含bmcv,sophon-ffmpeg,sophon-opencv的SAIL
+
+1. 下载SOPHON-SAIL源码,解压后进入其源码目录
+
+2. 创建编译文件夹build,并进入build文件夹
+
+    .. parsed-literal::
+        mkdir build && cd build                   
+
+3. 执行编译命令
+
+    .. parsed-literal::
+        cmake ..                                   
+        make pysail                                                                  
+
+4. 打包生成python wheel,生成的wheel包的路径为‘python/pcie/dist’,文件名为‘sophon-|ver|-py3-none-any.whl’
+
+    .. parsed-literal::
+        cd ../python/pcie 
+        chmod +x sophon_pcie_whl.sh
+        ./sophon_pcie_whl.sh  
+
+5. 安装python wheel  
+
+    .. parsed-literal::
+        pip3 install ./dist/sophon-|ver|-py3-none-any.whl --force-reinstall 
+
+**.编译不包含多媒体模块的SAIL**
+
+编译不包含bmcv,sophon-ffmpeg,sophon-opencv的SAIL,
+
+*通过此方式编译出来的SAIL无法使用其Decoder、Encoder、Bmcv等多媒体相关接口。适用于只需要大语言模型推理能力、不需要处理图片或视频的场景。*
+
+1. 下载SOPHON-SAIL源码,解压后进入其源码目录
+
+2. 创建编译文件夹build,并进入build文件夹
+
+    .. parsed-literal::
+        mkdir build && cd build                   
+
+3. 执行编译命令
+
+    .. parsed-literal::
+        cmake -DONLY_RUNTIME=ON ..                                   
+        make pysail                                     
+
+4. 打包生成python wheel,生成的wheel包的路径为‘python/pcie/dist’,文件名为‘sophon-|ver|-py3-none-any.whl’
+
+    .. parsed-literal::
+        cd ../python/pcie
+        chmod +x sophon_pcie_whl.sh
+        ./sophon_pcie_whl.sh  
+
+5. 安装python wheel  
+
+    .. parsed-literal::
+        pip3 install ./dist/sophon-|ver|-py3-none-any.whl --force-reinstall 
+
+
+**.编译指定Python版本的SAIL**
+
+如果生产环境与开发环境上的python3版本不一致,可以通过升级python3版本使其保持一致,
+也可以通过python3的官方网站获取获取相应的python3包,
+或者根据[:ref:`获取在X86主机上进行交叉编译的Python3`]获取已经编译好的python3。
+也就是使用非系统默认的python3,编译包含bmcv,sophon-ffmpeg,sophon-opencv的SAIL,并打包到‘build_pcie’目录下,
+本示例使用的python3路径为‘python_3.8.2/bin/python3’,python3的动态库目录‘python_3.8.2/lib’。
+
+1. 下载SOPHON-SAIL源码,解压后进入其源码目录
+
+2. 创建编译文件夹build,并进入build文件夹
+
+    .. parsed-literal::
+        mkdir build && cd build                   
+
+3. 执行编译命令
+
+    .. parsed-literal::
+        cmake -DPYTHON_EXECUTABLE=python_3.8.2/bin/python3 -DCUSTOM_PY_LIBDIR=python_3.8.2/lib ..                               
+        make pysail                                      
+
+4. 打包生成python wheel,生成的wheel包的路径为‘python/pcie/dist’,文件名为‘sophon-|ver|-py3-none-any.whl’
+
+    .. parsed-literal::
+        cd ../python/pcie 
+        chmod +x sophon_pcie_whl.sh
+        ./sophon_pcie_whl.sh  
+
+5. 安装python wheel  
+
+将‘sophon-|ver|-py3-none-any.whl’拷贝到目标机器上,然后执行如下安装命令
+
+    .. parsed-literal::
+        pip3 install ./dist/sophon-|ver|-py3-none-any.whl --force-reinstall 
+
+SOC MODE
+:::::::::::::::
+
+**.获取交叉编译需要使用的libsophon,sophon-ffmpeg,sophon-opencv**
+
+*此章节所有的编译操作都是在x86主机上,使用交叉编译的方式进行编译。下面示例中选择libsophon的版本为0.4.1, sophon-ffmpeg的版本为0.4.1,sophon-opencv的版本为0.4.1。*
+
+1. 从算能官网中获取‘libsophon_soc_0.4.1_aarch64.tar.gz’,并解压
+
+    .. parsed-literal::
+        tar -xvf libsophon_soc_0.4.1_aarch64.tar.gz
+
+解压后libsophon的目录为‘libsophon_soc_0.4.1_aarch64/opt/sophon/libsophon-0.4.1’
+
+2. 从算能官网中获取‘sophon-mw-soc_0.4.1_aarch64.tar.gz’,并解压
+
+    .. parsed-literal::
+        tar -xvf sophon-mw-soc_0.4.1_aarch64.tar.gz
+
+解压后sophon-ffmpeg的目录为‘sophon-mw-soc_0.4.1_aarch64/opt/sophon/sophon-ffmpeg_0.4.1’。
+
+解压后sophon-opencv的目录为‘sophon-mw-soc_0.4.1_aarch64/opt/sophon/sophon-opencv_0.4.1’。
+
+
+**.安装g++-aarch64-linux-gnu工具链**
+
+*如果已经安装,可忽略此步骤*
+
+    .. parsed-literal::
+        sudo apt-get install gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+
+**.编译包含多媒体模块的SAIL**
+
+使用指定版本的python3(和目标SOC上的python3保持一致),通过交叉编译的方式,编译出包含bmcv,sophon-ffmpeg,sophon-opencv的SAIL,
+python3的安装方式可通过python官方网站获取,
+也可以根据[:ref:`获取在X86主机上进行交叉编译的Python3`]获取已经编译好的python3。
+本示例使用的python3路径为‘python_3.8.2/bin/python3’,python3的动态库目录‘python_3.8.2/lib’。
+
+1. 下载SOPHON-SAIL源码,解压后进入其源码目录
+
+2. 创建编译文件夹build,并进入build文件夹
+
+    .. parsed-literal::
+        mkdir build && cd build 
+
+3. 执行编译命令
+
+    .. code-block:: bash
+
+        cmake -DBUILD_TYPE=soc  \
+            -DCMAKE_TOOLCHAIN_FILE=../cmake/BM168x_SOC/ToolChain_aarch64_linux.cmake \
+            -DPYTHON_EXECUTABLE=python_3.8.2/bin/python3 \
+            -DCUSTOM_PY_LIBDIR=python_3.8.2/lib \
+            -DLIBSOPHON_BASIC_PATH=libsophon_soc_0.4.1_aarch64/opt/sophon/libsophon-0.4.1 \
+            -DFFMPEG_BASIC_PATH=sophon-mw-soc_0.4.1_aarch64/opt/sophon/sophon-ffmpeg_0.4.1 \
+            -DOPENCV_BASIC_PATH=sophon-mw-soc_0.4.1_aarch64/opt/sophon/sophon-opencv_0.4.1 ..                                   
+        make pysail                                     
+
+4. 打包生成python wheel,生成的wheel包的路径为‘python/soc/dist’,文件名为‘sophon_arm-|ver|-py3-none-any.whl’
+
+    .. parsed-literal::
+        cd ../python/soc 
+        chmod +x sophon_soc_whl.sh
+        ./sophon_soc_whl.sh  
+
+5. 安装python wheel  
+
+将‘sophon_arm-|ver|-py3-none-any.whl’拷贝到目标SOC上,然后执行如下安装命令
+
+    .. parsed-literal::
+        pip3 install sophon_arm-|ver|-py3-none-any.whl --force-reinstall 
+
+**.编译不包含多媒体模块的SAIL**
+
+使用指定版本的python3(和目标SOC上的python3保持一致),通过交叉编译的方式,编译出不包含bmcv,sophon-ffmpeg,sophon-opencv的SAIL,
+python3的安装方式可通过python官方网站获取,
+也可以根据[:ref:`获取在X86主机上进行交叉编译的Python3`]获取已经编译好的python3。
+本示例使用的python3路径为‘python_3.8.2/bin/python3’,python3的动态库目录‘python_3.8.2/lib’。
+
+*通过此方式编译出来的SAIL无法使用其Decoder、Encoder、Bmcv等多媒体相关接口。适用于只需要大语言模型推理能力、不需要处理图片或视频的场景。*
+
+1. 下载SOPHON-SAIL源码,解压后进入其源码目录
+
+2. 创建编译文件夹build,并进入build文件夹
+
+    .. parsed-literal::
+        mkdir build && cd build 
+
+3. 执行编译命令
+
+    .. code-block:: bash
+
+        cmake -DBUILD_TYPE=soc  \
+            -DONLY_RUNTIME=ON \
+            -DCMAKE_TOOLCHAIN_FILE=../cmake/BM168x_SOC/ToolChain_aarch64_linux.cmake \
+            -DPYTHON_EXECUTABLE=python_3.8.2/bin/python3 \
+            -DCUSTOM_PY_LIBDIR=python_3.8.2/lib \
+            -DLIBSOPHON_BASIC_PATH=libsophon_soc_0.4.1_aarch64/opt/sophon/libsophon-0.4.1 ..
+        make pysail                                     
+
+4. 打包生成python wheel,生成的wheel包的路径为‘python/soc/dist’,文件名为‘sophon_arm-|ver|-py3-none-any.whl’
+
+    .. parsed-literal::
+        cd ../python/soc 
+        chmod +x sophon_soc_whl.sh
+        ./sophon_soc_whl.sh  
+
+5. 安装python wheel  
+
+将‘sophon_arm-|ver|-py3-none-any.whl’拷贝到目标SOC上,然后执行如下安装命令
+
+    .. parsed-literal::
+        pip3 install sophon_arm-|ver|-py3-none-any.whl --force-reinstall 
+ 
+
+ARM PCIE MODE
+::::::::::::::::
+
+**.获取交叉编译需要使用的libsophon,sophon-ffmpeg,sophon-opencv**
+
+*此章节所有的编译操作都是在x86主机上,使用交叉编译的方式进行编译。下面示例中选择libsophon的版本为0.4.1, sophon-ffmpeg的版本为0.4.1,sophon-opencv的版本为0.4.1。*
+
+1. 从算能官网中获取‘libsophon_0.4.1_aarch64.tar.gz’,并解压
+
+    .. parsed-literal::
+        tar -xvf libsophon_0.4.1_aarch64.tar.gz
+
+解压后libsophon的目录为‘libsophon_0.4.1_aarch64/opt/sophon/libsophon-0.4.1’
+
+2. 从算能官网中获取‘sophon-mw_0.4.1_aarch64.tar.gz’,并解压
+
+    .. parsed-literal::
+        tar -xvf sophon-mw_0.4.1_aarch64.tar.gz
+
+解压后sophon-ffmpeg的目录为‘sophon-mw_0.4.1_aarch64/opt/sophon/sophon-ffmpeg_0.4.1’。
+
+解压后sophon-opencv的目录为‘sophon-mw_0.4.1_aarch64/opt/sophon/sophon-opencv_0.4.1’。
+
+
+**.安装g++-aarch64-linux-gnu工具链**
+
+*如果已经安装,可忽略此步骤*
+
+    .. parsed-literal::
+        sudo apt-get install gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+
+**.编译包含多媒体模块的SAIL**
+
+使用指定版本的python3(和目标ARM主机上的python3保持一致),通过交叉编译的方式,编译出包含bmcv,sophon-ffmpeg,sophon-opencv的SAIL,
+python3的安装方式可通过python官方网站获取,
+也可以根据[:ref:`获取在X86主机上进行交叉编译的Python3`]获取已经编译好的python3。
+本示例使用的python3路径为‘python_3.8.2/bin/python3’,python3的动态库目录‘python_3.8.2/lib’。
+
+1. 下载SOPHON-SAIL源码,解压后进入其源码目录
+
+2. 创建编译文件夹build,并进入build文件夹
+
+    .. parsed-literal::
+        mkdir build && cd build 
+
+3. 执行编译命令
+
+    .. code-block:: bash
+
+        cmake -DBUILD_TYPE=arm_pcie  \
+            -DCMAKE_TOOLCHAIN_FILE=../cmake/BM168x_ARM_PCIE/ToolChain_aarch64_linux.cmake \
+            -DPYTHON_EXECUTABLE=python_3.8.2/bin/python3 \
+            -DCUSTOM_PY_LIBDIR=python_3.8.2/lib \
+            -DLIBSOPHON_BASIC_PATH=libsophon_0.4.1_aarch64/opt/sophon/libsophon-0.4.1 \
+            -DFFMPEG_BASIC_PATH=sophon-mw_0.4.1_aarch64/opt/sophon/sophon-ffmpeg_0.4.1 \
+            -DOPENCV_BASIC_PATH=sophon-mw_0.4.1_aarch64/opt/sophon/sophon-opencv_0.4.1 ..                                   
+        make pysail                                    
+
+4. 打包生成python wheel,生成的wheel包的路径为‘python/arm_pcie/dist’,文件名为‘sophon_arm_pcie-|ver|-py3-none-any.whl’
+
+    .. parsed-literal::
+        cd ../python/arm_pcie 
+        chmod +x sophon_arm_pcie_whl.sh
+        ./sophon_arm_pcie_whl.sh  
+
+5. 安装python wheel  
+
+将‘sophon_arm_pcie-|ver|-py3-none-any.whl’拷贝到目标ARM主机上,然后执行如下安装命令
+
+    .. parsed-literal::
+        pip3 install sophon_arm_pcie-|ver|-py3-none-any.whl --force-reinstall 
+
+**.编译不包含多媒体模块的SAIL**
+
+使用指定版本的python3(和目标ARM主机上的python3保持一致),通过交叉编译的方式,编译出不包含bmcv,sophon-ffmpeg,sophon-opencv的SAIL,
+python3的安装方式可通过python官方网站获取,
+也可以根据[:ref:`获取在X86主机上进行交叉编译的Python3`]获取已经编译好的python3。
+本示例使用的python3路径为‘python_3.8.2/bin/python3’,python3的动态库目录‘python_3.8.2/lib’。
+
+*通过此方式编译出来的SAIL无法使用其Decoder、Encoder、Bmcv等多媒体相关接口。适用于只需要大语言模型推理能力、不需要处理图片或视频的场景。*
+
+1. 下载SOPHON-SAIL源码,解压后进入其源码目录
+
+2. 创建编译文件夹build,并进入build文件夹
+
+    .. parsed-literal::
+        mkdir build && cd build 
+
+3. 执行编译命令
+
+    .. code-block:: bash
+
+        cmake -DBUILD_TYPE=arm_pcie  \
+            -DONLY_RUNTIME=ON \
+            -DCMAKE_TOOLCHAIN_FILE=../cmake/BM168x_ARM_PCIE/ToolChain_aarch64_linux.cmake \
+            -DPYTHON_EXECUTABLE=python_3.8.2/bin/python3 \
+            -DCUSTOM_PY_LIBDIR=python_3.8.2/lib \
+            -DLIBSOPHON_BASIC_PATH=libsophon_0.4.1_aarch64/opt/sophon/libsophon-0.4.1 ..
+        make                                      
+
+4. 打包生成python wheel,生成的wheel包的路径为‘python/arm_pcie/dist’,文件名为‘sophon_arm_pcie-|ver|-py3-none-any.whl’
+
+    .. parsed-literal::
+        cd ../python/arm_pcie 
+        chmod +x sophon_arm_pcie_whl.sh
+        ./sophon_arm_pcie_whl.sh  
+
+5. 安装python wheel  
+
+将‘sophon_arm_pcie-|ver|-py3-none-any.whl’拷贝到目标ARM主机上,然后执行如下安装命令
+
+    .. parsed-literal::
+        pip3 install sophon_arm_pcie-|ver|-py3-none-any.whl --force-reinstall 
+ 
+
+LOONGARCH64 MODE
+::::::::::::::::::::
+
+此小节描述的是，如何在x86主机上，使用交叉编译的方式编译 LoongArch64 版本的SAIL 。
+如果需要在 LoongArch64 主机上本地编译，操作过程与x86本地编译类似，请参考 PCIE MODE 章节。
+
+**.安装loongarch64-linux-gnu工具链**
+
+从LoongArch64官网获取其`交叉编译的工具链 <http://ftp.loongnix.cn/toolchain/gcc/release/loongarch/gcc8/loongson-gnu-toolchain-8.3-x86_64-loongarch64-linux-gnu-rc1.1.tar.xz>`_,
+解压到本地，解压后的目录结构如下：
+
+.. parsed-literal::
+
+    └── loongson-gnu-toolchain-8.3-x86_64-loongarch64-linux-gnu-rc1.1
+        ├── bin
+        ├── lib
+        ├── lib64
+        ├── libexec
+        ├── loongarch64-linux-gnu
+        ├── share
+        ├── sysroot
+        └── versions 
+
+**.获取交叉编译需要使用的libsophon**
+
+*此章节所有的编译操作都是在x86主机上,使用交叉编译的方式进行编译。下面示例中选择libsophon的版本为0.4.7。*
+
+
+**.编译包含多媒体模块的SAIL**
+
+使用指定版本的python3(和目标龙芯主机上的python3保持一致),通过交叉编译的方式,编译出不包含bmcv,sophon-ffmpeg,sophon-opencv的SAIL,
+python3的安装方式可通过python官方网站获取,
+也可以根据[:ref:`获取在X86主机上进行交叉编译的Python3`]获取已经编译好的python3。
+本示例使用的python3路径为‘python_3.7.3/bin/python3’,python3的动态库目录‘python_3.7.3/lib’。
+
+*通过此方式编译出来的SAIL无法使用其Decoder、Encoder、Bmcv等多媒体相关接口。适用于只需要大语言模型推理能力、不需要处理图片或视频的场景。*
+
+1. 下载SOPHON-SAIL源码,解压后进入其源码目录
+
+2. 创建编译文件夹build,并进入build文件夹
+
+    .. parsed-literal::
+        mkdir build && cd build 
+
+3. 执行编译命令
+
+    .. code-block:: bash
+
+        cmake -DBUILD_TYPE=loongarch  \
+            -DONLY_RUNTIME=ON \
+            -DTOOLCHAIN_BASIC_PATH=toolchains/loongson-gnu-toolchain-8.3-x86_64-loongarch64-linux-gnu-rc1.1 \
+            -DCMAKE_TOOLCHAIN_FILE=../cmake/BM168x_LoongArch64/ToolChain_loongarch64_linux.cmake \
+            -DPYTHON_EXECUTABLE=python_3.7.3/bin/python3 \
+            -DCUSTOM_PY_LIBDIR=python_3.7.3/lib \
+            -DLIBSOPHON_BASIC_PATH=libsophon_0.4.7_loongarch64/opt/sophon/libsophon-0.4.7 \
+            ..
+        make pysail
+
+*cmake选项中的路径需要您根据环境的配置进行调整*
+
+* DLIBSOPHON_BASIC_PATH: SOPHONSDK中libsophon下对应libsophon\_<x.y.z>_loongarch64.tar.gz解压后的目录。
+
+4. 打包生成python wheel,生成的wheel包的路径为‘python/loongarch64/dist’,文件名为‘sophon_loongarch64-|ver|-py3-none-any.whl’
+
+    .. parsed-literal::
+        cd ../python/loongarch64 
+        chmod +x sophon_loongarch64_whl.sh
+        ./sophon_loongarch64_whl.sh  
+
+注：此处易出现setuptools版本过高的问题，原则上python3.8最高兼容setuptools版本 < 66.0.0
+
+5. 安装python wheel  
+
+将‘sophon_loongarch64-|ver|-py3-none-any.whl’拷贝到目标主机上,然后执行如下安装命令
+
+    .. parsed-literal::
+        pip3 install sophon_loongarch64-|ver|-py3-none-any.whl --force-reinstall 
+
+RISCV MODE
+:::::::::::::::
+
+此小节描述的是，如何在x86主机上，使用交叉编译的方式编译 riscv64 版本的SAIL。
+如果需要在 riscv64 主机上本地编译，操作过程与x86本地编译类似，请参考 PCIE MODE 章节。
+
+**.获取交叉编译需要使用的libsophon,sophon-ffmpeg,sophon-opencv**
+
+*此章节所有的编译操作都是在x86主机上,使用交叉编译的方式进行编译。下面示例中选择libsophon的版本为0.5.0, sophon-ffmpeg的版本为0.6.0,sophon-opencv的版本为0.6.0。*
+
+1. 从算能官网中获取‘libsophon_0.5.0_riscv64.tar.gz’,并解压
+
+    .. parsed-literal::
+        tar -xvf libsophon_0.5.0_riscv64.tar.gz
+
+解压后libsophon的目录为‘libsophon_0.5.0_riscv64/opt/sophon/libsophon-0.5.0’
+
+2. 从算能官网中获取‘sophon-mw_0.6.0_riscv_64.tar.gz’,并解压
+
+    .. parsed-literal::
+        tar -xvf sophon-mw_0.6.0_riscv_64.tar.gz
+
+解压后sophon-ffmpeg的目录为‘sophon-mw_0.6.0_riscv_64/opt/sophon/sophon-ffmpeg_0.6.0’。
+
+解压后sophon-opencv的目录为‘sophon-mw_0.6.0_riscv_64/opt/sophon/sophon-opencv_0.6.0’。
+
+
+**.安装g++-riscv64-linux-gnu工具链**
+
+*如果已经安装,可忽略此步骤*
+
+    .. parsed-literal::
+        sudo apt-get install gcc-riscv64-linux-gnu g++-riscv64-linux-gnu
+
+**.编译包含多媒体模块的SAIL**
+
+使用指定版本的python3(和目标RISCV服务器上的python3保持一致),通过交叉编译的方式,编译出包含bmcv,sophon-ffmpeg,sophon-opencv的SAIL,
+python3的安装方式可通过python官方网站获取,
+也可以根据[:ref:`获取在X86主机上进行交叉编译的Python3`]获取已经编译好的python3。
+本示例使用的python3路径为‘python_3.11.0/bin/python3’,python3的动态库目录‘python_3.11.0/lib’。
+
+1. 下载SOPHON-SAIL源码,解压后进入其源码目录
+
+2. 创建编译文件夹build,并进入build文件夹
+
+    .. parsed-literal::
+        mkdir build && cd build 
+
+3. 执行编译命令
+
+    .. code-block:: bash
+
+        cmake -DBUILD_TYPE=riscv  \
+            -DCMAKE_TOOLCHAIN_FILE=../cmake/BM168x_RISCV/ToolChain_riscv64_linux.cmake \
+            -DPYTHON_EXECUTABLE=python_3.11.0/bin/python3 \
+            -DCUSTOM_PY_LIBDIR=python_3.11.0/lib \
+            -DLIBSOPHON_BASIC_PATH=libsophon_0.5.0_riscv64/opt/sophon/libsophon-0.5.0 \
+            -DFFMPEG_BASIC_PATH=sophon-mw_0.6.0_riscv_64/opt/sophon/sophon-ffmpeg_0.6.0 \
+            -DOPENCV_BASIC_PATH=sophon-mw_0.6.0_riscv_64/opt/sophon/sophon-opencv_0.6.0 ..                                   
+        make pysail                                     
+
+4. 打包生成python wheel,生成的wheel包的路径为‘python/riscv/dist’,文件名为‘sophon_riscv64-|ver|-py3-none-any.whl’
+
+    .. parsed-literal::
+        cd ../python/riscv 
+        chmod +x sophon_riscv_whl.sh
+        ./sophon_riscv_whl.sh  
+
+5. 安装python wheel  
+
+将‘sophon_riscv64-|ver|-py3-none-any.whl’拷贝到目标SOC上,然后执行如下安装命令
+
+    .. parsed-literal::
+        pip3 install sophon_riscv64-|ver|-py3-none-any.whl --force-reinstall 
+
+**.编译不包含多媒体模块的SAIL**
+
+使用指定版本的python3(和目标RISCV服务器上的python3保持一致),通过交叉编译的方式,编译出不包含bmcv,sophon-ffmpeg,sophon-opencv的SAIL,
+python3的安装方式可通过python官方网站获取,
+也可以根据[:ref:`获取在X86主机上进行交叉编译的Python3`]获取已经编译好的python3。
+本示例使用的python3路径为‘python_3.11.0/bin/python3’,python3的动态库目录‘python_3.11.0/lib’。
+
+*通过此方式编译出来的SAIL无法使用其Decoder、Encoder、Bmcv等多媒体相关接口。适用于只需要大语言模型推理能力、不需要处理图片或视频的场景。*
+
+1. 下载SOPHON-SAIL源码,解压后进入其源码目录
+
+2. 创建编译文件夹build,并进入build文件夹
+
+    .. parsed-literal::
+        mkdir build && cd build 
+
+3. 执行编译命令
+
+    .. code-block:: bash
+
+        cmake -DBUILD_TYPE=riscv  \
+            -DONLY_RUNTIME=ON \
+            -DCMAKE_TOOLCHAIN_FILE=../cmake/BM168x_RISCV/ToolChain_riscv64_linux.cmake \
+            -DPYTHON_EXECUTABLE=python_3.11.0/bin/python3 \
+            -DCUSTOM_PY_LIBDIR=python_3.11.0/lib \
+            -DLIBSOPHON_BASIC_PATH=libsophon_0.5.0_riscv64/opt/sophon/libsophon-0.5.0 ..
+        make pysail                                     
+
+4. 打包生成python wheel,生成的wheel包的路径为‘python/riscv/dist’,文件名为‘sophon_riscv64-|ver|-py3-none-any.whl’
+
+    .. parsed-literal::
+        cd ../python/riscv 
+        chmod +x sophon_riscv_whl.sh
+        ./sophon_riscv_whl.sh  
+
+5. 安装python wheel  
+
+将‘sophon_riscv64-|ver|-py3-none-any.whl’拷贝到目标SOC上,然后执行如下安装命令
+
+    .. parsed-literal::
+        pip3 install sophon_riscv64-|ver|-py3-none-any.whl --force-reinstall 
+
+
+WINDOWS MODE
+::::::::::::::::
+
+**.安装libsophon,sophon-ffmpeg,sophon-opencv的SAIL**
+
+windows下libsophon,sophon-ffmpeg,sophon-opencv的安装方式可参考算能官方文档
+
+**.编译包含多媒体模块的SAIL**
+
+编译包含bmcv,sophon-ffmpeg,sophon-opencv的SAIL
+
+1. 下载SOPHON-SAIL源码,解压后进入其源码目录
+
+2. 创建编译文件夹build,并进入build文件夹              
+
+3. 执行cmake指令，生成项目文件（.sln）
+
+    .. code-block:: bash
+
+        cmake -DBUILD_PYSAIL=ON -DBUILD_TYPE=windows -DTARGET_TYPE=release -DRUNTIME_LIB=MT -DLIBSOPHON_DIR=C:/sophon_sdk_win_release_MT/libsophon_0.4.9/data -DOPENCV_DIR=C:/sophon_sdk_win_release_MT/sophon-opencv_0.6.0/lib/cmake/opencv4 -DFFMPEG_DIR=C:/sophon_sdk_win_release_MT/sophon-ffmpeg_0.6.0/lib/cmake -DPYTHON_EXECUTABLE=C:\Users\SOPHGO\AppData\Local\Programs\Python\Python38\python.exe ..                                                                  
+
+4. 在vs2019下打开.sln项目文件，修改编译模式为release，点击生成项目。
+
+5. 在sophon-sail/python/windows路径下运行指令python setup.py bdist_wheel 打包生成dist文件夹下的wheel包，文件名为‘sophon-|ver|-py3-none-any.whl’
+
+6. 安装python wheel  
+
+    .. parsed-literal::
+        pip3 install ./dist/sophon-|ver|-py3-none-any.whl --force-reinstall 
+
+*python3.8及以上版本需要显示添加DLL动态库路径才能成功导入sail包，例：*
+
+    .. parsed-literal::
+        import os
+        os.add_dll_directory(r'C:\\sophon_sdk_win_release_MT\\libsophon_0.4.9\\bin')
+        os.add_dll_directory(r'C:\\sophon_sdk_win_release_MT\\sophon-ffmpeg_0.6.0\\lib')
+        os.add_dll_directory(r'C:\\sophon_sdk_win_release_MT\\sophon-opencv_0.6.0\\lib')
+        import sophon.sail as sail
+
+
+**.编译不包含多媒体模块的SAIL**
+
+编译不包含bmcv,sophon-ffmpeg,sophon-opencv的SAIL,
+
+*通过此方式编译出来的SAIL无法使用其Decoder、Encoder、Bmcv等多媒体相关接口。适用于只需要大语言模型推理能力、不需要处理图片或视频的场景。*
+
+1. 下载SOPHON-SAIL源码,解压后进入其源码目录
+
+2. 创建编译文件夹build,并进入build文件夹              
+
+3. 执行cmake指令，生成项目文件（.sln）
+
+    .. code-block:: bash
+
+        cmake -DONLY_RUNTIME=ON -DBUILD_PYSAIL=ON -DBUILD_TYPE=windows -DTARGET_TYPE=release -DRUNTIME_LIB=MT  -DLIBSOPHON_DIR=C:/sophon_sdk_win_release_MT/libsophon_0.4.9/data -DPYTHON_EXECUTABLE=C:\\Users\\SOPHGO\\AppData\\Local\\Programs\\Python\\Python38\\python.exe ..
+                                                                  
+
+4. 在vs2019下打开.sln项目文件，修改编译模式为release，点击生成项目。
+
+5. 在sophon-sail/python/windows路径下运行指令python setup.py bdist_wheel 打包生成dist文件夹下的wheel包，文件名为‘sophon-|ver|-py3-none-any.whl’
+
+6. 安装python wheel  
+
+    .. parsed-literal::
+        pip3 install ./dist/sophon-|ver|-py3-none-any.whl --force-reinstall 
+
+*python3.8及以上版本需要显示添加DLL动态库路径才能成功导入sail包，例：*
+
+    .. parsed-literal::
+        import os
+        os.add_dll_directory(r'C:\\sophon_sdk_win_release_MT\\libsophon_0.4.9\\bin')
+        os.add_dll_directory(r'C:\\sophon_sdk_win_release_MT\\sophon-ffmpeg_0.6.0\\lib')
+        os.add_dll_directory(r'C:\\sophon_sdk_win_release_MT\\sophon-opencv_0.6.0\\lib')
+        import sophon.sail as sail
+
+使用SAIL的Python接口进行开发
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+*注意: BM1688和CV186AH处理器仅支持SOC MODE章节,BM1684和BM1684X处理器无此限制。对于BM1688或者CV186AH处理器,下列命令中的sophon-mw应改为sophon-media。*
+
+PCIE MODE
+::::::::::::::::
+在使用PCIE MODE编译好SAIL,执行安装python wheel之后,即可以使用python中调用SAIL,其接口文档可参考API章节。
+
+SOC MODE
+::::::::::::::::
+
+**.使用自己编译的Python wheel包**
+
+在使用SOC MODE通过交叉编译的方式编译好SAIL之后,将python wheel拷贝到SOC上面进行安装,即可以使用python中调用SAIL,其接口文档可参考API章节。
+
+**.使用预编译的Python wheel包**
+
+1. 查看SOC上的libsophon版本和sophon-mw(sophon-ffmpeg,sophon-opencv)的版本
+
+    .. parsed-literal::
+
+        ls /opt/sophon/
+
+2. 查看SOC上的Python3版本
+
+    .. parsed-literal::
+
+        python3 --version
+
+3. 从预编译的Python wheel包中找到对应版本的wheel包,将对应的wheel包拷贝到SOC上面进行安装,即可以使用python中调用SAIL,其接口文档可参考API章节。
+
+ARM PCIE MODE
+::::::::::::::::
+在使用ARM PCIE MODE通过交叉编译的方式编译好SAIL之后,将python wheel拷贝到ARM主机上面进行安装,即可以在python中调用SAIL,其接口文档可参考API章节。
+
+1. 查看ARM主机上的libsophon版本和sophon-mw(sophon-ffmpeg,sophon-opencv)的版本
+
+    .. parsed-literal::
+
+        cat /opt/sophon/
+
+2. 查看ARM主机上的Python3版本
+
+    .. parsed-literal::
+
+        python3 --version
+
+3. 从预编译的Python wheel包中找到对应版本的wheel包,将对应的wheel包拷贝到ARM主机上面进行安装,即可以使用python中调用SAIL,其接口文档可参考API章节。

@@ -1,0 +1,749 @@
+C++ SAIL的编译与安装
+______________________
+
+..
+ .. |ver| replace:: 3.8.0
+
+编译可被C++接口调用的动态库及头文件
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+*注意: BM1688和CV186AH处理器仅支持SOC MODE章节,BM1684和BM1684X处理器无此限制。对于BM1688或者CV186AH处理器,下列命令中的sophon-mw应改为sophon-media。*
+
+
+PCIE MODE
+:::::::::::
+
+**.安装libsophon,sophon-ffmpeg,sophon-opencv的SAIL**
+
+libsophon,sophon-ffmpeg,sophon-opencv的安装方式可参考算能官方文档
+
+**.编译包含多媒体模块的SAIL**
+
+使用默认安装路径,编译包含bmcv,sophon-ffmpeg,sophon-opencv的SAIL
+
+1. 下载SOPHON-SAIL源码,解压后进入其源码目录
+
+2. 创建编译文件夹build,并进入build文件夹
+
+    .. parsed-literal::
+        mkdir build && cd build                   
+
+3. 执行编译命令
+
+    .. parsed-literal::
+        cmake -DBUILD_PYSAIL=OFF ..                                   
+        make sail                                     
+
+4. 安装SAIL动态库及头文件,编译结果将安装在‘/opt/sophon’下面
+
+    .. parsed-literal::
+        sudo make install                               
+
+**.编译不包含多媒体模块的SAIL**
+
+使用默认安装路径,编译不包含bmcv,sophon-ffmpeg,sophon-opencv的SAIL,
+
+*通过此方式编译出来的SAIL无法使用其Decoder、Bmcv等多媒体相关接口。适用于只需要大语言模型推理能力、不需要处理图片或视频的场景。*
+
+1. 下载SOPHON-SAIL源码,解压后进入其源码目录
+
+2. 创建编译文件夹build,并进入build文件夹
+
+    .. parsed-literal::
+        mkdir build && cd build                   
+
+3. 执行编译命令
+
+    .. parsed-literal::
+        cmake -DONLY_RUNTIME=ON -DBUILD_PYSAIL=OFF ..                                   
+        make sail                                      
+
+4. 安装SAIL动态库及头文件,编译结果将安装在‘/opt/sophon’下面
+
+    .. parsed-literal::
+        sudo make install  
+
+SOC MODE
+:::::::::::
+
+**.获取交叉编译需要使用的libsophon,sophon-ffmpeg,sophon-opencv**    
+
+*此章节所有的编译操作都是在x86主机上,使用交叉编译的方式进行编译。下面示例中选择libsophon的版本为0.4.1, sophon-ffmpeg的版本为0.4.1,sophon-opencv的版本为0.4.1。*
+
+1. 从算能官网中获取‘libsophon_soc_0.4.1_aarch64.tar.gz’,并解压
+
+    .. parsed-literal::
+        tar -xvf libsophon_soc_0.4.1_aarch64.tar.gz
+
+解压后libsophon的目录为‘libsophon_soc_0.4.1_aarch64/opt/sophon/libsophon-0.4.1’
+
+2. 从算能官网中获取‘sophon-mw-soc_0.4.1_aarch64.tar.gz’,并解压
+
+    .. parsed-literal::
+        tar -xvf sophon-mw-soc_0.4.1_aarch64.tar.gz
+
+解压后sophon-ffmpeg的目录为‘sophon-mw-soc_0.4.1_aarch64/opt/sophon/sophon-ffmpeg_0.4.1’。
+
+解压后sophon-opencv的目录为‘sophon-mw-soc_0.4.1_aarch64/opt/sophon/sophon-opencv_0.4.1’。
+
+
+**.安装g++-aarch64-linux-gnu工具链**
+
+*如果已经安装,可忽略此步骤*
+
+    .. parsed-literal::
+        sudo apt-get install gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+
+**.编译包含多媒体模块的SAIL**
+
+通过交叉编译的方式,编译出包含bmcv,sophon-ffmpeg,sophon-opencv的SAIL。
+
+1. 下载SOPHON-SAIL源码,解压后进入其源码目录
+
+2. 创建编译文件夹build,并进入build文件夹
+
+    .. parsed-literal::
+        mkdir build && cd build 
+
+3. 执行编译命令
+
+    .. code-block:: bash
+
+        cmake -DBUILD_TYPE=soc -DBUILD_PYSAIL=OFF \
+            -DCMAKE_TOOLCHAIN_FILE=../cmake/BM168x_SOC/ToolChain_aarch64_linux.cmake \
+            -DLIBSOPHON_BASIC_PATH=libsophon_soc_0.4.1_aarch64/opt/sophon/libsophon-0.4.1 \
+            -DFFMPEG_BASIC_PATH=sophon-mw-soc_0.4.1_aarch64/opt/sophon/sophon-ffmpeg_0.4.1 \
+            -DOPENCV_BASIC_PATH=sophon-mw-soc_0.4.1_aarch64/opt/sophon/sophon-opencv_0.4.1 ..                                   
+        make sail                                     
+
+4. 安装SAIL动态库及头文件,程序将自动在源码目录下创建‘build_soc’,编译结果将安装在‘build_soc’下面
+
+    .. parsed-literal::
+        make install
+
+5. 将‘build_soc’文件夹下的‘sophon-sail’拷贝至目标SOC的‘/opt/sophon’目录下,即可在soc上面进行调用。                       
+
+
+**.编译不包含多媒体模块的SAIL**
+
+通过交叉编译的方式,编译出不包含bmcv,sophon-ffmpeg,sophon-opencv的SAIL。
+
+*通过此方式编译出来的SAIL无法使用其Decoder、Bmcv等多媒体相关接口。适用于只需要大语言模型推理能力、不需要处理图片或视频的场景。*
+
+1. 下载SOPHON-SAIL源码,解压后进入其源码目录
+
+2. 创建编译文件夹build,并进入build文件夹
+
+    .. parsed-literal::
+        mkdir build && cd build 
+
+3. 执行编译命令
+
+    .. code-block:: bash
+
+        cmake -DBUILD_TYPE=soc  \
+            -DBUILD_PYSAIL=OFF \
+            -DONLY_RUNTIME=ON \
+            -DCMAKE_TOOLCHAIN_FILE=../cmake/BM168x_SOC/ToolChain_aarch64_linux.cmake \
+            -DLIBSOPHON_BASIC_PATH=libsophon_soc_0.4.1_aarch64/opt/sophon/libsophon-0.4.1 ..
+        make sail                                     
+
+4. 安装SAIL动态库及头文件,程序将自动在源码目录下创建‘build_soc’,编译结果将安装在‘build_soc’下面
+
+    .. parsed-literal::
+        make install                               
+
+5. 将‘build_soc’文件夹下的‘sophon-sail’拷贝至目标SOC的‘/opt/sophon’目录下,即可在soc上进行调用。                       
+
+
+ARM PCIE MODE
+::::::::::::::::::
+
+**.获取交叉编译需要使用的libsophon,sophon-ffmpeg,sophon-opencv**
+
+*此章节所有的编译操作都是在x86主机上,使用交叉编译的方式进行编译。下面示例中选择libsophon的版本为0.4.1, sophon-ffmpeg的版本为0.4.1,sophon-opencv的版本为0.4.1。*
+
+1. 从算能官网中获取‘libsophon_0.4.1_aarch64.tar.gz’,并解压
+
+    .. parsed-literal::
+        tar -xvf libsophon_0.4.1_aarch64.tar.gz
+
+解压后libsophon的目录为‘libsophon_0.4.1_aarch64/opt/sophon/libsophon-0.4.1’
+
+2. 从算能官网中获取‘sophon-mw_0.4.1_aarch64.tar.gz’,并解压
+
+    .. parsed-literal::
+        tar -xvf sophon-mw_0.4.1_aarch64.tar.gz
+
+解压后sophon-ffmpeg的目录为‘sophon-mw_0.4.1_aarch64/opt/sophon/sophon-ffmpeg_0.4.1’。
+
+解压后sophon-opencv的目录为‘sophon-mw_0.4.1_aarch64/opt/sophon/sophon-opencv_0.4.1’。
+
+
+**.安装g++-aarch64-linux-gnu工具链**
+
+*如果已经安装,可忽略此步骤*
+
+    .. parsed-literal::
+        sudo apt-get install gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+
+**.编译包含多媒体模块的SAIL**
+
+通过交叉编译的方式,编译出包含bmcv,sophon-ffmpeg,sophon-opencv的SAIL。
+
+1. 下载SOPHON-SAIL源码,解压后进入其源码目录
+
+2. 创建编译文件夹build,并进入build文件夹
+
+    .. parsed-literal::
+        mkdir build && cd build 
+
+3. 执行编译命令
+
+    .. code-block:: bash
+
+        cmake -DBUILD_TYPE=arm_pcie  \
+            -DBUILD_PYSAIL=OFF \
+            -DCMAKE_TOOLCHAIN_FILE=../cmake/BM168x_ARM_PCIE/ToolChain_aarch64_linux.cmake \
+            -DLIBSOPHON_BASIC_PATH=libsophon_0.4.1_aarch64/opt/sophon/libsophon-0.4.1 \
+            -DFFMPEG_BASIC_PATH=sophon-mw_0.4.1_aarch64/opt/sophon/sophon-ffmpeg_0.4.1 \
+            -DOPENCV_BASIC_PATH=sophon-mw_0.4.1_aarch64/opt/sophon/sophon-opencv_0.4.1 ..                                   
+        make sail                                      
+
+4. 安装SAIL动态库及头文件,程序将自动在源码目录下创建‘build_arm_pcie’,编译结果将安装在‘build_arm_pcie’下面
+
+    .. parsed-literal::
+        make install
+
+5. 将‘build_arm_pcie’文件夹下的‘sophon-sail’拷贝至目标ARM主机的‘/opt/sophon’目录下,即可在目标机器上面进行调用。                      
+
+**.编译不包含多媒体模块的SAIL**
+
+通过交叉编译的方式,编译出不包含bmcv,sophon-ffmpeg,sophon-opencv的SAIL。
+
+*通过此方式编译出来的SAIL无法使用其Decoder、Bmcv等多媒体相关接口。适用于只需要大语言模型推理能力、不需要处理图片或视频的场景。*
+
+1. 下载SOPHON-SAIL源码,解压后进入其源码目录
+
+2. 创建编译文件夹build,并进入build文件夹
+
+    .. parsed-literal::
+        mkdir build && cd build 
+
+3. 执行编译命令
+
+    .. code-block:: bash
+
+        cmake -DBUILD_TYPE=arm_pcie  \
+            -DONLY_RUNTIME=ON \
+            -DBUILD_PYSAIL=OFF \
+            -DCMAKE_TOOLCHAIN_FILE=../cmake/BM168x_ARM_PCIE/ToolChain_aarch64_linux.cmake \
+            -DLIBSOPHON_BASIC_PATH=libsophon_0.4.1_aarch64/opt/sophon/libsophon-0.4.1 ..
+        make sail                                    
+
+4. 安装SAIL动态库及头文件,程序将自动在源码目录下创建‘build_arm_pcie’,编译结果将安装在‘build_arm_pcie’下面
+
+    .. parsed-literal::
+        make install                               
+
+5. 将‘build_arm_pcie’文件夹下的‘sophon-sail’拷贝至目标ARM主机的‘/opt/sophon’目录下,即可在目标机器上面进行调用。                      
+
+LOONGARCH64 MODE
+::::::::::::::::::::
+
+此小节描述的是，如何在x86主机上，使用交叉编译的方式编译 LoongArch64 版本的SAIL。
+如果需要在 LoongArch64 主机上本地编译，操作过程与x86本地编译类似，请参考 PCIE MODE 章节。
+
+**.安装loongarch64-linux-gnu工具链**
+
+从LoongArch64官网获取其[交叉编译的工具链](http://ftp.loongnix.cn/toolchain/gcc/release/loongarch/gcc8/loongson-gnu-toolchain-8.3-x86_64-loongarch64-linux-gnu-rc1.1.tar.xz),
+解压到本地，解压后的目录结构如下：
+
+.. parsed-literal::
+
+    └── loongson-gnu-toolchain-8.3-x86_64-loongarch64-linux-gnu-rc1.1
+        ├── bin
+        ├── lib
+        ├── lib64
+        ├── libexec
+        ├── loongarch64-linux-gnu
+        ├── share
+        ├── sysroot
+        └── versions 
+
+**.获取交叉编译需要使用的libsophon,sophon-ffmpeg,sophon-opencv**
+
+*此章节所有的编译操作都是在x86主机上,使用交叉编译的方式进行编译。下面示例中选择libsophon的版本为0.4.7, sophon-ffmpeg的版本为0.6.0,sophon-opencv的版本为0.6.0。*
+
+**.编译包含多媒体模块的SAIL**
+
+通过交叉编译的方式,编译出包含bmcv,sophon-ffmpeg,sophon-opencv的SAIL,
+
+1. 下载SOPHON-SAIL源码,解压后进入其源码目录
+
+2. 创建编译文件夹build,并进入build文件夹
+
+    .. parsed-literal::
+        mkdir build && cd build 
+
+3. 执行编译命令
+
+    .. code-block:: bash
+
+        cmake -DBUILD_TYPE=loongarch  \
+            -DBUILD_PYSAIL=OFF \
+            -DTOOLCHAIN_BASIC_PATH=toolchains/loongson-gnu-toolchain-8.3-x86_64-loongarch64-linux-gnu-rc1.1 \
+            -DCMAKE_TOOLCHAIN_FILE=../cmake/BM168x_LoongArch64/ToolChain_loongarch64_linux.cmake \
+            -DLIBSOPHON_BASIC_PATH=libsophon_0.4.7_loongarch64/opt/sophon/libsophon-0.4.7 \
+            -DFFMPEG_BASIC_PATH=sophon-mw_0.6.0_loongarch64/opt/sophon/sophon-ffmpeg_0.6.0 \
+            -DOPENCV_BASIC_PATH=sophon-mw_0.6.0_loongarch64/opt/sophon/sophon-opencv_0.6.0  \
+            ..
+        make sail 
+        
+4. 安装SAIL动态库及头文件,程序将自动在源码目录下创建‘build_loongarch’,编译结果将安装在‘build_loongarch’下面
+
+    .. parsed-literal::
+        make install                               
+
+5. 将‘build_loongarch’文件夹下的‘sophon-sail’拷贝至目标龙芯主机的‘/opt/sophon’目录下,即可在目标机器上调用。 
+
+
+**.编译不包含多媒体模块的SAIL**
+
+通过交叉编译的方式,编译出不包含bmcv,sophon-ffmpeg,sophon-opencv的SAIL。
+
+*通过此方式编译出来的SAIL无法使用其Decoder、Bmcv等多媒体相关接口。适用于只需要大语言模型推理能力、不需要处理图片或视频的场景。*
+
+1. 下载SOPHON-SAIL源码,解压后进入其源码目录
+
+2. 创建编译文件夹build,并进入build文件夹
+
+    .. parsed-literal::
+        mkdir build && cd build 
+
+3. 执行编译命令
+
+    .. code-block:: bash
+
+        cmake -DBUILD_TYPE=loongarch  \
+            -DBUILD_PYSAIL=OFF \
+            -DONLY_RUNTIME=ON \
+            -DTOOLCHAIN_BASIC_PATH=toolchains/loongson-gnu-toolchain-8.3-x86_64-loongarch64-linux-gnu-rc1.1 \
+            -DCMAKE_TOOLCHAIN_FILE=../cmake/BM168x_LoongArch64/ToolChain_loongarch64_linux.cmake \
+            -DLIBSOPHON_BASIC_PATH=libsophon_0.4.7_loongarch64/opt/sophon/libsophon-0.4.7 \
+            ..
+        make sail
+        
+4. 安装SAIL动态库及头文件,程序将自动在源码目录下创建‘build_loongarch’,编译结果将安装在‘build_loongarch’下面
+
+    .. parsed-literal::
+        make install                               
+
+5. 将‘build_loongarch’文件夹下的‘sophon-sail’拷贝至目标龙芯主机的‘/opt/sophon’目录下,即可在目标机器上调用。
+
+
+RISCV MODE
+::::::::::::::::::
+
+此小节描述的是，如何在x86主机上，使用交叉编译的方式编译 riscv64 版本的SAIL。
+如果需要在 riscv64 主机上本地编译，操作过程与x86本地编译类似，请参考 PCIE MODE 章节。
+
+**.获取交叉编译需要使用的libsophon,sophon-ffmpeg,sophon-opencv**
+
+*此章节所有的编译操作都是在x86主机上,使用交叉编译的方式进行编译。下面示例中选择libsophon的版本为0.5.0, sophon-ffmpeg的版本为0.6.0,sophon-opencv的版本为0.6.0。*
+
+1. 从算能官网中获取‘libsophon_0.5.0_riscv64.tar.gz’,并解压
+
+    .. parsed-literal::
+        tar -xvf libsophon_0.4.0_riscv64.tar.gz
+
+解压后libsophon的目录为‘libsophon_0.5.0_riscv64/opt/sophon/libsophon-0.5.0’
+
+2. 从算能官网中获取‘sophon-mw_0.6.0_riscv_64.tar.gz’,并解压
+
+    .. parsed-literal::
+        tar -xvf sophon-mw_0.6.0_riscv_64.tar.gz
+
+解压后sophon-ffmpeg的目录为‘sophon-mw_0.6.0_riscv_64/opt/sophon/sophon-ffmpeg_0.6.0’。
+
+解压后sophon-opencv的目录为‘sophon-mw_0.6.0_riscv_64/opt/sophon/sophon-opencv_0.6.0’。
+
+
+**.安装g++-riscv64-linux-gnu工具链**
+
+*如果已经安装,可忽略此步骤*
+
+    .. parsed-literal::
+        sudo apt-get install gcc-riscv64-linux-gnu g++-riscv64-linux-gnu
+
+**.编译包含多媒体模块的SAIL**
+
+通过交叉编译的方式,编译出包含bmcv,sophon-ffmpeg,sophon-opencv的SAIL。
+
+1. 下载SOPHON-SAIL源码,解压后进入其源码目录
+
+2. 创建编译文件夹build,并进入build文件夹
+
+    .. parsed-literal::
+        mkdir build && cd build 
+
+3. 执行编译命令
+
+    .. code-block:: bash
+
+        cmake -DBUILD_TYPE=riscv  \
+            -DBUILD_PYSAIL=OFF \
+            -DCMAKE_TOOLCHAIN_FILE=../cmake/BM168x_RISCV/ToolChain_riscv64_linux.cmake \
+            -DLIBSOPHON_BASIC_PATH=libsophon_0.5.0_riscv64/opt/sophon/libsophon-0.5.0 \
+            -DFFMPEG_BASIC_PATH=sophon-mw_0.6.0_riscv_64/opt/sophon/sophon-ffmpeg_0.6.0 \
+            -DOPENCV_BASIC_PATH=sophon-mw_0.6.0_riscv_64/opt/sophon/sophon-opencv_0.6.0 ..                                   
+        make sail                                      
+
+4. 安装SAIL动态库及头文件,程序将自动在源码目录下创建‘build_riscv’,编译结果将安装在‘build_riscv’下面
+
+    .. parsed-literal::
+        make install
+
+5. 将‘build_riscv’文件夹下的‘sophon-sail’拷贝至目标RISCV主机的‘/opt/sophon’目录下,即可在目标机器上面进行调用。                      
+
+**.编译不包含多媒体模块的SAIL**
+
+通过交叉编译的方式,编译出不包含bmcv,sophon-ffmpeg,sophon-opencv的SAIL。
+
+*通过此方式编译出来的SAIL无法使用其Decoder、Bmcv等多媒体相关接口。适用于只需要大语言模型推理能力、不需要处理图片或视频的场景。*
+
+1. 下载SOPHON-SAIL源码,解压后进入其源码目录
+
+2. 创建编译文件夹build,并进入build文件夹
+
+    .. parsed-literal::
+        mkdir build && cd build 
+
+3. 执行编译命令
+
+    .. code-block:: bash
+
+        cmake -DBUILD_TYPE=riscv  \
+            -DONLY_RUNTIME=ON \
+            -DBUILD_PYSAIL=OFF \
+            -DCMAKE_TOOLCHAIN_FILE=../cmake/BM168x_RISCV/ToolChain_riscv64_linux.cmake \
+            -DLIBSOPHON_BASIC_PATH=libsophon_0.5.0_riscv64/opt/sophon/libsophon-0.5.0 ..
+        make sail                                    
+
+4. 安装SAIL动态库及头文件,程序将自动在源码目录下创建‘build_riscv’,编译结果将安装在‘build_riscv’下面
+
+    .. parsed-literal::
+        make install                               
+
+5. 将‘build_riscv’文件夹下的‘sophon-sail’拷贝至目标RISCV主机的‘/opt/sophon’目录下,即可在目标机器上面进行调用。 
+
+WINDOWS MODE
+::::::::::::::::::::
+
+**.安装libsophon,sophon-ffmpeg,sophon-opencv的SAIL**
+
+windows下libsophon,sophon-ffmpeg,sophon-opencv的安装方式可参考算能官方文档
+
+下载并安装Visual Studio 2019 作为windows下的开发工具
+
+**.编译包含多媒体模块的SAIL**
+
+编译出包含bmcv,sophon-ffmpeg,sophon-opencv的SAIL
+
+1. 下载SOPHON-SAIL源码,解压后进入其源码目录
+
+2. 创建编译文件夹build,并进入build文件夹          
+
+3. 执行cmake命令，生成项目文件 .sln
+
+    .. parsed-literal::
+        cmake -DBUILD_TYPE=windows -DTARGET_TYPE=release -DRUNTIME_LIB=MT -DBUILD_PYSAIL=OFF -DLIBSOPHON_DIR=C:/sophon_sdk_win_release_MT/libsophon_0.4.9/data -DOPENCV_DIR=C:/sophon_sdk_win_release_MT/sophon-opencv_0.6.0/lib/cmake/opencv4 -DFFMPEG_DIR=C:/sophon_sdk_win_release_MT/sophon-ffmpeg_0.6.0/lib/cmake ..
+                                    
+4. 在vs2019下打开.sln项目文件，修改编译模式为release，点击生成项目。
+
+5. 项目编译成功后会在build/lib/Release文件夹下生成sail.lib,sail.exp,sail.dll等文件。
+
+6. 安装sail库，在build路径下运行指令,生成build_windows文件夹
+
+    .. parsed-literal::
+        cmake --install .                           
+
+7. 在CMakeLists.txt文件中引入sail库即可，如：
+
+    .. parsed-literal::
+        set(SAIL_DIR your_path/build_windows/sophon-sail/lib/cmake)
+        find_package(SAIL REQUIRED)
+        include_directories(${SAIL_INCLUDE_DIRS})
+        link_directories(${SAIL_LIB_DIRS})
+            ...
+        target_link_libraries(your_project sail.lib)
+
+**.编译不包含多媒体模块的SAIL**
+
+编译不包含bmcv,sophon-ffmpeg,sophon-opencv的SAIL,
+
+*通过此方式编译出来的SAIL无法使用其Decoder、Bmcv等多媒体相关接口。适用于只需要大语言模型推理能力、不需要处理图片或视频的场景。*
+
+1. 下载SOPHON-SAIL源码,解压后进入其源码目录
+
+2. 创建编译文件夹build,并进入build文件夹          
+
+3. 执行cmake命令，生成项目文件 .sln
+
+    .. parsed-literal::
+        cmake -DBUILD_TYPE=windows -DTARGET_TYPE=release -DRUNTIME_LIB=MT -DBUILD_PYSAIL=OFF -DONLY_RUNTIME=ON -DLIBSOPHON_DIR=C:/sophon_sdk_win_release_MT/libsophon_0.4.9/data ..
+                                   
+4. 在vs2019下打开.sln项目文件，修改编译模式为release，点击生成项目。
+
+5. 项目编译成功后会在build/lib/Release文件夹下生成sail.lib,sail.exp,sail.dll等文件。
+
+6. 安装sail库，在build路径下运行指令,生成build_windows文件夹
+
+    .. parsed-literal::
+        cmake --install .                           
+
+7. 在CMakeLists.txt文件中引入sail库即可，如：
+
+    .. parsed-literal::
+        set(SAIL_DIR your_path/build_windows/sophon-sail/lib/cmake)
+        find_package(SAIL REQUIRED)
+        include_directories(${SAIL_INCLUDE_DIRS})
+        link_directories(${SAIL_LIB_DIRS})
+            ...
+        target_link_libraries(your_project sail.lib)
+
+使用SAIL的C++接口进行开发
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+*注意: BM1688和CV186AH处理器仅支持SOC MODE章节,BM1684和BM1684X处理器无此限制。对于BM1688或者CV186AH处理器,下列命令中的sophon-mw应改为sophon-media。*
+
+PCIE MODE
+::::::::::::::::
+在使用PCIE MODE编译好SAIL,并且通过执行‘sudo make install’或者通过拷贝的方式安装好SAIL的c++库之后,
+推荐使用cmake来将SAIL中的库链接到自己的程序中,如果需要使用SAIL多媒体相关的功能,
+也需要将libsophon,sophon-ffmpeg,sophon-opencv的头文件目录及动态库目录添加到自己的程序中。
+可以在您程序的CMakeLists.txt中添加如下段落:
+
+.. parsed-literal::
+
+    find_package(libsophon REQUIRED)
+    include_directories(${LIBSOPHON_INCLUDE_DIRS})
+    # 添加libsophon的头文件目录
+
+    set(SAIL_DIR  /opt/sophon/sophon-sail/lib/cmake)
+    find_package(SAIL REQUIRED)
+    include_directories(${SAIL_INCLUDE_DIRS})
+    link_directories(${SAIL_LIB_DIRS})
+    # 添加SAIL的头文件及动态库目录
+
+    find_package(libsophon REQUIRED)
+    include_directories(${LIBSOPHON_INCLUDE_DIRS})
+    # 添加libsophon的头文件目录
+
+    set(OpenCV_DIR  /opt/sophon/sophon-opencv-latest/lib/cmake/opencv4)
+    find_package(OpenCV REQUIRED)
+    include_directories(${OpenCV_INCLUDE_DIRS})
+    # 添加sophon-opencv的头文件目录
+
+    set(FFMPEG_DIR  /opt/sophon/sophon-ffmpeg-latest/lib/cmake)
+    find_package(FFMPEG REQUIRED)
+    include_directories(${FFMPEG_INCLUDE_DIRS})
+    link_directories(${FFMPEG_LIB_DIRS})
+    # 添加sophon-ffmpeg的头文件及动态库目录
+
+    add_executable(${YOUR_TARGET_NAME} ${YOUR_SOURCE_FILES})
+    target_link_libraries(${YOUR_TARGET_NAME} sail)
+
+
+在您的代码中即可以调用sail中的函数：
+
+.. code-block:: cpp
+
+    #define USE_FFMPEG  1
+    #define USE_OPENCV  1
+    #define USE_BMCV    1
+
+    #include <stdio.h>
+    #include <sail/cvwrapper.h>
+    #include <iostream>
+    #include <string>
+
+    using namespace std;
+
+    int main() 
+    {
+        int device_id = 0;
+        std::string video_path = "test.avi";
+        sail::Decoder decoder(video_path,true,device_id);
+        if(!decoder.is_opened()){
+            printf("Video[%s] read failed!\n",video_path.c_str());
+            exit(1) ;
+        }
+        
+        sail::Handle handle(device_id);
+        sail::Bmcv bmcv(handle);
+        
+        while(true){
+            sail::BMImage ost_image = decoder.read(handle);
+            bmcv.imwrite("test.jpg", ost_image);
+            break;
+        }
+
+        return 0;
+    }
+
+
+SOC MODE
+::::::::::::::::
+
+**.SOC板卡上编译程序**
+
+在SOC板卡上安装好libsophon,sophon-ffmpeg,sophon-opencv,及SAIL之后,您可以参考PCIE MODE的开发方法使用cmake将SAIL中的库链接到自己的程序中,
+如果需要使用SAIL多媒体相关的功能,
+也需要将libsophon,sophon-ffmpeg,sophon-opencv的头文件目录及动态库目录添加到自己的程序中。
+
+
+**.x86交叉编译程序**
+
+如果您希望使用SAIL搭建交叉编译环境,您需要用到libsophon,sophon-ffmpeg,sophon-opencv以及gcc-aarch64-linux-gnu工具链。
+
+**.创建‘soc-sdk’文件夹**
+
+创建‘soc-sdk’文件夹,后续交叉编译需要用到的头文件及动态库都将存放在此目录中。
+
+    .. parsed-literal::
+        mkdir soc-sdk
+
+**.获取交叉编译需要使用的libsophon,sophon-ffmpeg,sophon-opencv**
+
+*下面示例中选择libsophon的版本为0.4.1, sophon-ffmpeg的版本为0.4.1,sophon-opencv的版本为0.4.1。*
+
+1. 从算能官网中获取‘libsophon_soc_0.4.1_aarch64.tar.gz’,并解压拷贝至‘soc-sdk’文件夹
+
+    .. parsed-literal::
+        tar -xvf libsophon_soc_0.4.1_aarch64.tar.gz
+        cp -r libsophon_soc_0.4.1_aarch64/opt/sophon/libsophon-0.4.1/include soc-sdk
+        cp -r libsophon_soc_0.4.1_aarch64/opt/sophon/libsophon-0.4.1/lib soc-sdk
+
+解压后libsophon的目录为‘libsophon_soc_0.4.1_aarch64/opt/sophon/libsophon-0.4.1’
+
+2. 从算能官网中获取‘sophon-mw-soc_0.4.1_aarch64.tar.gz’,并解压拷贝至‘soc-sdk’文件夹
+
+    .. parsed-literal::
+        tar -xvf sophon-mw-soc_0.4.1_aarch64.tar.gz
+        cp -r sophon-mw-soc_0.4.1_aarch64/opt/sophon/sophon-ffmpeg_0.4.1/include soc-sdk
+        cp -r sophon-mw-soc_0.4.1_aarch64/opt/sophon/sophon-ffmpeg_0.4.1/lib soc-sdk
+        cp -r sophon-mw-soc_0.4.1_aarch64/opt/sophon/sophon-opencv_0.4.1/include/opencv4/opencv2 soc-sdk/include
+        cp -r sophon-mw-soc_0.4.1_aarch64/opt/sophon/sophon-opencv_0.4.1/lib soc-sdk
+
+**.将交叉编译好的SAIL,也即是‘build_soc’拷贝至‘soc-sdk’文件夹**
+
+    .. parsed-literal::
+        cp build_soc/sophon-sail/include soc-sdk
+        cp build_soc/sophon-sail/lib soc-sdk
+
+**.安装g++-aarch64-linux-gnu工具链**
+
+*如果已经安装,可忽略此步骤*
+
+    .. parsed-literal::
+        sudo apt-get install gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+
+上述步骤配置好之后,可以通过配置cmake来完成交叉编译,在您程序的CMakeLists.txt中添加如下段落:
+
+*CMakeLists.txt中需要使用‘soc-sdk’的绝对路径为‘/opt/sophon/soc-sdk’,实际应用中需要根据自己实际的位置来进行配置。*
+
+.. parsed-literal::
+
+    set(CMAKE_C_COMPILER aarch64-linux-gnu-gcc)
+    set(CMAKE_ASM_COMPILER aarch64-linux-gnu-gcc)
+    set(CMAKE_CXX_COMPILER aarch64-linux-gnu-g++)
+    
+    include_directories("/opt/sophon/soc-sdk/include")
+    include_directories("/opt/sophon/soc-sdk/include/sail")
+    # 添加交叉编译需要使用的头文件目录
+
+    link_directories("/opt/sophon/soc-sdk/lib")
+    # 添加交叉编译需要使用的动态库目录
+
+    add_executable(${YOUR_TARGET_NAME} ${YOUR_SOURCE_FILES})
+    target_link_libraries(${YOUR_TARGET_NAME} sail)
+    # sail为需要链接的库
+
+
+ARM PCIE MODE
+::::::::::::::::
+
+**.ARM主机上编译程序**
+
+在ARM主机上安装好libsophon,sophon-ffmpeg,sophon-opencv,及SAIL之后,您可以参考PCIE MODE的开发方法使用cmake将SAIL中的库链接到自己的程序中,
+如果需要使用SAIL多媒体相关的功能,
+也需要将libsophon,sophon-ffmpeg,sophon-opencv的头文件目录及动态库目录添加到自己的程序中。
+
+
+**.x86交叉编译程序**
+
+如果您希望使用SAIL搭建交叉编译环境,您需要用到libsophon,sophon-ffmpeg,sophon-opencv以及gcc-aarch64-linux-gnu工具链。
+
+**.创建‘arm_pcie-sdk’文件夹**
+
+创建‘arm_pcie-sdk’文件夹,后续交叉编译需要用到的头文件及动态库都将存放在此目录中。
+
+    .. parsed-literal::
+        mkdir arm_pcie-sdk
+
+**.获取交叉编译需要使用的libsophon,sophon-ffmpeg,sophon-opencv**
+
+*下面示例中选择libsophon的版本为0.4.1, sophon-ffmpeg的版本为0.4.1,sophon-opencv的版本为0.4.1。*
+
+1. 从算能官网中获取‘libsophon_0.4.1_aarch64.tar.gz’,并解压拷贝至‘arm_pcie-sdk’文件夹
+
+    .. parsed-literal::
+        tar -xvf libsophon_0.4.1_aarch64.tar.gz
+        cp -r libsophon_0.4.1_aarch64/opt/sophon/libsophon-0.4.1/include arm_pcie-sdk
+        cp -r libsophon_0.4.1_aarch64/opt/sophon/libsophon-0.4.1/lib arm_pcie-sdk
+
+解压后libsophon的目录为‘libsophon_0.4.1_aarch64/opt/sophon/libsophon-0.4.1’
+
+2. 从算能官网中获取‘sophon-mw_0.4.1_aarch64.tar.gz’,并解压拷贝至‘arm_pcie-sdk’文件夹
+
+    .. parsed-literal::
+        tar -xvf sophon-mw_0.4.1_aarch64.tar.gz
+        cp -r sophon-mw_0.4.1_aarch64/opt/sophon/sophon-ffmpeg_0.4.1/include arm_pcie-sdk
+        cp -r sophon-mw_0.4.1_aarch64/opt/sophon/sophon-ffmpeg_0.4.1/lib arm_pcie-sdk
+        cp -r sophon-mw_0.4.1_aarch64/opt/sophon/sophon-opencv_0.4.1/include/opencv4/opencv2 arm_pcie-sdk/include
+        cp -r sophon-mw_0.4.1_aarch64/opt/sophon/sophon-opencv_0.4.1/lib arm_pcie-sdk
+
+**.将交叉编译好的SAIL,也即是‘build_arm_pcie’拷贝至‘arm_pcie-sdk’文件夹**
+
+    .. parsed-literal::
+        cp build_arm_pcie/sophon-sail/include arm_pcie-sdk
+        cp build_arm_pcie/sophon-sail/lib arm_pcie-sdk
+
+**.安装g++-aarch64-linux-gnu工具链**
+
+*如果已经安装,可忽略此步骤*
+
+    .. parsed-literal::
+        sudo apt-get install gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+
+上述步骤配置好之后,可以通过配置cmake来完成交叉编译,在您程序的CMakeLists.txt中添加如下段落:
+
+*CMakeLists.txt中需要使用‘arm_pcie-sdk’的绝对路径为‘/opt/sophon/arm_pcie-sdk’,实际应用中需要根据自己实际的位置来进行配置。*
+
+.. parsed-literal::
+
+    set(CMAKE_C_COMPILER aarch64-linux-gnu-gcc)
+    set(CMAKE_ASM_COMPILER aarch64-linux-gnu-gcc)
+    set(CMAKE_CXX_COMPILER aarch64-linux-gnu-g++)
+    
+    include_directories("/opt/sophon/arm_pcie-sdk/include")
+    include_directories("/opt/sophon/arm_pcie-sdk/include/sail")
+    # 添加交叉编译需要使用的头文件目录
+
+    link_directories("/opt/sophon/arm_pcie-sdk/lib")
+    # 添加交叉编译需要使用的动态库目录
+
+    add_executable(${YOUR_TARGET_NAME} ${YOUR_SOURCE_FILES})
+    target_link_libraries(${YOUR_TARGET_NAME} sail)
+    # sail为需要链接的库

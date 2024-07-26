@@ -1,0 +1,44 @@
+编译用户手册
+______________________
+
+**.安装软件包**
+
+.. parsed-literal::
+
+    # 更新apt
+    sudo apt update
+    # 安装latex
+    sudo apt install texlive-xetex texlive-latex-recommended
+    # 安装Sphinx
+    pip3 install sphinx sphinx-autobuild sphinx_rtd_theme rst2pdf
+    # 安装结巴中文分词库，以支持中文搜索
+    pip3 install jieba3k
+
+
+**.安装字体**
+
+    [Fandol](https://ctan.org/pkg/fandol) - Four basic fonts for Chinese typesetting
+
+.. parsed-literal::
+
+    # 下载Fandol字体
+    wget http://mirrors.ctan.org/fonts/fandol.zip
+    # 解压缩字体包
+    unzip fandol.zip
+    # 拷贝安装字体包
+    sudo cp -r fandol /usr/share/fonts/
+    cp -r fandol ~/.fonts
+
+
+**.执行编译**
+
+下载SOPHON-SAIL源码,解压后进入其源码的docs目录
+
+.. parsed-literal::
+
+   cd docs
+   make pdf
+
+编译好的用户手册路径为‘docs/build/sophon-sail_zh.pdf’
+
+*如果编译仍然报错,可以安装以下 ‘sudo apt-get install texlive-lang-chinese’,然后重新执行上述命令。*
