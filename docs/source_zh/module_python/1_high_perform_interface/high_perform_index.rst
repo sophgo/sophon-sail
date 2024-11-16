@@ -97,3 +97,13 @@ nms_rotated 接口
    :maxdepth: 1
    
    sail.nms_rotated
+
+
+Yolov8_seg TPU后处理加速接口
+=================================
+
+.. toctree::
+   :glob:
+   :maxdepth: 1
+
+   sail.algo_yolov8_seg_post_tpu_opt

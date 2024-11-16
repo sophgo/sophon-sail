@@ -5,6 +5,8 @@
 #include <graph.h>
 #include <algorithm>
 
+#include "internal.h"
+
 #ifdef PYTHON
 #include <pybind11/detail/common.h>
 #include <pybind11/pybind11.h>
@@ -220,7 +222,7 @@ network_width(network_w),network_height(network_h)
 {
     if (shape.size() != 3){
         SPDLOG_ERROR("ERROR DIMS, 3 vs. {}!",shape.size());
-        exit(1);
+        throw SailRuntimeError("invalid argument");
     }
     buffer_size_ = 1;
     for(int i=0;i<shape.size();++i)    {
@@ -867,7 +869,7 @@ network_width(network_w),network_height(network_h)
 {
     if (shape.size() != 3){
         SPDLOG_ERROR("ERROR DIMS, 3 vs. {}!",shape.size());
-        exit(1);
+        throw SailRuntimeError("invalid argument");
     }
     buffer_size_ = 1;
     for(int i=0;i<shape.size();++i)    {
@@ -1532,7 +1534,7 @@ network_width(network_w),network_height(network_h)
 {
     if (shape.size() != 3){
         SPDLOG_ERROR("ERROR DIMS, 3 vs. {}!",shape.size());
-        exit(1);
+        throw SailRuntimeError("invalid argument");
     }
     buffer_size_ = 1;
     for(int i=0;i<shape.size();++i)    {
@@ -2189,11 +2191,11 @@ network_width(network_w),network_height(network_h)
 {
     if (shape.size() != 3){
         SPDLOG_ERROR("ERROR outputs num, 3 vs. {}!",shape.size());
-        exit(1);
+        throw SailRuntimeError("invalid argument");
     }
     if (shape[0].size() != 5){
         SPDLOG_ERROR("ERROR DIM, 5 vs. {}!",shape[0].size());
-        exit(1);
+        throw SailRuntimeError("invalid argument");
     }
     
     for(int i=0;i<shape.size();++i){
@@ -2833,11 +2835,11 @@ network_width(network_w),network_height(network_h),use_multiclass_nms(use_multic
 {
     if (shape.size() != 3){
         SPDLOG_ERROR("ERROR outputs num, 3 vs. {}!",shape.size());
-        exit(1);
+        throw SailRuntimeError("invalid argument");
     }
     if (shape[0].size() != 5){
         SPDLOG_ERROR("ERROR DIM, 5 vs. {}!",shape[0].size());
-        exit(1);
+        throw SailRuntimeError("invalid argument");
     }
     
     for(int i=0;i<shape.size();++i){
@@ -3466,7 +3468,7 @@ network_width(network_w),network_height(network_h),p6(false)
 {
     if (shape.size() != 3){
         SPDLOG_ERROR("ERROR DIMS, 3 vs. {}!",shape.size());
-        exit(1);
+        throw SailRuntimeError("invalid argument");
     }
     for(int i=0;i<shape.size();++i)    {
         data_shape_.push_back(shape[i]);
@@ -4044,7 +4046,7 @@ algo_yolov5_post_cpu_opt::algo_yolov5_post_cpu_opt_cc::algo_yolov5_post_cpu_opt_
 {
     if (shapes.size() <= 0 || shapes[0].size() <= 0){
         SPDLOG_ERROR("ERROR Shapes size: {}!", shapes.size());
-        exit(1);
+        throw SailRuntimeError("invalid argument");
     }
 
     input_num = shapes.size();
@@ -4052,18 +4054,18 @@ algo_yolov5_post_cpu_opt::algo_yolov5_post_cpu_opt_cc::algo_yolov5_post_cpu_opt_
     batch_size = shapes[0][0];
     if (batch_size <= 0 || class_num < 0){
         SPDLOG_ERROR("ERROR Shapes size: {}!", shapes.size());
-        exit(1);
+        throw SailRuntimeError("invalid argument");
     }
 
     input_shapes.clear();
     for(int i = 0; i < input_num; ++i){
         if(shapes[i].size() != 3 && shapes[i].size() != 5){
             SPDLOG_ERROR("ERROR Shapes size: {}!", shapes.size());
-            exit(1);
+            throw SailRuntimeError("invalid argument");
         }
         if(shapes[i][shapes[i].size() - 1] - 5 != class_num || shapes[i][0] != batch_size){
             SPDLOG_ERROR("ERROR Shapes size: {}!", shapes.size());
-            exit(1);
+            throw SailRuntimeError("invalid argument");
         }
         std::vector<int> temp_shape;
         for(int j = 0; j < shapes[i].size(); ++j){
@@ -4092,7 +4094,7 @@ algo_yolov5_post_cpu_opt::algo_yolov5_post_cpu_opt_cc::algo_yolov5_post_cpu_opt_
     }
     if (network_box_num <= 0){
         SPDLOG_ERROR("ERROR Shapes size: {}!", shapes.size());
-        exit(1);
+        throw SailRuntimeError("invalid argument");
     }
 
     anchors = {{{10, 13}, {16, 30}, {33, 23}}, {{30, 61}, {62, 45}, {59, 119}}, {{116, 90}, {156, 198}, {373, 326}}};
@@ -4553,6 +4555,641 @@ int algo_yolov5_post_cpu_opt::reset_anchors(std::vector<std::vector<std::vector<
 {
     return _impl->reset_anchors(anchors_new);
 }
+
+// algo_yolov8_seg_post_tpu_opt
+class algo_yolov8_seg_post_tpu_opt::algo_yolov8_seg_post_tpu_opt_cc {
+public:
+    explicit algo_yolov8_seg_post_tpu_opt_cc(string bmodel_file, int dev_id, const vector<int>& detection_shape, const vector<int>& segmentation_shape, int network_h, int network_w);
+
+    int process(sail::Tensor* &detection_input,
+                sail::Tensor* &segmentation_input,
+                int &ost_h,
+                int &ost_w,
+                vector<YoloV8Box> &yolov8_results,
+                float &dete_threshold,
+                float &nms_threshold,
+                bool input_keep_aspect_ratio,
+                bool input_use_multiclass_nms);
+
+    int process(TensorPTRWithName &detection_input,
+                TensorPTRWithName &segmentation_input,
+                int &ost_h,
+                int &ost_w,
+                vector<YoloV8Box> &yolov8_results,
+                float &dete_threshold,
+                float &nms_threshold,
+                bool input_keep_aspect_ratio,
+                bool input_use_multiclass_nms);
+
+    ~algo_yolov8_seg_post_tpu_opt_cc();
+    cv::Mat crop_mask(cv::Mat& mask, const cv::Rect& box);
+    vector<float> mask_to_contour(cv::Mat mask);
+
+private:
+    // getmask bmodel
+    bm_handle_t tpu_mask_handle;
+    void *bmrt = nullptr;
+    const bm_net_info_t *netinfo;
+    vector<string> network_names;
+    int tpu_mask_num;
+    int m_tpumask_net_h, m_tpumask_net_w;
+    int mask_len;
+
+    int per_feat_size;
+    int m_class_num;
+    int feat_num;
+    int m_net_h, m_net_w;
+    int max_det = 300;
+    int max_wh = 7680; // (pixels) maximum box width and height
+
+    struct Paras {
+        int r_x;
+        int r_y;
+        int r_w;
+        int r_h;
+        int width;
+        int height;
+    };
+
+    struct ImageInfo {
+        cv::Size raw_size;
+        cv::Vec4d trans;
+    };
+
+    float get_aspect_scaled_ratio(int src_w, int src_h, int dst_w, int dst_h, bool* pIsAligWidt);
+    void NMS(vector<YoloV8Box>& dets, float nmsConfidence);
+    void clip_boxes(vector<YoloV8Box>& yolobox_vec, int src_w, int src_h);
+    void getmask_tpu(vector<YoloV8Box>& yolov8box_input, int start, const bm_tensor_t& segmentation_tensor, Paras& paras, vector<YoloV8Box>& yolov8box_output, float confThreshold);
+};
+
+algo_yolov8_seg_post_tpu_opt::algo_yolov8_seg_post_tpu_opt_cc::algo_yolov8_seg_post_tpu_opt_cc(string bmodel_file, int dev_id, const vector<int>& detection_shape, const vector<int>& segmentation_shape, int network_h, int network_w):m_net_h(network_h), m_net_w(network_w) {
+
+    // 1. get handle
+    int ret = bm_dev_request(&tpu_mask_handle, dev_id);
+    if (ret != BM_SUCCESS) {
+        SPDLOG_ERROR("bm_dev_request error");
+        throw SailRuntimeError("bm_dev_request error");
+    }
+
+    // 2. create bmrt and load bmodel
+    bmrt = bmrt_create(tpu_mask_handle);
+    if (!bmrt_load_bmodel(bmrt, bmodel_file.c_str())) {
+        SPDLOG_ERROR("load getmask bmodel {} failed", bmodel_file);
+        throw SailRuntimeError("load getmask bmodel failed");
+    }
+
+    // 3. get network names from bmodel
+    const char **names = nullptr;
+    int num = bmrt_get_network_number(bmrt);
+    if (num > 1) {
+        SPDLOG_INFO("This bmodel have {} networks, and this program will only take network 0", num);
+    }
+
+    bmrt_get_network_names(bmrt, &names);
+    for (int i = 0; i < num; ++i) {
+        network_names.emplace_back(names[i]);
+    }
+    free(names);
+
+    // 4. get netinfo by netname
+    netinfo = bmrt_get_network_info(bmrt, network_names[0].c_str());
+    if (netinfo->stage_num > 1) {
+        SPDLOG_INFO("This bmodel have {}  stages, and this program will only take stage 0", netinfo->stage_num);
+    }
+
+    // 5. initialize parameters.
+    m_tpumask_net_h = netinfo->stages[0].input_shapes[1].dims[2];
+    m_tpumask_net_w = netinfo->stages[0].input_shapes[1].dims[3];
+
+    if (netinfo->stages[0].input_shapes[1].dims[1] != netinfo->stages[0].input_shapes[0].dims[2]) {
+        SPDLOG_ERROR("The number of prototype mask does not match the mask coefficients");
+        throw SailRuntimeError("The number of prototype mask does not match the mask coefficients");
+    }
+
+    tpu_mask_num = netinfo->stages[0].input_shapes[0].dims[1];
+    mask_len = netinfo->stages[0].input_shapes[1].dims[1];
+
+    if (mask_len != 32) {
+        SPDLOG_ERROR("The number of prototype mask supports only 32 now");
+        throw SailRuntimeError("The number of prototype mask supports only 32 now");
+    }
+
+    per_feat_size = detection_shape[1];
+    m_class_num = per_feat_size - mask_len - 4;
+    feat_num = detection_shape[2];
+
+    // 6. compare
+    if ((segmentation_shape[1] != mask_len) || (segmentation_shape[2] != m_tpumask_net_h) || (segmentation_shape[3] != m_tpumask_net_w)) {
+        SPDLOG_ERROR("The shape of prototype mask of getmask bmodel does not match the segmentation_shape of the actual input");
+        throw SailRuntimeError("The shape of prototype mask of getmask bmodel does not match the segmentation_shape of the actual input");
+    }
+
+}
+
+algo_yolov8_seg_post_tpu_opt::algo_yolov8_seg_post_tpu_opt_cc::~algo_yolov8_seg_post_tpu_opt_cc() {
+    if (bmrt != nullptr) {
+        bmrt_destroy(bmrt);
+        bmrt = nullptr;
+    }
+    if (tpu_mask_handle != nullptr) {
+        bm_dev_free(tpu_mask_handle);
+        tpu_mask_handle = nullptr;
+    }
+}
+
+float algo_yolov8_seg_post_tpu_opt::algo_yolov8_seg_post_tpu_opt_cc::get_aspect_scaled_ratio(int src_w, int src_h, int dst_w, int dst_h, bool* pIsAligWidth) {
+    float ratio;
+    float r_w = (float)dst_w / src_w;
+    float r_h = (float)dst_h / src_h;
+    if (r_h > r_w) {
+        *pIsAligWidth = true;
+        ratio = r_w;
+    } else {
+        *pIsAligWidth = false;
+        ratio = r_h;
+    }
+    return ratio;
+}
+
+void algo_yolov8_seg_post_tpu_opt::algo_yolov8_seg_post_tpu_opt_cc::NMS(vector<YoloV8Box>& dets, float nmsConfidence) {
+    int length = dets.size();
+    int index = length - 1;
+
+    std::sort(dets.begin(), dets.end(), [](const YoloV8Box& a, const YoloV8Box& b) { return a.score < b.score; });
+
+    std::vector<float> areas(length);
+    for (int i = 0; i < length; i++) {
+        float width = dets[i].right - dets[i].left;
+        float height = dets[i].bottom - dets[i].top;
+        areas[i] = width * height;
+    }
+
+    while (index > 0) {
+        int i = 0;
+        while (i < index) {
+            float left = std::max(dets[index].left, dets[i].left);
+            float top = std::max(dets[index].top, dets[i].top);
+            float right = std::min(dets[index].right, dets[i].right);
+            float bottom = std::min(dets[index].bottom, dets[i].bottom);
+            float overlap = std::max(0.0f, right - left) * std::max(0.0f, bottom - top);
+            if (overlap / (areas[index] + areas[i] - overlap) > nmsConfidence) {
+                areas.erase(areas.begin() + i);
+                dets.erase(dets.begin() + i);
+                index--;
+            } else {
+                i++;
+            }
+        }
+        index--;
+    }
+}
+
+void algo_yolov8_seg_post_tpu_opt::algo_yolov8_seg_post_tpu_opt_cc::clip_boxes(vector<YoloV8Box>& yolobox_vec, int src_w, int src_h) {
+    for (int i = 0; i < yolobox_vec.size(); i++) {
+        yolobox_vec[i].left = std::max((float)0.0, std::min(yolobox_vec[i].left, (float)src_w));
+        yolobox_vec[i].top = std::max((float)0.0, std::min(yolobox_vec[i].top, (float)src_h));
+        yolobox_vec[i].right = std::max((float)0.0, std::min(yolobox_vec[i].right, (float)src_w));
+        yolobox_vec[i].bottom = std::max((float)0.0, std::min(yolobox_vec[i].bottom, (float)src_h));
+    }
+}
+
+cv::Mat algo_yolov8_seg_post_tpu_opt::algo_yolov8_seg_post_tpu_opt_cc::crop_mask(cv::Mat& mask, const cv::Rect& box) {
+    cv::threshold(mask, mask, 0.5, 255, cv::THRESH_BINARY);
+    mask.convertTo(mask, CV_8UC1); 
+    
+    cv::Mat cropped_mask(mask.size(), mask.type(), cv::Scalar(0));
+    cv::add(cropped_mask(box), mask(box), cropped_mask(box));
+    return cropped_mask;
+}
+
+vector<float> algo_yolov8_seg_post_tpu_opt::algo_yolov8_seg_post_tpu_opt_cc::mask_to_contour(cv::Mat mask) {
+    vector<float> contour;
+    contour.clear();
+    vector<vector<cv::Point>> contours;
+    cv::findContours(mask, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_NONE);
+
+    if (!contours.empty()) {
+        size_t max_contour_index = 0;
+        int max_contour_length = 0;
+
+        for (size_t i = 0; i < contours.size(); ++i) {
+            if (contours[i].size() > max_contour_length) {
+                max_contour_length = contours[i].size();
+                max_contour_index = i;
+            }
+        }
+
+        const vector<cv::Point>& longest_contour = contours[max_contour_index];
+        for (const auto& point : longest_contour) {
+            contour.emplace_back(static_cast<float>(point.x));
+            contour.emplace_back(static_cast<float>(point.y));
+        }
+    }
+
+    return contour;
+}
+
+void algo_yolov8_seg_post_tpu_opt::algo_yolov8_seg_post_tpu_opt_cc::getmask_tpu(vector<YoloV8Box>& yolov8box_input, int start, const bm_tensor_t& segmentation_tensor, Paras& paras, vector<YoloV8Box>& yolov8box_output, float confThreshold) {
+    int mask_height = m_tpumask_net_h;
+    int mask_width = m_tpumask_net_w;
+    int actual_mask_num = MIN(tpu_mask_num, yolov8box_input.size() - start);
+
+    netinfo->stages[0].input_shapes[0].dims[0] = 1;
+    netinfo->stages[0].input_shapes[0].dims[1] = actual_mask_num;
+    netinfo->stages[0].input_shapes[0].dims[2] = mask_len;
+
+    //1. prepare bmodel inputs
+    bm_tensor_t detection_tensor;
+    bool ok = bmrt_tensor(&detection_tensor, bmrt, netinfo->input_dtypes[0], netinfo->stages[0].input_shapes[0]);
+    if (!ok) {
+        SPDLOG_ERROR("bmrt_tensor error");
+        throw SailRuntimeError("bmrt_tensor error");
+    }
+
+    for (size_t i = start; i < start + actual_mask_num; i++) {
+        int ret = bm_memcpy_s2d_partial_offset(tpu_mask_handle, detection_tensor.device_mem, reinterpret_cast<void*>(yolov8box_input[i].mask.data()), 32*4, 32*4*(i-start));
+        if (ret != BM_SUCCESS) {
+            SPDLOG_ERROR("bm_memcpy_s2d_partial_offset");
+            throw SailRuntimeError("bm_memcpy_s2d_partial_offset");
+        }
+    }
+
+    vector<bm_tensor_t> input_tensors = {detection_tensor, segmentation_tensor};
+    vector<bm_tensor_t> output_tensors;
+    
+    // 2. run bmodel
+    output_tensors.resize(netinfo->output_num);
+    ok = bmrt_launch_tensor(bmrt, netinfo->name, input_tensors.data(), netinfo->input_num, output_tensors.data(), netinfo->output_num);
+    if (!ok) {
+        SPDLOG_ERROR("bmrt_launch_tensor error");
+        throw SailRuntimeError("bmrt_launch_tensor error");
+    }
+
+    int ret = bm_thread_sync(tpu_mask_handle);
+    if (ret != BM_SUCCESS) {
+        SPDLOG_ERROR("bm_thread_sync error");
+        throw SailRuntimeError("bm_thread_sync error");
+    }
+
+    bm_free_device(tpu_mask_handle, input_tensors[0].device_mem);
+
+    // 3. get outputs
+    bm_tensor_t output_tensor = output_tensors[0];
+    float output0[1 * actual_mask_num * mask_height * mask_width];
+    ret = bm_memcpy_d2s_partial(tpu_mask_handle, output0, output_tensor.device_mem, bmrt_tensor_bytesize(&output_tensor));
+    if (ret != BM_SUCCESS) {
+        SPDLOG_ERROR("bm_memcpy_d2s_partial error");
+        throw SailRuntimeError("bm_memcpy_d2s_partial error");
+    }
+    for (int i = 0; i < output_tensors.size(); i++) {
+        bm_free_device(tpu_mask_handle, output_tensors[i].device_mem);  
+    }
+
+    // 4. crop + mask
+    for (int i = 0; i < actual_mask_num; i++){
+        int yi = start + i;
+        cv::Mat temp_mask(mask_height, mask_width, CV_32FC1, output0 + i * mask_height * mask_width);
+        cv::Mat masks_feature = temp_mask(cv::Rect(paras.r_x, paras.r_y, paras.r_w, paras.r_h)); 
+        cv::Mat mask;
+        cv::resize(masks_feature, mask, cv::Size(paras.width, paras.height)); 
+        
+        cv::Rect box = cv::Rect{yolov8box_input[yi].left, yolov8box_input[yi].top, yolov8box_input[yi].right - yolov8box_input[yi].left, yolov8box_input[yi].bottom - yolov8box_input[yi].top};
+        cv::Mat crop_mask_ = crop_mask(mask, box);
+        vector<float> contour = mask_to_contour(crop_mask_);
+
+        yolov8box_input[yi].mask_img = crop_mask_;
+        yolov8box_input[yi].contour = contour;
+
+        yolov8box_output.push_back(yolov8box_input[yi]);
+    }
+
+}
+
+int algo_yolov8_seg_post_tpu_opt::algo_yolov8_seg_post_tpu_opt_cc::process(sail::Tensor* &detection_input,
+                                                                        sail::Tensor* &segmentation_input,
+                                                                        int &ost_h,
+                                                                        int &ost_w,
+                                                                        vector<YoloV8Box> &yolov8_results,
+                                                                        float &dete_threshold,
+                                                                        float &nms_threshold,
+                                                                        bool input_keep_aspect_ratio,
+                                                                        bool input_use_multiclass_nms)
+    {   
+        // post0: init
+        vector<YoloV8Box> yolov8box_vec;
+        int frame_width = ost_w;
+        int frame_height = ost_h;  // Height and width of the original image
+        
+        // segmentation_data, one batch 
+        float* segmentation_data = reinterpret_cast<float*>(segmentation_input->sys_data());
+        bm_tensor_t segmentation_tensor;
+        bool ok = bmrt_tensor(&segmentation_tensor, bmrt, netinfo->input_dtypes[1], netinfo->stages[0].input_shapes[1]);
+        if (!ok) {
+           SPDLOG_ERROR("bmrt_tensor error"); 
+           throw SailRuntimeError("bmrt_tensor error");
+        }
+        int ret = bm_memcpy_s2d_partial(tpu_mask_handle, segmentation_tensor.device_mem, reinterpret_cast<void*>(segmentation_data), bmrt_tensor_bytesize(&segmentation_tensor));
+        if (ret != BM_SUCCESS) {
+            SPDLOG_ERROR("bm_memcpy_s2d_partial error"); 
+            throw SailRuntimeError("bm_memcpy_s2d_partial error");
+        }
+
+        // input_keep_aspect_ratio
+        float ratio = 0.0;
+        int tx1 = 0, ty1 = 0;
+        ImageInfo para;
+
+        if (input_keep_aspect_ratio) {
+            bool isAlignWidth = false;  
+            ratio = get_aspect_scaled_ratio(frame_width, frame_height, m_net_w, m_net_h, &isAlignWidth);
+            if (isAlignWidth) {
+                ty1 = (int)((m_net_h - frame_height * ratio) / 2);  
+            } else {
+                tx1 = (int)((m_net_w - frame_width * ratio) / 2);
+            }
+            para = {cv::Size(frame_width, frame_height), {ratio, ratio, tx1, ty1}}; 
+
+        }
+        else {
+            float ratio = 1;
+            tx1 = 0;
+            ty1 = 0;
+            para = {cv::Size(frame_width, frame_height), {m_net_w / frame_width, m_net_h / frame_height, tx1, ty1}};
+        }
+
+        // post1: get output one batch
+        float* detection_data = nullptr; 
+        detection_data = reinterpret_cast<float*>(detection_input->sys_data());
+
+        // post2:  get detections matrix nx6 (xyxy, score, class_id, mask)
+        float* cls_conf = detection_data + 4 * feat_num;
+        for (int i = 0; i < feat_num; i++) {
+            // input_use_multiclass_nms
+            if (input_use_multiclass_nms) {
+                for (int j = 0; j < m_class_num; j++) {
+                    float cur_value = cls_conf[i + j * feat_num];
+                    if (cur_value >= dete_threshold) {
+                        YoloV8Box box;
+                        box.score = cur_value;
+                        box.class_id = j;
+                        int c = box.class_id * max_wh;
+                        float centerX = detection_data[i + 0 * feat_num];
+                        float centerY = detection_data[i + 1 * feat_num];
+                        float width = detection_data[i + 2 * feat_num];
+                        float height = detection_data[i + 3 * feat_num];
+
+                        box.left = centerX - width / 2 + c;
+                        box.top = centerY - height / 2 + c;
+                        box.right = box.left + width;
+                        box.bottom = box.top + height;
+                        box.mask = vector<float>(detection_data + 4 + m_class_num, detection_data + per_feat_size);
+
+                        yolov8box_vec.emplace_back(box);
+                    }
+                }
+            }
+            else 
+            {
+                // input_use_multiclass_nms == false
+                float max_value = 0.0;
+                int max_index = 0;
+                for (int j = 0; j < m_class_num; j++) {
+                    float cur_value = cls_conf[i + j * feat_num];
+                    if (cur_value > max_value) {
+                        max_value = cur_value;
+                        max_index = j;
+                    }
+                }
+                
+               
+                if (max_value >= dete_threshold) {
+                    YoloV8Box box; 
+                    box.score = max_value;
+                    box.class_id = max_index;
+                    int c = box.class_id * max_wh; 
+                    float centerX = detection_data[i + 0 * feat_num];
+                    float centerY = detection_data[i + 1 * feat_num];
+                    float width = detection_data[i + 2 * feat_num];
+                    float height = detection_data[i + 3 * feat_num];
+
+                    box.left = centerX - width / 2 + c;
+                    box.top = centerY - height / 2 + c;
+                    box.right = box.left + width;
+                    box.bottom = box.top + height;
+
+                    for (int k = 0; k < mask_len; k++) {
+                        box.mask.emplace_back(detection_data[i + (per_feat_size - mask_len + k) * feat_num]); 
+                    }
+                    yolov8box_vec.emplace_back(box);
+                }
+
+            }
+        }
+
+        // post3: nms
+        NMS(yolov8box_vec, nms_threshold);
+        if (yolov8box_vec.size() > max_det) {
+            yolov8box_vec.erase(yolov8box_vec.begin(), yolov8box_vec.begin() + (yolov8box_vec.size() - max_det));
+        }
+
+        for (int i = 0; i < yolov8box_vec.size(); i++) {
+            int c = yolov8box_vec[i].class_id * max_wh;
+            yolov8box_vec[i].left = yolov8box_vec[i].left - c;
+            yolov8box_vec[i].top = yolov8box_vec[i].top - c;
+            yolov8box_vec[i].right = yolov8box_vec[i].right - c;
+            yolov8box_vec[i].bottom = yolov8box_vec[i].bottom - c;
+        }
+
+        for (int i = 0; i < yolov8box_vec.size(); i++) {
+            float centerx = ((yolov8box_vec[i].right + yolov8box_vec[i].left) / 2 - tx1) / ratio;
+            float centery = ((yolov8box_vec[i].bottom + yolov8box_vec[i].top) / 2 - ty1) / ratio;
+            float width = (yolov8box_vec[i].right - yolov8box_vec[i].left) / ratio;
+            float height = (yolov8box_vec[i].bottom - yolov8box_vec[i].top) / ratio; 
+            yolov8box_vec[i].left = centerx - width / 2;
+            yolov8box_vec[i].top = centery - height / 2;
+            yolov8box_vec[i].right = centerx + width / 2;
+            yolov8box_vec[i].bottom = centery + height / 2;
+        }
+
+        clip_boxes(yolov8box_vec, frame_width, frame_height);
+
+        // post4: get mask
+        cv::Vec4f trans = para.trans;
+        int r_x = floor(trans[2] / m_net_w * m_tpumask_net_w);
+        int r_y = floor(trans[3] / m_net_h * m_tpumask_net_h);
+        int r_w = m_tpumask_net_w - 2 * r_x;
+        int r_h = m_tpumask_net_h - 2 * r_y;
+
+        r_w = MAX(r_w, 1);
+        r_h = MAX(r_h, 1);
+
+        struct Paras paras={r_x, r_y, r_w, r_h, para.raw_size.width, para.raw_size.height};
+
+        vector<YoloV8Box> yolobox_valid_vec;
+        for(int i = 0; i < yolov8box_vec.size(); i++){
+            if (yolov8box_vec[i].right > yolov8box_vec[i].left + 1 && yolov8box_vec[i].bottom > yolov8box_vec[i].top + 1){
+                yolobox_valid_vec.push_back(yolov8box_vec[i]);
+            }
+        }  
+
+        vector<YoloV8Box> yolov8box_output;
+        if (yolobox_valid_vec.size() > 0) {
+            int mask_times = (yolobox_valid_vec.size() + tpu_mask_num - 1) / tpu_mask_num;
+            for (int i = 0; i < mask_times; i++){
+                int start = i * tpu_mask_num;
+                getmask_tpu(yolobox_valid_vec, start, segmentation_tensor, paras, yolov8box_output, dete_threshold);
+            }
+        }
+
+        yolov8_results = yolov8box_output;
+
+        bm_free_device(tpu_mask_handle, segmentation_tensor.device_mem);
+
+        return SAIL_ALGO_SUCCESS;
+    }
+
+
+int algo_yolov8_seg_post_tpu_opt::algo_yolov8_seg_post_tpu_opt_cc::process(TensorPTRWithName &detection_input,
+                                                                        TensorPTRWithName &segmentation_input,
+                                                                        int &ost_h,
+                                                                        int &ost_w,
+                                                                        vector<YoloV8Box> &yolov8_results,
+                                                                        float &dete_threshold,
+                                                                        float &nms_threshold,
+                                                                        bool input_keep_aspect_ratio,
+                                                                        bool input_use_multiclass_nms) 
+{
+    sail::Tensor* detection_input_data = detection_input.data;
+    sail::Tensor* segmentation_input_data = segmentation_input.data;
+
+    return process(detection_input_data, segmentation_input_data, ost_h, ost_w, yolov8_results, dete_threshold, nms_threshold, input_keep_aspect_ratio, input_use_multiclass_nms);
+}
+
+
+algo_yolov8_seg_post_tpu_opt::algo_yolov8_seg_post_tpu_opt(string bmodel_file, int dev_id, 
+                                                        const vector<int>& detection_shape, 
+                                                        const vector<int>& segmentation_shape, 
+                                                        int network_h, int network_w)
+    :_impl (new algo_yolov8_seg_post_tpu_opt_cc(bmodel_file, dev_id, detection_shape, segmentation_shape, network_h, network_w))
+{
+
+}
+
+algo_yolov8_seg_post_tpu_opt::~algo_yolov8_seg_post_tpu_opt()
+{   
+    delete _impl;
+}
+
+
+int algo_yolov8_seg_post_tpu_opt::process(TensorPTRWithName &detection_input,
+                                        TensorPTRWithName &segmentation_input,
+                                        int &ost_h,
+                                        int &ost_w,
+                                        vector<YoloV8Box> &yolov8_results,
+                                        float &dete_threshold,
+                                        float &nms_threshold,
+                                        bool input_keep_aspect_ratio,
+                                        bool input_use_multiclass_nms)
+{  
+    return _impl->process(detection_input, segmentation_input, ost_h, ost_w, yolov8_results, dete_threshold, nms_threshold, input_keep_aspect_ratio, input_use_multiclass_nms);
+}
+
+
+#ifdef PYTHON
+pybind11::array_t<uint8_t> cvmat_to_numpy(cv::Mat cv_mat){
+    std::vector<pybind11::ssize_t> shape;
+    pybind11::ssize_t item_size = 1;
+    std::string format;
+    if (cv_mat.type()  == CV_8UC3) {
+        shape.push_back(cv_mat.rows);
+        shape.push_back(cv_mat.cols);
+        shape.push_back(3);
+        item_size = sizeof(uint8_t);
+        format = pybind11::format_descriptor<uint8_t>::format();
+    } else if(cv_mat.type()  == CV_8UC1){
+        shape.push_back(cv_mat.rows);
+        shape.push_back(cv_mat.cols);
+        item_size = sizeof(uint8_t);
+        format = pybind11::format_descriptor<uint8_t>::format();
+    }else{
+        SPDLOG_ERROR("Mat type not support: {}",cv_mat.type());
+        throw SailBMImageError("not supported");
+    }
+    
+    int stride_temp = FFALIGN(cv_mat.cols * 3 * item_size, SAIL_ALIGN); // ceiling to 64 * N
+    pybind11::ssize_t ndim = shape.size();
+    std::vector<pybind11::ssize_t> stride;
+    for (size_t i = 1; i < shape.size(); i++) {
+        stride.push_back(cv_mat.step[i-1]);
+    }
+    stride.push_back(item_size);
+    pybind11::buffer_info output_buf(cv_mat.data, item_size, format,
+                                        ndim, shape, stride);
+    return std::move(pybind11::array_t<uint8_t>(output_buf));
+}
+pybind11::list algo_yolov8_seg_post_tpu_opt::process(TensorPTRWithName &detection_input,
+                            TensorPTRWithName &segmentation_input,
+                            int &ost_h,
+                            int &ost_w,
+                            float &dete_threshold,
+                            float &nms_threshold,
+                            bool input_keep_aspect_ratio,
+                            bool input_use_multiclass_nms)
+{
+    pybind11::list results;
+    vector<YoloV8Box> yolov8_results;
+
+    int ret = process(detection_input, segmentation_input, ost_h, ost_w, yolov8_results, dete_threshold, nms_threshold, input_keep_aspect_ratio, input_use_multiclass_nms);
+    
+    if (ret != SAIL_ALGO_SUCCESS) {
+        return results;
+    }
+
+    for (int i = 0; i < yolov8_results.size(); ++i) {
+        int left = yolov8_results[i].left;
+        int top = yolov8_results[i].top;
+        int right = yolov8_results[i].right;
+        int bottom = yolov8_results[i].bottom;
+        float score = yolov8_results[i].score;
+        int class_id = yolov8_results[i].class_id;
+        pybind11::array_t<uint8_t> mask = cvmat_to_numpy(yolov8_results[i].mask_img);
+        vector<float> contour = yolov8_results[i].contour;
+
+        results.append(pybind11::make_tuple(left, top, right, bottom, score, class_id, contour, mask));
+
+    }
+
+    return results;  
+}
+
+
+pybind11::list algo_yolov8_seg_post_tpu_opt::process(map<string, Tensor&> &detection_input,
+                            map<string, Tensor&> &segmentation_input,
+                            int &ost_h,
+                            int &ost_w,
+                            float &dete_threshold,
+                            float &nms_threshold,
+                            bool input_keep_aspect_ratio,
+                            bool input_use_multiclass_nms)
+{   
+    TensorPTRWithName detection_input_temp;
+    for (const auto& pair : detection_input) { 
+        detection_input_temp.data = &pair.second; 
+        detection_input_temp.name = pair.first;   
+    }
+
+    TensorPTRWithName segmentation_input_temp;
+    for (const auto& pair : segmentation_input) { 
+        segmentation_input_temp.data = &pair.second; 
+        segmentation_input_temp.name = pair.first;
+    }
+
+    pybind11::list results;
+    results = process(detection_input_temp, segmentation_input_temp, ost_h, ost_w, dete_threshold, nms_threshold, input_keep_aspect_ratio, input_use_multiclass_nms);
+
+    return results; 
+}
+#endif
 
 /*下面的内容都是跟目标跟踪有关*/
 /*controller*/

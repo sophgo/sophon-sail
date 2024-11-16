@@ -229,6 +229,40 @@ Specified io mode
             engine.set_io_mode(graph_name,sail.IOMode.SYSI)
 
 
+graph_is_dynamic
+>>>>>>>>>>>>>>>>>>>>>
+
+Determine whether a selected computational map is dynamic.
+
+**Interface:**
+    .. code-block:: python
+
+        def graph_is_dynamic(self, graph_name: str) -> list
+
+**Parameters**
+
+* graph_name : str
+
+Specified graph name
+
+**Returns**
+
+* is_dynamic : bool
+
+A boolean value indicating whether the selected computation graph is dynamic or not.
+
+**Sample:**
+    .. code-block:: python
+
+        import sophon.sail as sail
+
+        if __name__ == '__main__':
+            bmodel_path = "your_bmodel.bmodel"
+            engine = sail.Engine(bmodel_path,0,sail.IOMode.SYSI)
+            graph_name = engine.get_graph_names()[0]
+            is_dynamic = engine.graph_is_dynamic(graph_name)
+
+
 get_input_names
 >>>>>>>>>>>>>>>>>>>>>
 

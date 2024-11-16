@@ -263,6 +263,44 @@ set_io_mode
             return 0;  
         }
 
+graph_is_dynamic
+>>>>>>>>>>>>>>>>>>>>>
+
+判断选定计算图是否为动态。
+
+**接口形式:**
+    .. code-block:: c
+
+        bool graph_is_dynamic(const std::string& graph_name);
+
+**参数说明:**
+
+* graph_name: string
+
+设定需要查询的计算图的name。
+
+**返回值说明:**
+
+* is_dynamic: bool
+
+返回选定计算图是否为动态的判断结果。
+
+**示例代码:**
+    .. code-block:: c
+
+        #include "engine.h"
+
+        int main() {  
+            int dev_id = 0;
+            sail::Engine engine(dev_id);
+            std::string bmodel_path = "your_bmodel.bmodel";
+            engine.load(bmodel_path);
+            std::vector<std::string> bmodel_names = engine.get_graph_names();
+            bool is_dynamic = engine.graph_is_dynamic(bmodel_names[0]);
+            return 0;  
+        }
+
+
 get_input_names
 >>>>>>>>>>>>>>>>>>>>>
 

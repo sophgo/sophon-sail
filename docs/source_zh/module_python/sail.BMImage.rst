@@ -15,7 +15,20 @@ BMImage也是通过Bmcv接口进行其他图像处理操作的基本数据类型
 
         def __init__(self)
 
-        def __init__(self, handle: sail.Handle, h: int, w: int, format: sail.Format, dtype: sail.ImgDtype)
+        def __init__(self, handle: sail.Handle, 
+                     h: int, 
+                     w: int, 
+                     format: sail.Format, 
+                     dtype: sail.ImgDtype)
+
+        def __init__(self, handle: sail.Handle, 
+                     buffer: bytes | np.array, 
+                     h: int, 
+                     w: int, 
+                     format: sail.Format, 
+                     dtype: sail.ImgDtype = DATA_TYPE_EXT_1N_BYTE, 
+                     strides: list[int] = None, 
+                     offset: int = 0)
 
 **参数说明:**
 
@@ -33,11 +46,26 @@ BMImage也是通过Bmcv接口进行其他图像处理操作的基本数据类型
 
 * format : sail.Format
 
-图像的格式。
+图像的像素格式。
+支持 `sail.Format <0_enum_type/sail.Format.html>`_ 中的像素格式。
 
 * dtype: sail.ImgDtype
 
 图像的数据类型。
+支持 `sail.ImgDtype <0_enum_type/sail.ImgDtype.html>`_ 中的像素格式。
+
+* buffer: bytes | np.array
+
+用于创建图像的保存了像素值的buffer
+
+* strides
+
+用buffer创建图像时图像的步长。单位为byte，默认为空，表示和一行的数据宽度相同。
+如果需要指定，注意list中元素个数要与图像plane数一致
+
+* offset
+
+用buffer创建图像时有效数据相对buffer起始地址的偏移量。单位为byte，默认为0
 
 
 width
@@ -161,7 +189,7 @@ get_handle
 asmat
 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
-将BMImage中的数据转换成numpy.ndarray
+将BMImage中的数据转换成cv2默认的BGR_PACKED像素格式的numpy.ndarray。
 
 **接口形式:**
     .. code-block:: python
@@ -172,7 +200,84 @@ asmat
 
 * image : numpy.ndarray[numpy.uint8]  
 
+返回BMImage中的数据，自动转换成BGR PACKED像素格式。
+
+
+asnumpy
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+将BMImage中的图像裸数据转换成numpy.ndarray，并保持像素格式不变。
+
+支持的像素格式为 `sail.Format <0_enum_type/sail.Format.html>`_ 中列出的格式。
+
+支持的数据类型为DATA_TYPE_EXT_1N_BYTE、DATA_TYPE_EXT_1N_BYTE_SIGNED和DATA_TYPE_EXT_FLOAT32。
+
+不同像素格式返回的ndarray的shape见下表：
+
+.. list-table:: 
+   :widths: 50 50
+   :header-rows: 1
+
+   * - 像素格式
+     - 输出维度
+   * - FORMAT_BGR_PACKED / FORMAT_BGR_PACKED
+     - (height, width, 3)
+   * - FORMAT_ARGB_PACKED / FORMAT_ABGR_PACKED
+     - (height, width, 4)
+   * - FORMAT_GRAY
+     - (1, height, width)
+   * - FORMAT_BGR_PLANAR / FORMAT_RGB_PLANAR
+     - (3, height, width)
+   * - FORMAT_YUV444P
+     - (3, height, width)
+   * - 其他
+     - (numel,)
+
+其中，numel表示该BMImage所含像素点的个数。
+例如，
+对于YUV420P或NV12，numel = height * width * 1.5 ；
+对于BGR_PACKED或BGR_PLANAR，numel = height * width * 3 。
+
+**接口形式:**
+    .. code-block:: python
+
+        def asnumpy(self) -> numpy.ndarray
+
+**返回值说明:**
+
+* image : numpy.ndarray
+
 返回BMImage中的数据。
+
+**示例代码:**
+    .. code-block:: python
+
+        import sophon.sail as sail
+        import numpy as np
+
+        if __name__ == '__main__':
+            devid = 0
+            handle = sail.Handle(devid)
+            height = 1080
+            width = 1920
+            dtype = sail.ImgDtype.DATA_TYPE_EXT_1N_BYTE
+            np_dtype = np.uint8
+
+            # example for BGR_PLANAR
+            format = sail.Format.FORMAT_BGR_PLANAR
+            numel = int(height * width * 3)
+            rawdata = np.random.randint(0, 255, (numel,), np_dtype)
+            img = sail.BMImage(handle, rawdata, height, width, format, dtype)
+            out_ndarray = img.asnumpy()
+            assert out_ndarray.shape == (3, height, width)
+
+            # example for YUV420P
+            format = sail.Format.FORMAT_YUV420P
+            numel = int(height * width * 1.5)
+            rawdata = np.random.randint(0, 255, (numel,), np_dtype)
+            img = sail.BMImage(handle, rawdata, height, width, format, dtype)
+            out_ndarray = img.asnumpy()
+            assert out_ndarray.shape == (numel,)
 
 
 get_plane_num
@@ -299,3 +404,7 @@ check_contiguous_memory
 
             # check contiguous memory
             print(BMimg.check_contiguous_memory())
+
+            # create BMImage with data from buffer
+            buf = bytes([i % 256 for i in range(int(200*100*3))])
+            img_fromRawdata = sail.BMImage(handle, buf, 200, 100, sail.Format.FORMAT_BGR_PACKED)

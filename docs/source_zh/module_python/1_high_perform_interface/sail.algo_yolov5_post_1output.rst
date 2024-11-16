@@ -120,7 +120,7 @@ push_npy
 push_data
 >>>>>>>>>>>>>
 
-输入数据，支持batchsize不为1的输入。
+输入数据，只支持batchsize为1的输入，或者输入之前将数据拆分之后再送入接口。
 
 **接口形式:**
     .. code-block:: python
@@ -128,7 +128,7 @@ push_data
         def push_data(self, 
             channel_idx: list[int], 
             image_idx: list[int], 
-            input_data: list[TensorPTRWithName], 
+            input_data: TensorPTRWithName, 
             dete_threshold: list[float],
             nms_threshold: list[float],
             ost_w: list[int],
@@ -145,7 +145,7 @@ push_data
 
 输入参数。输入图像序列的编号。
 
-* input_data: list[TensorPTRWithName]
+* input_data: TensorPTRWithName
 
 输入参数。输入数据。
 
@@ -248,11 +248,11 @@ tuple[tuple[left, top, right, bottom, class_id, score],channel_idx, image_idx]
             nms_thresholds = np.ones(len(channels),dtype=np.float32)
             dete_thresholds = 0.2*dete_thresholds
             nms_thresholds = 0.5*nms_thresholds
-            ret = yolov5_post.push_data(channels, imageidxs, output_tensor_map, dete_thresholds, nms_thresholds, width_list, height_list, paddding_attrs)
+            ret = yolov5_post.push_data(channels, imageidxs, output_tensor_map[0], dete_thresholds, nms_thresholds, width_list, height_list, paddding_attrs)
             # 以下是利用push_npy接口推送 numpy 数据的示例
-            .. for index, channel in enumerate(channels):
-            ..     ret = yolov5_post.push_npy(channel, index, output_tensor_map[index].get_data().asnumpy(), 0.2, 0.5, 
-            ..             ost_images[index].width(), ost_images[index].height(), 
-            ..             paddding_attrs[index][0], paddding_attrs[index][1], paddding_attrs[index][2], paddding_attrs[index][3])
+            # for index, channel in enumerate(channels):
+            #     ret = yolov5_post.push_npy(channel, index, output_tensor_map[index].get_data().asnumpy(), 0.2, 0.5, 
+            #             ost_images[index].width(), ost_images[index].height(), 
+            #             paddding_attrs[index][0], paddding_attrs[index][1], paddding_attrs[index][2], paddding_attrs[index][3])
             objs, channel, image_idx = yolov5_post.get_result_npy()
             print(objs, channel, image_idx)

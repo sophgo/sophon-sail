@@ -26,6 +26,11 @@ You may obtain a copy of the License at
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
 #endif
+
+#ifdef USE_OPENCV
+#include <opencv2/core/mat.hpp>
+#endif
+
 #include <tensor.h>
 #include <string>
 #include <vector>
@@ -784,6 +789,102 @@ class DECL_EXPORT algo_yolov5_post_cpu_opt {
      * @return Reference of a algo_yolov5_post_cpu_opt instance.
      */
     algo_yolov5_post_cpu_opt& operator=(const algo_yolov5_post_cpu_opt& other) = delete;
+};
+
+// algo_yolov8_seg_post_tpu_opt
+struct YoloV8Box {
+    float left;
+    float top;
+    float right;
+    float bottom;
+    float score;
+    unsigned int class_id;
+    std::vector<float> mask;
+    std::vector<float> contour;
+    cv::Mat mask_img;
+};
+
+class DECL_EXPORT algo_yolov8_seg_post_tpu_opt {
+    public:
+    /**
+     * @brief Constructor
+     * 
+     * @param bmodel_file             TPU getmask bmodel 
+     * @param dev_id                  device id 
+     * @param detection_shape         The shapes of detection head
+     * @param segmentation_shape      The shapes of segmentation head, that is Prototype Mask
+     * @param network_h               The input height of yolov8 network
+     * @param network_w               The input width of yolov8 network
+     */
+    explicit algo_yolov8_seg_post_tpu_opt(string bmodel_file, int dev_id, const vector<int>& detection_shape, const vector<int>& segmentation_shape, int network_h, int network_w);
+
+     /**
+     * @brief Destructor 
+     */ 
+    ~algo_yolov8_seg_post_tpu_opt();
+
+    /**
+     * @brief Process (single batch)
+     * 
+     * @param detection_input               The input data of detection head
+     * @param segmentation_input            The input data of segmentation head, that is Prototype Mask
+     * @param ost_h                         Original image height
+     * @param ost_w                         Original image width 
+     * @param dete_threshold                Detection threshold
+     * @param nms_threshold                 NMS threshold
+     * @param input_keep_aspect_ratio       Input keeping aspect ratio  
+     * @param input_use_multiclass_nms      Input with multiclass
+     * @return                              Segmentiont results[left, top, right, bottom, score, class_id, contour, mask] 
+     */
+    int process(TensorPTRWithName &detection_input,
+                TensorPTRWithName &segmentation_input,
+                int &ost_h,
+                int &ost_w,
+                vector<YoloV8Box> &yolov8_results,
+                float &dete_threshold,
+                float &nms_threshold,
+                bool input_keep_aspect_ratio,
+                bool input_use_multiclass_nms);
+ 
+#ifdef PYTHON
+    pybind11::list process(map<string, Tensor&> &detection_input,
+                            map<string, Tensor&> &segmentation_input,
+                            int &ost_h,
+                            int &ost_w,
+                            float &dete_threshold,
+                            float &nms_threshold,
+                            bool input_keep_aspect_ratio,
+                            bool input_use_multiclass_nms);
+    
+    pybind11::list process(TensorPTRWithName &detection_input,
+                            TensorPTRWithName &segmentation_input,
+                            int &ost_h,
+                            int &ost_w,
+                            float &dete_threshold,
+                            float &nms_threshold,
+                            bool input_keep_aspect_ratio,
+                            bool input_use_multiclass_nms);
+#endif
+    private:
+    class algo_yolov8_seg_post_tpu_opt_cc;
+    class algo_yolov8_seg_post_tpu_opt_cc* const _impl;
+
+    /**
+     * @brief Forbidden copy constructor.
+     * @brief Copy constructor.
+     *
+     * @param other An other algo_yolov8_seg_post_tpu_opt instance.
+     */
+    algo_yolov8_seg_post_tpu_opt(const algo_yolov8_seg_post_tpu_opt& other) = delete;
+    
+    /**
+     * @brief Forbidden assignment function.
+     * @brief Assignment function.
+     *
+     * @param other An other algo_yolov8_seg_post_tpu_opt instance.
+     * @return Reference of a algo_yolov8_seg_post_tpu_opt instance.
+     */
+    algo_yolov8_seg_post_tpu_opt& operator=(const algo_yolov8_seg_post_tpu_opt& other) = delete;
 };
 
 /*下面的内容都是跟目标跟踪有关*/

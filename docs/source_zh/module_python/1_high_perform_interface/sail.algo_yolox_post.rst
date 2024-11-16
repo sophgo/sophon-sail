@@ -110,7 +110,7 @@ push_npy
 push_data
 >>>>>>>>>>>>>
 
-输入数据，支持batchsize不为1的输入。
+输入数据，只支持batchsize为1的输入，或者输入之前将数据拆分之后再送入接口。
 
 **接口形式:**
     .. code-block:: python
@@ -135,7 +135,7 @@ push_data
 
 输入参数。输入图像序列的编号。
 
-* data: numpy.ndarray[Any, numpy.dtype[numpy.float\_]],
+* input_data: TensorPTRWithName
 
 输入参数。输入数据。
 
@@ -217,15 +217,14 @@ tuple[tuple[left, top, right, bottom, class_id, score],channel_idx, image_idx]
         if __name__ == '__main__':
             tpu_id = 0
             handle = sail.Handle(tpu_id)
-            image_name = "../../../sophon-demo/sample/YOLOv5/datasets/test/3.jpg"
-            bmodel_name = "../../../sophon-demo/sample/YOLOX/models/BM1684X/yolox_int8_1b.bmodel"
+            image_name = "../../../sophon-demo/sample/YOLOX/datasets/test/3.jpg"
+            bmodel_name = "../../../sophon-demo/sample/YOLOX/models/BM1684X/yolox_s_fp32_1b.bmodel"
             decoder = sail.Decoder(image_name,True,tpu_id)
             bmimg = decoder.read(handle)
             engine_image_pre_process = sail.EngineImagePreProcess(bmodel_name, tpu_id, 0)
             engine_image_pre_process.InitImagePreProcess(sail.sail_resize_type.BM_PADDING_TPU_LINEAR, True, 10, 10)
             engine_image_pre_process.SetPaddingAtrr(114,114,114,1)
-            alpha_beta = (1.0/255,0),(1.0/255,0),(1.0/255,0)
-            engine_image_pre_process.SetConvertAtrr(alpha_beta)
+            engine_image_pre_process.SetConvertAtrr(((1, 0), (1, 0), (1, 0)))
             ret = engine_image_pre_process.PushImage(0,0, bmimg)
             engine_image_pre_process
             output_tensor_map, ost_images, channels ,imageidxs, padding_atrr = engine_image_pre_process.GetBatchData(True)
@@ -234,7 +233,7 @@ tuple[tuple[left, top, right, bottom, class_id, score],channel_idx, image_idx]
             for index, channel in enumerate(channels):
                 width_list.append(ost_images[index].width())
                 height_list.append(ost_images[index].height())
-            yolox_post = sail.algo_yolox_post([[1, 3, 20, 20, 85],[1, 3, 40, 40, 85],[1, 3, 80, 80, 85]],640,640,10)
+            yolox_post = sail.algo_yolox_post([1, 8400, 85],640,640,10)
             dete_thresholds = np.ones(len(channels),dtype=np.float32)
             nms_thresholds = np.ones(len(channels),dtype=np.float32)
             dete_thresholds = 0.2*dete_thresholds

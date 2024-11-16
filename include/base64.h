@@ -19,7 +19,7 @@ You may obtain a copy of the License at
  *  @version  2.3.2
  *  @date     2021-04-06
  */
-
+#pragma once
 #ifndef SAIL_BASE64_H
 #define SAIL_BASE64_H
 

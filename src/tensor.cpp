@@ -38,6 +38,7 @@ namespace sail {
         bm_dev_request(&handle, dev_id);
         unsigned int board_temp=0;
         bm_get_board_temp(handle, &board_temp);
+        bm_dev_free(handle);
         return board_temp;
     }
 
@@ -47,6 +48,7 @@ namespace sail {
 
         unsigned int chip_temp=0;
         bm_get_chip_temp(handle, &chip_temp);
+        bm_dev_free(handle);
         return chip_temp;
     }
 
@@ -57,6 +59,7 @@ namespace sail {
         bm_dev_request(&handle, dev_id);
         bm_get_stat(handle, &stat);
         std::vector<int> res={stat.mem_total, stat.mem_used,stat.tpu_util};
+        bm_dev_free(handle);
         return res;
     }
 
@@ -72,7 +75,7 @@ namespace sail {
 
         bm_dev_request(&handle, dev_id);
         bm_get_stat(handle, &stat);
-
+        bm_dev_free(handle);
         return stat.tpu_util;
     }
 
@@ -109,22 +112,26 @@ namespace sail {
             res.push_back(vpu_usage[i]);
         }
 #else
-        std::ifstream file("/proc/vpuinfo");
-        if(!file.is_open()){
-            spdlog::error("File open failed!");
-            exit(0);
+        std::string file_path =  (chipid == 0x1686A200) ? "/proc/soph/vpuinfo" : "/proc/vpuinfo";
+
+        std::ifstream file(file_path); 
+
+        if (!file.is_open()) {
+            spdlog::error("File open failed: {}", file_path);
+            return res;
         }
+
         std::string line;
         std::regex reg(R"(:([0-9]+)%\|([0-9]+)%)");
-        while(std::getline(file, line)){
+        while (std::getline(file, line)) {
             std::smatch sm;
-            bool ret = std::regex_search(line, sm ,reg);
-            if(ret){
+            if (std::regex_search(line, sm, reg)) {
                 int sm_int = std::stoi(sm[1]);
                 res.push_back(sm_int);
             }
         }
 #endif
+        bm_dev_free(handle);
         return res;
     }
 
@@ -148,22 +155,34 @@ namespace sail {
             res.push_back(vpp_usage[i]);
         }
 #else
-        std::ifstream file("/proc/vppinfo");
-        if(!file.is_open()){
-            spdlog::error("File open failed!");
-            exit(0);
+        unsigned int chipid = 0;
+        bm_status_t r_value = bm_get_chipid(handle, &chipid);
+
+        if(r_value != BM_SUCCESS){
+            spdlog::error("Failed to retrieve chip ID: bm_get_chipid failed");
+            return res;
         }
+
+        std::string file_path =  (chipid == 0x1686A200) ? "/proc/soph/vppinfo" : "/proc/vppinfo";
+
+        std::ifstream file(file_path); 
+
+        if (!file.is_open()) {
+            spdlog::error("File open failed: {} ", file_path);
+            return res;
+        }
+
         std::string line;
         std::regex reg(R"(:([0-9]+)%\|([0-9]+)%)");
-        while(std::getline(file, line)){
+        while (std::getline(file, line)) {
             std::smatch sm;
-            bool ret = std::regex_search(line, sm ,reg);
-            if(ret){
+            if (std::regex_search(line, sm, reg)) {
                 int sm_int = std::stoi(sm[1]);
                 res.push_back(sm_int);
             }
         }
 #endif
+        bm_dev_free(handle);
         return res;
     }
 
@@ -269,8 +288,8 @@ namespace sail {
     std::shared_ptr<bm_handle_t> make_shaptr_bm_handle_t(int dev_id){
         std::shared_ptr<bm_handle_t> ptr_temp = std::shared_ptr<bm_handle_t>(new bm_handle_t[1],delete_shaptr_bm_handle_t_allocated);
         if (bm_dev_query(dev_id)) {
-            printf("Error: Invalid tpu id: %d!\n", dev_id);
-            exit(SAIL_ERR_DEV_INIT);
+            SPDLOG_ERROR("Error: Invalid tpu id: {}!", dev_id);
+            throw SailDeviceError("invalid device id");
         }
         bm_dev_request(&ptr_temp.get()[0], dev_id);
         return std::move(ptr_temp);
@@ -462,8 +481,8 @@ namespace sail {
     inline
     Range::Range(int s, int e){
         if (s >= e or s < 0){
-            spdlog::error("Range is not valid!");
-            exit(SAIL_ERR_TENSOR_INIT);
+            SPDLOG_ERROR("Range is invalid!");
+            throw SailTensorError("size out of range");
         }
         
         start = s;
@@ -492,6 +511,11 @@ namespace sail {
         explicit Tensor_CC(
             const std::vector<int>& shape,
             bm_data_type_t          dtype);
+
+        explicit Tensor_CC(const Tensor_CC *src,
+                           const std::vector<int> &shape,
+                           unsigned int offset,
+                           bool no_copy);
 
         void free();
         
@@ -612,7 +636,8 @@ namespace sail {
                 ret = bm_malloc_device_byte_heap_mask(handle_.data(), &dev_data_, 7, data_size_);
 #endif
                 if (BM_SUCCESS != ret) {
-                    SPDLOG_ERROR("bm_malloc_device_type() err={}, size={}", ret, data_size_);
+                    SPDLOG_ERROR("bm_malloc_device_byte() err={}, size={}", ret, data_size_);
+                    throw SailRuntimeError("no enough device memory");
                 }
 
                 int c = 0;
@@ -620,6 +645,7 @@ namespace sail {
                 ret = bm_memset_device_ext(handle_.data(), value, 1, dev_data_);
                 if (BM_SUCCESS != ret) {
                     SPDLOG_ERROR("bm_memset_device failed, return={}", ret);
+                    throw SailRuntimeError("bmlib api fail");
                 }
             }
             if (own_sys_data_) {
@@ -627,8 +653,12 @@ namespace sail {
                 sys_data_ = malloc(data_size_);
 #else
                 if (own_dev_data_) {
-                  bm_mem_mmap_device_mem(handle_.data(), &dev_data_,
+                    ret = bm_mem_mmap_device_mem(handle_.data(), &dev_data_,
                                          (unsigned long long*)&sys_data_);
+                    if (BM_SUCCESS != ret) {
+                        SPDLOG_ERROR("bm_mem_mmap_device_mem failed, return={}", ret);
+                        throw SailRuntimeError("bmlib api fail");
+                    }
                   own_sys_data_is_mmap_ = true;
                 } else {
                   sys_data_ = malloc(data_size_);
@@ -650,6 +680,63 @@ namespace sail {
         if (data_size_ > 0) {
             sys_data_ = malloc(data_size_);
             memset(sys_data_,0,data_size_);
+        }
+    }
+
+    Tensor::Tensor_CC::Tensor_CC(const Tensor_CC *src,
+                                 const std::vector<int> &shape,
+                                 unsigned int offset,
+                                 bool no_copy)
+        : handle_(src->handle_), dtype_(src->dtype_),
+          device_id_(src->device_id_), shape_(shape),
+          own_sys_data_(false), own_sys_data_is_mmap_(false),
+          own_dev_data_(false), sys_data_(nullptr), data_size_(0)
+    {
+        // check src status
+        if (!shape_is_valid(shape_))
+        {
+            SPDLOG_ERROR("The input shape is invalid.");
+            throw SailTensorError("invalid shape");
+        }
+        if (!src->is_dev_data_valid())
+        {
+            SPDLOG_ERROR("The source Tensor has no device memory.");
+            throw SailTensorError("invalid Tensor");
+        }
+
+        // check params
+        int type_size = get_type_size(dtype_);
+        spdlog::debug("Tensor init, type_size: {}", type_size);
+        data_size_ = std::accumulate(shape_.begin(), shape_.end(),
+                                     type_size, std::multiplies<int>());
+        auto offset_size = static_cast<unsigned long long>(offset * type_size);
+        if (src->data_size_ < data_size_ ||
+            src->data_size_ < offset_size + data_size_)
+        {
+            SPDLOG_ERROR("The source Tensor's size is not enough.");
+            throw SailTensorError("size out of range");
+        }
+
+        if (no_copy)
+        {
+            // reuse src device memory
+            bm_set_device_mem(&dev_data_, static_cast<unsigned int>(data_size_),
+                              src->dev_data_.u.device.device_addr + offset_size);
+            spdlog::debug("Tensor init, dev_data_.u.device.device_addr: {}, size: {}",
+                          dev_data_.u.device.device_addr, dev_data_.size);
+            // reuse src system memory
+            if (src->is_sys_data_valid())
+            {
+                sys_data_ = static_cast<void *>(src->sys_data_ + offset_size);
+            }
+        }
+        else
+        {
+            // TODO
+            SPDLOG_ERROR("no_copy=true is not supported yet.");
+            throw SailTensorError("not supported");
+            // set own flag
+            // d2d
         }
     }
 
@@ -687,7 +774,7 @@ namespace sail {
     void Tensor::Tensor_CC::reset(const std::vector<int> &shape, bm_data_type_t dtype) {
         if (!shape_is_valid(shape)) {
             spdlog::error("Invalid tensor shape!");
-            exit(SAIL_ERR_TENSOR_SHAPE);
+            throw SailTensorError("invalid argument");
         }
 
         int ret = 0;
@@ -706,6 +793,7 @@ namespace sail {
 #endif
                 if (BM_SUCCESS != ret) {
                     SPDLOG_ERROR("bm_malloc_device_byte err={}, size={}", ret, data_size);
+                    throw SailRuntimeError("no enough device memory");
                 }
             }
             if (own_sys_data_) {
@@ -740,7 +828,7 @@ namespace sail {
                 memcpy(sys_data_, data, data_size_);
             } else {
                 spdlog::error("Cannot reset_sys_data when own_dev_data is true.");
-                exit(SAIL_ERR_TENSOR_DEVMEM);
+                throw SailTensorError("invalid argument");
             }
             PRINT_TIME_MS("memcpy_cpu_to_cpu_0", process_start_time_befor)
         } else if (own_sys_data_) {
@@ -859,13 +947,13 @@ namespace sail {
         // Ensure data types match
         if (dtype_ != src->dtype_) {
             spdlog::error("sync_d2d: Data types do not match!");
-            exit(SAIL_ERR_TENSOR_DTYPE);
+            throw SailTensorError("mismatch Tensor");
         }
 
         // Ensure both source and destination data are on the device
         if (!src->is_dev_data_valid() || !is_dev_data_valid()) {
             spdlog::error("sync_d2d: Data is not on the device!");
-            exit(SAIL_ERR_TENSOR_DEVMEM);
+            throw SailTensorError("invalid Tensor");
         }
 
         // Calculate the total number of elements for source and destination
@@ -875,11 +963,11 @@ namespace sail {
         // Check if source and destination data are within bounds
         if (offset_src + len > src_size) {
             spdlog::error("sync_d2d: Source data out of bounds, offset_src:{}, len:{}, src_size:{}!",offset_src, len, src_size);
-            exit(SAIL_ERR_TENSOR_PARAM);
+            throw SailTensorError("size out of range");
         }
         if (offset_dst + len > size) {
             spdlog::error("sync_d2d: Destination data out of bounds, offset_dst:{}, len:{}, dst_size:{}!",offset_dst, len, size);
-            exit(SAIL_ERR_TENSOR_PARAM);
+            throw SailTensorError("size out of range");
         }
 
         // Get the size of the data type
@@ -1030,7 +1118,7 @@ namespace sail {
     void Tensor::Tensor_CC::sync_from(Tensor_CC* src)   {
         if (dtype_ != src->dtype_) {
             spdlog::error("sync_from: data type not match!");
-            exit(SAIL_ERR_TENSOR_DTYPE);
+            throw SailTensorError("mismatch Tensor");
         }
         int size = std::accumulate(shape_.begin(), shape_.end(),
                                    1, std::multiplies<int>());
@@ -1039,7 +1127,7 @@ namespace sail {
                                        1, std::multiplies<int>());
         if (size != src_size) {
             spdlog::error("sync_from: tensor size not match!");
-            exit(SAIL_ERR_TENSOR_SIZE);
+            throw SailTensorError("size out of range");
         }
         auto src_handle = src->handle_.data();
         auto dtype_size = get_type_size(dtype_);
@@ -1080,7 +1168,7 @@ namespace sail {
     void Tensor::Tensor_CC::sync_to(Tensor_CC* dst){
         if (dtype_ != dst->dtype_) {
             spdlog::error("dst_from: data type not match!");
-            exit(SAIL_ERR_TENSOR_DTYPE);
+            throw SailTensorError("mismatch Tensor");
         }
         int size = std::accumulate(shape_.begin(), shape_.end(),
                                    1, std::multiplies<int>());
@@ -1089,7 +1177,7 @@ namespace sail {
                                        1, std::multiplies<int>());
         if (size != dst_size) {
             spdlog::error("dst_from: tensor size not match!");
-            exit(SAIL_ERR_TENSOR_SIZE);
+            throw SailTensorError("size out of range");
         }
         auto dst_handle = dst->handle_.data();
         auto dtype_size = get_type_size(dtype_);
@@ -1246,24 +1334,24 @@ namespace sail {
     bm_device_mem_t Tensor::Tensor_CC::slice(std::vector<sail::Range> &ranges, bool d2d_flag=true){
         if (ranges.size()>2 || shape_.size() > 2){
             spdlog::error("slicing not support shape > 2");
-            exit(SAIL_ERR_TENSOR_INIT);
+            throw SailTensorError("invalid argument");
         }
 
         if (shape_.size()!=ranges.size()){
             spdlog::error("original tensor shape is not equal to slicing shape");
-            exit(SAIL_ERR_TENSOR_INIT);
+            throw SailTensorError("invalid argument");
         }
         
         if(!is_dev_data_valid()){
             spdlog::error("no device mem from the original tensor");
-            exit(SAIL_ERR_TENSOR_INIT);
+            throw SailTensorError("invalid Tensor");
         }
 
         std::vector<int> new_shape;
         for (int i = 0; i < ranges.size(); i++){
             if (ranges[i].end > shape_[i]){
                 spdlog::error("slicing range is larger than origin tensor");
-                exit(SAIL_ERR_TENSOR_INIT);
+                throw SailTensorError("size out of range");
             }
             new_shape.emplace_back(ranges[i].size());
         }
@@ -1280,13 +1368,15 @@ namespace sail {
         ret = bm_malloc_device_byte_heap_mask(handle_.data(), &new_dev_data, 7, new_data_size);
 #endif
         if (ret != BM_SUCCESS){
-            SPDLOG_ERROR("bm_malloc_device_type() err={}, size={}", ret, new_data_size);
+            SPDLOG_ERROR("bm_malloc_device_byte() err={}, size={}", ret, new_data_size);
+            throw SailRuntimeError("no enough device memory");
         }
         int c = 0;
         void* value = (void*)&c;
         ret = bm_memset_device_ext(handle_.data(), value, 1, new_dev_data);
         if (BM_SUCCESS != ret) {
             SPDLOG_ERROR("bm_memset_device failed, return={}", ret);
+            throw SailRuntimeError("bmlib api fail");
         }
 
 
@@ -1326,19 +1416,16 @@ namespace sail {
             }
             
         }
-        if (BM_SUCCESS != ret){
-            if (d2d_flag){
-                spdlog::error("d2d failed");
-                exit(SAIL_ERR_DEV_MCOPY);
-            }else{
-                spdlog::error("c2c failed");
-                exit(SAIL_ERR_DEV_MCOPY);
+        if (BM_SUCCESS != ret) {
+            if (d2d_flag) {
+                SPDLOG_ERROR("d2d failed");
+            } else {
+                SPDLOG_ERROR("c2c failed");
             }
-                
+            throw SailRuntimeError("bmlib api fail");
         }
 
         return std::move(new_dev_data);
-        
     }
 
 #ifdef PYTHON
@@ -1352,7 +1439,7 @@ namespace sail {
         own_dev_data_(own_dev_data),sys_data_(nullptr),dev_data_({}),device_id_(-1){
         if (buf.ndim < 1) {
             spdlog::error("Invalid tensor shape!");
-            exit(SAIL_ERR_TENSOR_SHAPE);
+            throw SailTensorError("invalid argument");
         }
         shape_.clear();
         for (auto it : buf.shape) {
@@ -1387,7 +1474,7 @@ namespace sail {
             numpy_ptr = arr_int32_t.request().ptr;
         }else{
             SPDLOG_ERROR("Input Data Type not supported: {}",dtype);
-            exit(SAIL_ERR_TENSOR_DTYPE);
+            throw SailTensorError("not supported");
         }
 
         // alloc dev_mem
@@ -1402,7 +1489,7 @@ namespace sail {
 #endif
             if (BM_SUCCESS != ret) {
                 SPDLOG_ERROR("bm_malloc_device_byte_heap_mask() err={}", ret);
-                exit(SAIL_ERR_DEV_MALLOC);
+                throw SailRuntimeError("bmlib api fail");
             }
         }
         if (own_sys_data_) {
@@ -1431,7 +1518,7 @@ namespace sail {
     {
         if (buf.ndim != shape_.size()) {
             SPDLOG_ERROR("Invalid tensor shape dims {} vs. {}!",shape_.size(),buf.ndim);
-            exit(SAIL_ERR_TENSOR_SHAPE);
+            throw SailTensorError("invalid argument");
         }
         std::vector<int> shape;
         for (auto it : buf.shape) {
@@ -1451,7 +1538,7 @@ namespace sail {
                 str_shape_new[strlen(str_shape_new)-1] = ']';
                 str_shape_old[strlen(str_shape_old)-1] = ']';
                 SPDLOG_ERROR("Invalid tensor shape {} vs. {}!",str_shape_old,str_shape_new);
-                exit(SAIL_ERR_TENSOR_SHAPE);
+                throw SailTensorError("invalid argument");
             }
         }
         size_t type_size_tmep = 1;
@@ -1481,7 +1568,7 @@ namespace sail {
             type_size, std::multiplies<int>());
         if (new_size > old_size) {
             spdlog::error("Data size exceeds tensor size!");
-            exit(SAIL_ERR_TENSOR_SIZE);
+            throw SailTensorError("size out of range");
         }
 
         void* numpy_ptr = buf.ptr;
@@ -1557,7 +1644,7 @@ namespace sail {
             PRINT_TIME_MS("bm_memcpy_s2d_partial",process_start_time);
         }else{
             spdlog::error("Can not found device memory or host memory!");
-            exit(SAIL_ERR_TENSOR_EMPTY);
+            throw SailTensorError("invalid Tensor");
         }
     }
 
@@ -1575,6 +1662,13 @@ namespace sail {
             const std::vector<int> &shape,
             bm_data_type_t dtype)
             : _impl(new Tensor_CC(shape,dtype)){}
+
+    Tensor::Tensor(
+        const Tensor &src,
+        const std::vector<int> &shape,
+        unsigned int offset,
+        bool no_copy)
+        : _impl(new Tensor_CC(src._impl, shape, offset, no_copy)) {}
 
     Tensor::Tensor(const Tensor &other):_impl(new Tensor_CC()) {
         _impl->handle_ = other._impl->handle_;
@@ -1595,7 +1689,7 @@ namespace sail {
 #endif
             if (BM_SUCCESS != ret) {
                 SPDLOG_ERROR("bm_malloc_device_byte_heap_mask() err={}", ret);
-                exit(SAIL_ERR_TENSOR_INIT);
+                throw SailRuntimeError("device memory not enough");
             }
         }else{
             _impl->dev_data_ = other._impl->dev_data_;
@@ -1688,7 +1782,7 @@ namespace sail {
 #endif
                 if (BM_SUCCESS != ret) {
                     SPDLOG_ERROR("bm_malloc_device_byte_heap_mask() err={}", ret);
-                    exit(SAIL_ERR_TENSOR_INIT);
+                    throw SailRuntimeError("device memory not enough");
                 }
             }
 #ifndef IS_SOC_MODE
@@ -1750,7 +1844,7 @@ namespace sail {
             if (own_sys_data()){
                 std::swap(_impl->own_sys_data_, other._impl->own_sys_data_);
             }else{  
-                _impl->own_sys_data_, other._impl->own_sys_data_;
+                _impl->own_sys_data_ = other._impl->own_sys_data_;
             }
             std::swap(_impl->sys_data_, other._impl->sys_data_);
             std::swap(_impl->dev_data_, other._impl->dev_data_);
@@ -1870,17 +1964,24 @@ namespace sail {
         return _impl->dump_data(file_name, bin);
     }
 
-    int Tensor::size()
-    {
+    int Tensor::size() const {
         return std::accumulate(this->shape().begin(), this->shape().end(), 1, std::multiplies<int>());
     }
+
+    int Tensor::element_size() const {
+        return get_type_size(_impl->dtype_);
+    }
+
+    int Tensor::nbytes() const {
+        return this->size()*this->element_size();
+    }   
 
 #if USE_ASM_SSE
 
     void Tensor::scale_from(float *src, float scale, int size) {
         if (nullptr == _impl->sys_data_) {
             spdlog::error("When call scale_from, own_sys_data must be true");
-            exit(EXIT_FAILURE);
+            throw SailTensorError("invalid Tensor");
         }
         double process_start_time_scale = get_current_time_us();
         AnyScale_SSE(src, BM_FLOAT32, _impl->sys_data_, _impl->dtype_, scale, size);
@@ -1890,7 +1991,7 @@ namespace sail {
     void Tensor::scale_from_int32(int32_t *src, float scale, int size) {
         if (nullptr == _impl->sys_data_) {
             spdlog::error("When call scale_from_int32, own_sys_data must be true");
-            exit(EXIT_FAILURE);
+            throw SailTensorError("invalid Tensor");
         }
         double process_start_time_scale = get_current_time_us();
         AnyScale_SSE(src, BM_INT32, _impl->sys_data_, _impl->dtype_, scale, size);
@@ -1901,7 +2002,7 @@ namespace sail {
 
         if (nullptr == _impl->sys_data_) {
             SPDLOG_ERROR("When call scale_to, own_sys_data must be true");
-            exit(EXIT_FAILURE);
+            throw SailTensorError("invalid Tensor");
         }
 
         double process_start_time_scale = get_current_time_us();
@@ -1927,7 +2028,7 @@ namespace sail {
     void Tensor::scale_from_int32(int32_t* src, float scale, int size) {
       if (nullptr == _impl->sys_data_) {
         spdlog::error("When call scale_from_int32, own_sys_data must be true");
-        exit(EXIT_FAILURE);
+        throw SailTensorError("invalid Tensor");
       }
         double process_start_time_scale = get_current_time_us();
         AnyScale(src, BM_INT32, _impl->sys_data_, _impl->dtype_, scale, size);
@@ -2089,11 +2190,11 @@ namespace sail {
         memory_set((float)1);
     }
 
-    inline bool Tensor::is_dev_data_valid() const {
+    bool Tensor::is_dev_data_valid() const {
         return _impl->is_dev_data_valid();
     }
 
-    inline bool Tensor::is_sys_data_valid() const {
+    bool Tensor::is_sys_data_valid() const {
         return _impl->is_sys_data_valid();
     }
     
@@ -2140,7 +2241,7 @@ namespace sail {
                                           1, std::multiplies<int>());
         if (size > tensor_size) {
             SPDLOG_ERROR("data size exceeds tensor size!");
-            exit(SAIL_ERR_TENSOR_SIZE);
+            throw SailTensorError("size out of range");
         }
 
         float* src = reinterpret_cast<float*>(buf.ptr);
@@ -2158,7 +2259,7 @@ namespace sail {
                                           1, std::multiplies<int>());
         if (size > tensor_size) {
             SPDLOG_ERROR("data size exceeds tensor size!");
-            exit(SAIL_ERR_TENSOR_SIZE);
+            throw SailTensorError("size out of range");
         }
 
         int32_t* src = reinterpret_cast<int32_t*>(buf.ptr);
@@ -2190,7 +2291,7 @@ namespace sail {
         auto ndarray = pybind11::array_t<float>(array_shape);
         if (size > tensor_size) {
             SPDLOG_ERROR("data size exceeds tensor size!");
-            exit(SAIL_ERR_TENSOR_SIZE);
+            throw SailTensorError("size out of range");
         }
 
         float *dst = ndarray.mutable_data();
@@ -2204,8 +2305,10 @@ namespace sail {
         void *data = _impl->sys_data_;
         if (!is_sys_data_valid()) {
             if (!is_dev_data_valid()) {
+                spdlog::debug("Tensor init, dev_data_.u.device.device_addr: {}, size: {}", 
+                              _impl->dev_data_.u.device.device_addr, _impl->dev_data_.size);
                 SPDLOG_ERROR("asnumpy: sys_data=null and dev_data is null!");
-                exit(SAIL_ERR_TENSOR_EMPTY);
+                throw SailTensorError("invalid Tensor");
             }
             ptr.reset(new uint8_t[_impl->data_size_]);
             data = ptr.get();
@@ -2283,7 +2386,7 @@ namespace sail {
         if (!is_sys_data_valid()) {
             if (!is_dev_data_valid()) {
                 SPDLOG_ERROR("asnumpy: sys_data=null and dev_data is null!");
-                exit(SAIL_ERR_TENSOR_EMPTY);
+                throw SailTensorError("invalid Tensor");
             }
             ptr.reset(new uint8_t[_impl->data_size_]);
             data = ptr.get();

@@ -21,6 +21,7 @@ You may obtain a copy of the License at
 #include <engine.h>
 #include <numeric>
 #include <sys/types.h>
+#include <fstream>
 #ifdef WIN
 #else
 #include <unistd.h>
@@ -277,11 +278,11 @@ namespace sail {
         decoder_ = new sail::Decoder(file_path,true,tpu_id_);
         if(decoder_ == NULL){
             SPDLOG_ERROR("Decoder failed! file_path:{}, tpu_id:{}!",file_path,tpu_id);
-            exit(SAIL_ERR_DEC_INIT);
+            throw SailDecoderError("invalid argument");
         }
         if(!decoder_->is_opened()){
             SPDLOG_ERROR("Decoder failed! file_path:{}, tpu_id:{}!",file_path,tpu_id);
-            exit(SAIL_ERR_DEC_INIT);
+            throw SailDecoderError("invalid argument");
         }
         sail_status_t ret = set_decoder_status(sail::DecoderStatus::OPENED);
         std::thread thread_decoder = std::thread(&ChannelDecoder::decoder_thread,this);
@@ -1025,7 +1026,7 @@ namespace sail {
         int batch_size_;
         bool use_padding_;      //是否使用padding
         bool had_padding_atrr_; //是否已经设置过padding属性
-        bool had_resize_attr_;  //是否已经设置热size的属性
+        bool had_resize_attr_;  //是否已经设置resize的属性
 
         int output_width_;				        //输出图像的宽度
         int output_height_;				        //输出图像的高度
@@ -1160,7 +1161,7 @@ namespace sail {
 
         if(batch_size_ != 1 && batch_size_ != 4 && batch_size_ != 8 && batch_size_ != 16 && batch_size_ != 32 && batch_size_ != 64){
             SPDLOG_ERROR("Batch size must be one of [1,4,8,16,32,64]!");
-            exit(1);
+            throw SailEngineError("not supported");
         }
         had_create_thread_flag = false;
         print_flag_ = false;
@@ -1241,7 +1242,7 @@ namespace sail {
             dtype_ = BM_INT8;
         }else{
             SPDLOG_ERROR("DType not supported!");
-            exit(1);
+            throw SailEngineError("not supported");
         }
         had_resize_attr_ = true;
     }
@@ -1342,7 +1343,7 @@ namespace sail {
     {
         if(use_mat_flag){
             SPDLOG_ERROR("USE cvMat Flag is TRUE, Can not use GetBatchData Function!");  
-            exit(1);
+            throw SailEngineError("not supported");
         }
         sail::Tensor out_tensor;
         std::vector<sail::BMImage> images;
@@ -1378,7 +1379,7 @@ namespace sail {
     {
         if(!use_mat_flag){
             SPDLOG_ERROR("USE cvMat Flag is False, Can not use GetBatchData_CV Function!");  
-            exit(1);
+            throw SailEngineError("not supported");
         }
         sail::Tensor out_tensor;
         std::vector<cv::Mat> images;
@@ -1695,11 +1696,11 @@ namespace sail {
     void ImagePreProcess::ImagePreProcess_CC::convert_format_thread(){
         if (!had_resize_attr_){
             SPDLOG_ERROR("Not SetResizeImageAtrr, Create convert format thread failed!");
-            exit(1);
+            throw SailRuntimeError("invalid status");
         }
         if(!set_convert_attr_flag){
             SPDLOG_ERROR("Not Set LinearTransParam, Please Call SetConvertAtrr First!");
-            exit(1);
+            throw SailRuntimeError("invalid status");
         }
 //         SPDLOG_INFO("Create Convert Format Thread, pid:{}, tid:{} .",getpid(),gettid());
         sail::Handle handle(tpu_id_);
@@ -1759,14 +1760,14 @@ namespace sail {
                 // judge ret
                 if (ret != 0){
                     SPDLOG_ERROR("vpp convert format error! ret:{}",ret);
-                    exit(-1);
+                    throw SailBMImageError("bmcv api fail");
                 }
             }else{
                 int ret = bmcv.convert_format(image_temp,format_image);
                 // judge ret
                 if (ret != 0){
                     SPDLOG_ERROR("convert format error! ret:{}",ret);
-                    exit(-1);
+                    throw SailBMImageError("bmcv api fail");
                 }
             }
             {
@@ -1798,11 +1799,11 @@ namespace sail {
     void ImagePreProcess::ImagePreProcess_CC::resize_thread(){
         if (!had_resize_attr_){
             SPDLOG_ERROR("Not SetResizeImageAtrr, Create resize thread failed!");
-            exit(1);
+            throw SailRuntimeError("invalid status");
         }
         if(!set_convert_attr_flag){
             SPDLOG_ERROR("Not Set LinearTransParam, Please Call SetConvertAtrr First!");
-            exit(1);
+            throw SailRuntimeError("invalid status");
         }
         sail::Handle handle(tpu_id_);
         sail::Bmcv bmcv(handle);
@@ -1857,7 +1858,7 @@ namespace sail {
                     // judge ret
                     if (ret != 0){
                         SPDLOG_ERROR("vpp resize error! ret:{}",ret);
-                        exit(-1);
+                        throw SailBMImageError("bmcv api fail");
                     }
                     push_flag = true;
                     break;
@@ -1868,7 +1869,7 @@ namespace sail {
                     // judge ret
                     if (ret != 0){
                         SPDLOG_ERROR("resize error! ret:{}",ret);
-                        exit(-1);
+                        throw SailBMImageError("bmcv api fail");
                     }
                     push_flag = true;
                     break;
@@ -1879,7 +1880,7 @@ namespace sail {
                     // judge ret
                     if (ret != 0){
                         SPDLOG_ERROR("resize error! ret:{}",ret);
-                        exit(-1);
+                        throw SailBMImageError("bmcv api fail");
                     }
                     push_flag = true;
                     break;
@@ -1890,7 +1891,7 @@ namespace sail {
                     // judge ret
                     if (ret != 0){
                         SPDLOG_ERROR("resize error! ret:{}",ret);
-                        exit(-1);
+                        throw SailBMImageError("bmcv api fail");
                     }
                     push_flag = true;
                     break;
@@ -1899,7 +1900,7 @@ namespace sail {
                 {    
                     if(!had_padding_atrr_){
                         SPDLOG_ERROR("Not SetPaddingAtrr, Can not use BM_PADDING_VPP_NEAREST!");
-                        exit(1);
+                        throw SailRuntimeError("invalid status");
                     }
                     pad_att_temp = CalcPaddingAtrr(format_image.width(),format_image.height(),output_width_,output_height_,align_);
                     padding_atrr.set_stx(pad_att_temp[0]);
@@ -1918,7 +1919,7 @@ namespace sail {
                     // judge ret
                     if (ret != 0) {
                         SPDLOG_ERROR("ImagePreProcess resize thread:VPP crop and resize padding failed!");
-                        exit(1);
+                        throw SailBMImageError("bmcv api fail");
                     }
                     push_flag = true;
                     break;
@@ -1927,7 +1928,7 @@ namespace sail {
                 {
                     if(!had_padding_atrr_){
                         SPDLOG_ERROR("Not SetPaddingAtrr, Can not use BM_PADDING_TPU_NEAREST!");
-                        exit(1);
+                        throw SailRuntimeError("invalid status");
                     }
                     pad_att_temp = CalcPaddingAtrr(format_image.width(),format_image.height(),output_width_,output_height_,align_);
                     padding_atrr.set_stx(pad_att_temp[0]);
@@ -1947,7 +1948,7 @@ namespace sail {
                 {
                     if(!had_padding_atrr_){
                         SPDLOG_ERROR("Not SetPaddingAtrr, Can not use BM_PADDING_TPU_LINEAR!");
-                        exit(1);
+                        throw SailRuntimeError("invalid status");
                     }
                     pad_att_temp = CalcPaddingAtrr(format_image.width(),format_image.height(),output_width_,output_height_,align_);
                     padding_atrr.set_stx(pad_att_temp[0]);
@@ -1965,7 +1966,7 @@ namespace sail {
                 {
                     if(!had_padding_atrr_){
                         SPDLOG_ERROR("Not SetPaddingAtrr, Can not use BM_PADDING_TPU_BICUBIC!");
-                        exit(1);
+                        throw SailRuntimeError("invalid status");
                     }
                     pad_att_temp = CalcPaddingAtrr(format_image.width(),format_image.height(),output_width_,output_height_,align_);
                     padding_atrr.set_stx(pad_att_temp[0]);
@@ -1982,7 +1983,7 @@ namespace sail {
                 default:
                 {
                     SPDLOG_ERROR("Error resize mode: Unknown{}!",resize_mode_);
-                    exit(1);
+                    throw SailRuntimeError("invalid argument");
                     break;
                 }
             } 
@@ -2005,11 +2006,11 @@ namespace sail {
     {
         if (!had_resize_attr_){
             SPDLOG_ERROR("Not SetResizeImageAtrr, Create convert to thread failed!");
-            exit(1);
+            throw SailRuntimeError("invalid status");
         }
         if(!set_convert_attr_flag){
             SPDLOG_ERROR("Not Set LinearTransParam, Please Call SetConvertAtrr First!");
-            exit(1);
+            throw SailRuntimeError("invalid status");
         }
         sail::Handle handle(tpu_id_);
         sail::Bmcv bmcv(handle);
@@ -2048,7 +2049,7 @@ namespace sail {
             // judge ret
             if (ret != 0){
                 SPDLOG_ERROR("convert to error! ret:{}",ret);
-                exit(-1);
+                throw SailBMImageError("bmcv api fail");
             }
             Convert_queue->Push(out_image);
             if(print_flag_){
@@ -2065,11 +2066,11 @@ namespace sail {
     void ImagePreProcess::ImagePreProcess_CC::to_tensor_thread(){
         if (!had_resize_attr_){
             SPDLOG_ERROR("Not SetResizeImageAtrr, Create resize thread failed!");
-            exit(1);
+            throw SailRuntimeError("invalid status");
         }
         if(!set_convert_attr_flag){
             SPDLOG_ERROR("Not Set LinearTransParam, Please Call SetConvertAtrr First!");
-            exit(1);
+            throw SailRuntimeError("invalid status");
         }
         sail::Handle handle(tpu_id_);
         sail::Bmcv bmcv(handle);
@@ -2137,7 +2138,7 @@ namespace sail {
 
             default:{
                 SPDLOG_ERROR("Batch size is not supported, bathsize must be 1,4,8,16,32,64!");
-                exit(1);
+                throw SailEngineError("not supported");
                 break;
             }
             }
@@ -2344,7 +2345,7 @@ private:
         engine_ = new sail::Engine(bmodel_name, tpu_id, DEVIO);
         if (engine_ == NULL){
             SPDLOG_INFO("Create Engine failed,bmode_name:{}, tpu:{}",bmodel_name,tpu_id);
-            exit(1);
+            throw SailEngineError("Engine related error");
         }
         graph_name_ = engine_->get_graph_names()[0];
         input_name_ = engine_->get_input_names(graph_name_)[0];
@@ -2377,7 +2378,9 @@ private:
 
     EngineImagePreProcess::EngineImagePreProcess_CC::~EngineImagePreProcess_CC()
     {
-        pre_process_->stop_thread();
+        if(pre_process_){
+            pre_process_->stop_thread();
+        }
         SPDLOG_INFO("Start Set Thread Exit Flag!");
         set_thread_exit();
         SPDLOG_INFO("End Set Thread Exit Flag, Waiting Thread Exit....");
@@ -2572,11 +2575,11 @@ private:
 
         if (engine_ == NULL){
             SPDLOG_INFO("Engine is NULL!");
-            exit(1);
+            throw SailRuntimeError("invalid status");
         }
         if(pre_process_ == NULL) {
             SPDLOG_ERROR("ImagePreProcess is NULL!");
-            exit(1);
+            throw SailRuntimeError("invalid status");
         }
         sail::Handle handle(tpu_id_);
         sail::Bmcv bmcv(handle);
@@ -2752,7 +2755,7 @@ private:
             engine_->scale_int32_to_fp32(src, data, scale, size);
         }else{
             SPDLOG_ERROR("scale_output_tensor() not support!");
-            exit(-1);
+            throw SailTensorError("not supported");
         }
     }
 
@@ -2886,7 +2889,7 @@ private:
             format = pybind11::format_descriptor<uint8_t>::format();
         }else{
             SPDLOG_ERROR("Mat type not support: {}",cv_mat.type());
-            exit(1);
+            throw SailBMImageError("not supported");
         }
         
         int stride_temp = FFALIGN(cv_mat.cols * 3 * item_size, SAIL_ALIGN); // ceiling to 64 * N
@@ -2944,7 +2947,7 @@ private:
                 if (ret != BM_SUCCESS) {
                     spdlog::error("bm_memcpy_d2s_partial(sys_data=%p, dev_data.addr=%p, size=%d)\n",
                                     data, (void *) dev_data_.u.device.device_addr, data_size);
-                    exit(-1);
+                    throw SailRuntimeError("bmlib api fail");
                 }
             }
             output[pybind11::str(iter->first)] = ndarray;
@@ -3050,6 +3053,411 @@ private:
     bool EngineImagePreProcess::get_exhausted_flag()
     {
         return _impl->get_exhausted_flag();
+    }
+
+    class ImageListDecoder      //通过此方法可以将图片预先加载到TPU中，主要为了防止出现图片解码瓶颈
+    {
+    public:
+        /**
+         * @brief Construct a new Image List Decoder object
+         * 
+         * @param image_list image name list
+         * @param tpu_id     TPU ID. You can use bm-smi to see available IDs.
+         * @param queue_size max queue size
+         */
+        explicit ImageListDecoder(
+                    std::vector<std::string>& image_list,
+                    int tpu_id,
+                    int queue_size);
+
+        /**
+         * @brief Destroy the Image List Decoder object
+         * 
+         */
+        ~ImageListDecoder();
+
+        /**
+         * @brief Set the Resize Attr object
+         * 
+         * @param width output width
+         * @param height output height
+         * @param resize_alg Resize algorithm, defalut BMCV_INTER_LINEAR
+         * @return int, 0 for success and other for failure 
+         */
+        int setResizeAttr(int width, int height, bmcv_resize_algorithm resize_alg = BMCV_INTER_LINEAR);
+
+        /**
+         * @brief Start read images
+         * 
+         * @return int, 0 for success and other for failure 
+         */
+        int start();
+
+        /**
+         * @brief 
+         * 
+         * @param image 
+         * @return int 0:success, 1:queue empty, -1:stop and exit
+         */
+        int read(BMImage &image);
+
+        /**
+         * @brief stop thread
+         * 
+         */
+        void stop();
+
+        /**
+         * @brief Get the schedule object
+         * 
+         * @return int The number of decoded images
+         */
+        int get_schedule();
+ 
+    private:
+        /* data */
+        BMImageQueue* pframes_queue;
+
+        std::vector<std::string> image_name_list;
+        std::condition_variable data_flag_cond;
+        std::mutex mutex_data_flag;
+
+        int current_index_;          //当前的进度
+        int tpu_id_;                 //使用的dev
+
+        bool stop_thread_flag;      //线程退出的标志位
+        std::mutex mutex_stop_;     //线程退出互斥锁
+        std::condition_variable exit_cond;  //线程已经退出的信号量
+        std::mutex mutex_exit_;             //线程已经退出互斥锁
+        bool exit_thread_flag;              //线程已经退出的标志位
+
+        bmcv_resize_algorithm resize_alg_;      //如果设置resize, resize使用的算法
+        bool resize_flag;                       //是否需要resize的标志位
+        bool thread_flag;                       //线程是否已经开启的标志位
+        int width_;                             //输出图片的宽
+        int height_;                            //输出图片的高
+
+
+    private:
+        void decoder_thread();          //解码线程
+        
+        void set_stop_flag(bool flag);  //设置线程退出的标志位
+
+        bool get_stop_flag();           //获取线程退出的标志位
+
+        void notify_data_flag();        //发送已经有缓存数据的信号
+
+        void set_thread_exit();         //设置线程已经退出     
+
+        void wait_thread_exit();        //等待线程退出
+    };
+    
+    ImageListDecoder::ImageListDecoder(
+                    std::vector<std::string>& image_list,
+                    int tpu_id,
+                    int queue_size):
+        image_name_list(image_list),current_index_(0),stop_thread_flag(false),
+        exit_thread_flag(true), tpu_id_(tpu_id),thread_flag(false),resize_flag(false)
+    {
+        pframes_queue = new BMImageQueue(queue_size);
+    }
+
+    int ImageListDecoder::setResizeAttr(int width, int height, bmcv_resize_algorithm resize_alg)
+    {
+        if(thread_flag){
+            SPDLOG_INFO("Needs to be called before the start()!");
+            return 1;
+        }
+        width_ = width;
+        height_ = height;
+        resize_alg_ = resize_alg;
+        resize_flag = true;
+        return 0;
+    }
+
+
+    int ImageListDecoder::start()
+    {
+        if(!thread_flag){
+            std::thread thread_decoder = std::thread(&ImageListDecoder::decoder_thread,this);
+            thread_decoder.detach();
+            thread_flag = true;
+            return 0;
+        }
+        SPDLOG_INFO("Thread has been created!");
+        return 1;
+
+    }
+
+    ImageListDecoder::~ImageListDecoder()
+    {
+        SPDLOG_INFO(">>Dev-{},Set Stop Flag!",tpu_id_);
+        set_stop_flag(true);
+        SPDLOG_INFO(">>Dev-{},Wait Thread Finshed: {}!",tpu_id_,get_stop_flag());
+        wait_thread_exit(); 
+        SPDLOG_INFO(">>Dev-{},All end!",tpu_id_);
+        delete pframes_queue;
+        pframes_queue = NULL;
+    }
+    
+    void ImageListDecoder::set_stop_flag(bool flag)
+    {
+        std::lock_guard<std::mutex> lock(mutex_stop_);
+        stop_thread_flag = flag;
+    }
+
+    int ImageListDecoder::get_schedule()
+    {
+        return current_index_;
+    }
+
+    bool ImageListDecoder::get_stop_flag()
+    {
+        std::lock_guard<std::mutex> lock(mutex_stop_);
+        return stop_thread_flag;
+    }
+
+    void ImageListDecoder::notify_data_flag()
+    {
+        std::unique_lock<std::mutex> lck(mutex_data_flag);
+        data_flag_cond.notify_all();
+    }
+
+    void ImageListDecoder::set_thread_exit()
+    {
+        std::unique_lock<std::mutex> lck(mutex_exit_);
+        exit_cond.notify_all();
+    }
+
+    void ImageListDecoder::wait_thread_exit()
+    {
+        {
+            std::lock_guard<std::mutex> lock(mutex_exit_);
+            if(exit_thread_flag){
+                return;
+            }
+        }
+        std::unique_lock<std::mutex> lck(mutex_exit_);
+        exit_cond.wait(lck);
+    }  
+
+    void ImageListDecoder::stop()
+    {
+        return set_stop_flag(true);
+    }
+
+    void ImageListDecoder::decoder_thread()
+    {
+        sail::Handle handle(tpu_id_);
+        sail::Bmcv bmcv(handle);
+        {        
+            std::lock_guard<std::mutex> lock(mutex_exit_);      //防止未收到退出信号导致卡死
+            exit_thread_flag = false;
+        }
+        while (true)
+        {
+            if(get_stop_flag()){
+                break;
+            }       
+            if(pframes_queue->IsFull()){
+                std::this_thread::sleep_for(std::chrono::milliseconds(2));
+                continue;
+            }
+
+            std::ifstream file(image_name_list[current_index_], std::ios::binary | std::ios::ate);
+            if(!file.is_open()){
+                SPDLOG_INFO("0-Can not open file: {}",image_name_list[current_index_]);
+                continue;
+            }
+            size_t size = file.tellg();
+            file.seekg(0, std::ios::beg);
+            std::vector<unsigned char> jpeg_data(size);
+            if (!file.read(reinterpret_cast<char*>(jpeg_data.data()), size)){
+                SPDLOG_INFO("1-Can not open file: {}",image_name_list[current_index_]);
+                file.close();
+                continue;
+            }
+            file.close();
+            sail::BMImage image_temp = bmcv.imdecode(jpeg_data.data(),size);
+            if(resize_flag){
+                sail::BMImage image_resize = bmcv.resize(image_temp, width_,height_, resize_alg_);
+                pframes_queue->Push(image_resize);
+            }else{
+                pframes_queue->Push(image_temp);
+            }
+
+            notify_data_flag();
+            current_index_++;
+            if(current_index_>=image_name_list.size()){
+                stop();
+                break;
+            }
+        }
+        set_thread_exit();
+        {
+            std::lock_guard<std::mutex> lock(mutex_exit_);      //防止未收到退出信号导致卡死
+            exit_thread_flag = true;
+        }
+        SPDLOG_INFO(">>>>>Dev-{} Image List Decoder Thread Finshed!", tpu_id_);
+    }
+
+    int ImageListDecoder::read(BMImage &image)
+    {
+        int ret = pframes_queue->Pop(image);
+        if(ret != 0){
+            if(get_stop_flag()){
+                ret = -1;
+            } 
+        }
+        return ret;
+    }
+
+    class DecoderImages::DecoderImages_CC
+    {
+    public:
+        DecoderImages_CC(
+                    std::vector<std::string>& image_list,
+                    int tpu_id,
+                    int queue_size,
+                    int thread_count=4);
+        ~DecoderImages_CC();
+
+        int setResizeAttr(int width, int height, bmcv_resize_algorithm resize_alg = BMCV_INTER_LINEAR);
+
+        int start();
+
+        int read(BMImage &image);
+
+        void stop();
+
+        int get_schedule();
+    private:
+        std::vector<ImageListDecoder*> decoder;
+        std::vector<std::string>* image_name_list;
+        int max_queue_size;
+
+        int current_idx;
+        int thread_num;
+    private:
+    };
+    
+    DecoderImages::DecoderImages_CC::DecoderImages_CC(
+        std::vector<std::string>& image_list,
+                    int tpu_id,
+                    int queue_size,
+                    int thread_count)
+        :image_name_list(NULL),current_idx(0),thread_num(thread_count)
+    {
+        if(image_list.size() < thread_count){
+            thread_num = 1;
+        }
+        max_queue_size = queue_size/thread_num;
+        if(queue_size%thread_num != 0){
+            max_queue_size += 1;
+        }
+        image_name_list = new std::vector<std::string>[thread_num];
+        for(int i=0;i<image_list.size();i++){
+            image_name_list[i%thread_num].push_back(image_list[i]);
+        }
+        for(int i=0;i<thread_num;i++){
+            decoder.push_back(new ImageListDecoder(image_name_list[i],tpu_id,max_queue_size));
+        }
+    }
+    
+    DecoderImages::DecoderImages_CC::~DecoderImages_CC()
+    {
+        stop();
+        for (size_t i = 0; i < thread_num; i++)        {
+           delete decoder[i];
+        }
+        decoder.clear();
+        delete []image_name_list;
+    }
+
+    int DecoderImages::DecoderImages_CC::setResizeAttr(int width, int height, bmcv_resize_algorithm resize_alg)
+    {
+        int ret = 0;
+        for (size_t i = 0; i < thread_num; i++)        {
+           ret = decoder[i]->setResizeAttr(width,height,resize_alg);
+           if(ret != 0){
+                return ret;
+           }
+        }
+        return ret;
+    }
+
+    int DecoderImages::DecoderImages_CC::start()
+    {
+        int ret = 0;
+        for (size_t i = 0; i < thread_num; i++)        {
+           ret = decoder[i]->start();
+           if(ret != 0){
+                return ret;
+           }
+        }
+        return ret;
+    }
+    
+    int DecoderImages::DecoderImages_CC::read(BMImage &image)
+    {
+        int ret = decoder[current_idx%thread_num]->read(image);
+        if(ret == 0){
+            current_idx++;
+        }
+        return ret;
+    }
+
+    void DecoderImages::DecoderImages_CC::stop()
+    {
+        for (size_t i = 0; i < thread_num; i++)        {
+           decoder[i]->stop();
+        }
+    }
+
+    int DecoderImages::DecoderImages_CC::get_schedule()
+    {
+        int sch = 0;
+        for (size_t i = 0; i < thread_num; i++)        {
+           sch += decoder[i]->get_schedule();
+        }
+        return sch;
+    }
+
+    DecoderImages::DecoderImages(
+                    std::vector<std::string>& image_list,
+                    int tpu_id,
+                    int queue_size)
+        :_impl(new DecoderImages_CC(image_list,tpu_id,queue_size))
+    {}
+
+    DecoderImages::~DecoderImages()
+    {
+        delete _impl;
+    }
+
+    int DecoderImages::setResizeAttr(int width, int height, bmcv_resize_algorithm resize_alg)
+    {
+        return _impl->setResizeAttr(width,height,resize_alg);
+    }
+
+    int DecoderImages::start()
+    {
+        return _impl->start();
+    }
+
+    int DecoderImages::read(BMImage &image)
+    {
+        return _impl->read(image);
+    }
+        
+    void DecoderImages::stop()
+    {
+        return _impl->stop();
+    }
+
+    int DecoderImages::get_schedule()
+    {
+        return _impl->get_schedule();
     }
 }
 

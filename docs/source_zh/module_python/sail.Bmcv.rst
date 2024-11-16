@@ -130,7 +130,8 @@ tensor_to_bm_image
 
         def tensor_to_bm_image(self, 
                 tensor: sail.Tensor, 
-                bgr2rgb: bool=False) -> sail.BMImage
+                bgr2rgb: bool=False,
+                layout: str = 'nchw') -> sail.BMImage
 
 
 **参数说明1:**
@@ -142,6 +143,10 @@ tensor_to_bm_image
 * bgr2rgb: bool, default: False
 
 输入参数。是否进行图像的通道变换。
+
+* layout: str, default: 'nchw'
+
+输入参数。输入Tensor的布局。
 
 **返回值说明1:**
 
@@ -169,11 +174,50 @@ tensor_to_bm_image
 
         def tensor_to_bm_image(self, 
                 tensor: sail.Tensor, 
-                img: sail.BMImage | sail.BMImageArray, 
-                bgr2rgb: bool=False) -> None
-            
+                format: sail.Format) -> sail.BMImage
+
 
 **参数说明2:**
+
+* tensor: sail.Tensor
+
+输入参数。待转换的Tensor。
+
+* format: sail.Format
+
+输入参数。BMImage的像素格式。
+
+**返回值说明2:**
+
+* image : sail.BMImage
+
+返回转换后的图像。
+
+**示例代码:**
+    .. code-block:: python
+
+        import sophon.sail as sail
+
+        if __name__ == '__main__':
+            tpu_id = 0
+            handle = sail.Handle(tpu_id)
+            image_name = "your_image_path"
+            decoder = sail.Decoder(image_name,True,tpu_id)
+            BMimg = decoder.read(handle)# here is a sail.BMImage
+            bmcv = sail.Bmcv(handle)
+            tensor = bmcv.bm_image_to_tensor(BMimg)# here is a sail.Tensor
+            BMimg2 = bmcv.tensor_to_bm_image(tensor, sail.Format.FORMAT_BGR_PLANAR)
+
+**接口形式3:**
+    .. code-block:: python
+
+        def tensor_to_bm_image(self, 
+                tensor: sail.Tensor, 
+                img: sail.BMImage | sail.BMImageArray, 
+                bgr2rgb: bool=False,
+                layout: str = 'nchw') -> None
+            
+**参数说明3:**
 
 * tensor: sail.Tensor
 
@@ -202,6 +246,45 @@ tensor_to_bm_image
             tensor = bmcv.bm_image_to_tensor(BMimg)# here is a sail.Tensor
             BMimg2 = sail.BMImage()
             bmcv.tensor_to_bm_image(tensor,BMimg2)
+
+**接口形式4:**
+    .. code-block:: python
+
+        def tensor_to_bm_image(self, 
+                tensor: sail.Tensor, 
+                img: sail.BMImage | sail.BMImageArray, 
+                format: sail.Format) -> None
+            
+
+**参数说明4:**
+
+* tensor: sail.Tensor
+
+输入参数。待转换的Tensor。
+
+* img: sail.BMImage | sail.BMImageArray
+
+输出参数。返回转换后的图像。
+
+* format: sail.Format
+
+输入参数。BMImage的像素格式。
+
+**示例代码:**
+    .. code-block:: python
+
+        import sophon.sail as sail
+
+        if __name__ == '__main__':
+            tpu_id = 0
+            handle = sail.Handle(tpu_id)
+            image_name = "your_image_path"
+            decoder = sail.Decoder(image_name,True,tpu_id)
+            BMimg = decoder.read(handle)# here is a sail.BMImage
+            bmcv = sail.Bmcv(handle)
+            tensor = bmcv.bm_image_to_tensor(BMimg)# here is a sail.Tensor
+            BMimg2 = sail.BMImage()
+            bmcv.tensor_to_bm_image(tensor,BMimg2, sail.Format.FORMAT_BGR_PLANAR)
 
 crop_and_resize
 >>>>>>>>>>>>>>>>>>>>>>
@@ -1180,7 +1263,7 @@ rectangle
 fillRectangle
 >>>>>>>>>>>>>>>>>>
 
-在图像上画一个矩形框。
+在图像上填充一个矩形框。
 
 **实现硬件**
 * BM1684: 智能视觉深度学习处理器
@@ -1304,14 +1387,15 @@ imwrite
 imread
 >>>>>>>>>>>>>>>>>
 
-读取和解码JPEG图片文件。该接口仅支持 JPEG baseline 格式图片。
-返回的 BMImage 保持YUV色彩空间，像素格式取决于图片文件本身的采样方式，比如YUV420。
+读取和解码图片文件，仅支持 JPEG baseline 格式的硬解码。对于其他格式，如 PNG 和 BMP，则采用软解码。
+对于 JPEG baseline 图片，返回的 BMImage 将保持 YUV 色彩空间，像素格式依据图片文件本身的采样方式，例如 YUV420；
+而对于其他格式，返回的 BMImage 将保持其输入的对应色彩空间。
 
 **实现硬件**
 
-* BM1684: JPU
+* BM1684: JPU(JPEG baseline), CPU(其他格式)
 
-* BM1684X: JPU
+* BM1684X: JPU(JPEG baseline), CPU(其他格式)
 
 **接口形式:**
     .. code-block:: python
@@ -1328,7 +1412,7 @@ imread
 
 * output : sail.BMImage
 
-返回解码得到的BMImage，其像素格式是基于YUV色彩空间的。
+返回解码得到的BMImage。
 
 **示例代码:**
     .. code-block:: python
@@ -1638,7 +1722,11 @@ vpp_convert_format
 putText
 >>>>>>>>>>
 
-在图像上添加text。
+在图像上添加text。只支持英文文字。
+
+输入的BMImage支持的像素格式为：
+FORMAT_GRAY、FORMAT_YUV420P、FORMAT_YUV422P、FORMAT_YUV444P、FORMAT_NV12、
+FORMAT_NV21、FORMAT_NV16、FORMAT_NV61。
 
 **实现硬件**
 * BM1684: 处理器
@@ -1693,7 +1781,7 @@ putText
 
 * thickness : int
 
-字体的粗细。
+字体的粗细。建议设置为偶数。
 
 **返回值说明:**
 
@@ -1711,10 +1799,11 @@ putText
             handle = sail.Handle(tpu_id)
             image_name = "your_image_path"
             decoder = sail.Decoder(image_name,True,tpu_id)
-            BMimg = decoder.read(handle)# here is a sail.BMImage
+            bgr_img = decoder.read(handle)
             bmcv = sail.Bmcv(handle)
-            ret = bmcv.putText(BMimg, "snow person" , 20, 20, [0,0,255], 1.4, 2)
-            #ret = bmcv.putText(BMimg.data(), "snow person" , 20, 20, [0,0,255], 1.4, 2)
+            yuv_img = bmcv.convert_format(bgr_img, sail.FORMAT_YUV420P)
+            ret = bmcv.putText(yuv_img, "some text" , 20, 20, [0,0,255], 1.4, 2)
+            assert ret == 0
 
 
 image_add_weighted
@@ -2945,3 +3034,264 @@ drawLines
             thickness = 2  
             bm = bmcv.vpp_convert_format(BMimg1,sail.FORMAT_YUV444P)
             ret = bmcv.drawLines(bm, start_points, end_points, line_num,color, thickness)
+
+stft
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+实现对信号的短时傅里叶变换（STFT）。
+
+**注意：请查询《BMCV开发参考手册/BMCV API》确认当前算子是否适配BM1684X。**
+
+**接口形式:**
+    .. code-block:: python
+
+        stft(self, input_real: numpy.ndarray, input_imag: numpy.ndarray, real_input: bool, normalize: bool, n_fft: int, hop_len: int,
+                pad_mode: int, win_mode: int) -> tuple[numpy.ndarray, numpy.ndarray]
+
+        stft(self, input_real: Tensor, input_imag: Tensor, real_input: bool, normalize: bool, n_fft: int, hop_len: int,
+                pad_mode: int, win_mode: int) -> tuple[Tensor, Tensor]
+    
+**参数说明:**
+
+* input_real: numpy.ndarray 或者 Tensor
+    输入信号的实数部分。
+
+* input_imag: numpy.ndarray 或者 Tensor
+    输入信号的虚数部分。
+
+* real_input: bool
+    是否仅使用实数输入的标志。
+
+* normalize: bool
+    是否对输出进行归一化的标志。
+
+* n_fft: int
+    STFT计算中使用的FFT点数。
+
+* hop_len: int
+    窗口滑动的步长。
+
+* pad_mode: int
+    输入信号的填充模式，0表示CONSTANT填充，1表示REFLECT填充。
+
+* win_mode: int
+    窗口函数的类型，0表示HANN窗，1表示HAMM窗。
+
+**返回值说明:**
+
+* result: tuple[numpy.ndarray, numpy.ndarray] 或者 tuple[Tensor, Tensor]
+    返回输出的实数部分和虚数部分。
+
+**示例代码:**
+    .. code-block:: python
+
+        import sophon.sail as sail
+        import numpy as np
+
+        if __name__ == '__main__':
+            tpu_id = 0
+            handle = sail.Handle(tpu_id)
+            random_array1 = np.random.rand(2, 4096).astype('float32')
+            random_array2 = np.random.rand(2, 4096).astype('float32')
+            bmcv = sail.Bmcv(handle)
+            input_real = sail.Tensor(handle, random_array1, True)
+            input_imag = sail.Tensor(handle, random_array2, True)
+            real_input = False
+            normalize = True
+            n_fft = 1024
+            hop_len = 256
+            pad_mode = 0  # 填充模式示例
+            win_mode = 1  # 窗口类型示例
+            stft_R, stft_I = bmcv.stft(input_real, input_imag, real_input, normalize, n_fft, hop_len, pad_mode, win_mode)
+
+istft
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+实现对信号的逆短时傅里叶变换（ISTFT）。
+
+**注意：请查询《BMCV开发参考手册/BMCV API》确认当前算子是否适配BM1684X。**
+
+**接口形式:**
+    .. code-block:: python
+
+        istft(self, input_real: numpy.ndarray, input_imag: numpy.ndarray, real_input: bool, normalize: bool, L: int, hop_len: int,
+            pad_mode: int, win_mode: int) -> tuple[numpy.ndarray, numpy.ndarray]:
+
+        istft(self, input_real: Tensor, input_imag: Tensor, real_input: bool, normalize: bool, L: int, hop_len: int,
+            pad_mode: int, win_mode: int) -> tuple[Tensor, Tensor]:
+
+**参数说明:**
+
+* input_real: numpy.ndarray 或者 Tensor
+    输入信号的实数部分。
+
+* input_imag: numpy.ndarray 或者 Tensor
+    输入信号的虚数部分。
+
+* real_input: bool
+    输出的信号是否为实数， false 为复数， true 为实数。
+
+* normalize: bool
+    是否对输出进行归一化。
+
+* L: int
+    原始时域信号的长度。
+
+* hop_len: int
+    窗口滑动的步长，必须与STFT计算时使用的值相同。
+
+* pad_mode: int
+    输入信号的填充模式，必须与STFT计算时使用的值相同。
+
+* win_mode: int
+    窗口函数的类型，必须与STFT计算时使用的值相同。
+
+**返回值说明:**
+
+* result: tuple[numpy.ndarray, numpy.ndarray] 或者 tuple[Tensor, Tensor]
+    返回输出的实数部分和虚数部分。
+
+**示例代码:**
+    .. code-block:: python
+
+        import sophon.sail as sail
+        import numpy as np
+
+        if __name__ == '__main__':
+            tpu_id = 0
+            handle = sail.Handle(tpu_id)
+            random_array1 = np.random.rand(2, 513, 17).astype('float32')
+            random_array2 = np.random.rand(2, 513, 17).astype('float32')
+            bmcv = sail.Bmcv(handle)
+            input_real = sail.Tensor(handle, random_array1, True)
+            input_imag = sail.Tensor(handle, random_array2, True)
+            real_input = False
+            normalize = True
+            L = 4096
+            hop_len = 256
+            pad_mode = 0  # 填充模式示例
+            win_mode = 1  # 窗口类型示例
+            istft_R, istft_I = bmcv.istft(input_real, input_imag, real_input, normalize, 4096, hop_len, pad_mode, win_mode)
+
+bmcv_overlay
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+图片上添加带透明通道的水印图。仅支持BM1688和CV186AH。
+
+**接口形式:**
+    .. code-block:: python
+
+        def bmcv_overlay(self, image: BMImage, overlay_info: list[list[int]], overlay_image: list[BMImage]) -> int:   
+
+        
+**参数说明:**
+
+* image : sail.BMImage
+
+输入/输出图片。
+
+* overlay_info: list[list[int]]
+
+一组水印图的位置大小信息，格式是[x,y,w,h]
+
+* overlay_image: list[BMImage]
+
+一组水印图，目前仅支持sail.Format.FORMAT_ARGB_PACKED格式
+
+**返回值说明:**
+
+* ret: int
+
+成功后返回0。
+
+**注：**
+
+需要自行确保overlay_info中的所有矩形位置不重叠
+
+**示例代码1:**
+
+直接读入RGBA图片作为水印
+
+    .. code-block:: python
+
+        import sophon.sail as sail
+        import cv2
+
+        if __name__ == '__main__':
+
+            handle = sail.Handle(0)
+
+            decoder = sail.Decoder("pics/1.jpg")
+            image_org = decoder.read(handle)
+
+            bmcv = sail.Bmcv(handle)
+
+            buffer = cv2.imread("pics/icon.png", cv2.IMREAD_UNCHANGED)
+            buffer_x = 100
+            buffer_y = 50
+            buffer_w = 100
+            buffer_h = 30
+
+            buffer_x1 = 500
+            buffer_y1 = 200
+            buffer_w1 = 60
+            buffer_h1 = 70
+
+            buffer = cv2.resize(buffer, (buffer_w, buffer_h))
+            buffer1 = cv2.resize(buffer, (buffer_w1, buffer_h1))
+
+            overlay_images = []
+            overlay_info = []
+            overlay_images.append(sail.BMImage(handle, buffer, buffer_h, buffer_w, sail.Format.FORMAT_ARGB_PACKED, sail.ImgDtype.DATA_TYPE_EXT_1N_BYTE))
+            overlay_info.append([buffer_x,buffer_y,buffer_w, buffer_h])
+            overlay_images.append(sail.BMImage(handle, buffer1, buffer_h1, buffer_w1, sail.Format.FORMAT_ARGB_PACKED, sail.ImgDtype.DATA_TYPE_EXT_1N_BYTE))
+            overlay_info.append([buffer_x1,buffer_y1,buffer_w1, buffer_h1])
+
+            ret = bmcv.bmcv_overlay(image_org, overlay_info, overlay_images)
+
+            ret = bmcv.imwrite("overlayed.jpg", image_org)
+
+
+**示例代码2:**
+
+用其他库生成中文字的水印图，用overlay画在指定位置，间接实现puttext功能
+
+    .. code-block:: python
+      
+        import sophon.sail as sail
+        from PIL import Image, ImageDraw, ImageFont
+
+        if __name__ == '__main__':
+            # 获取原图
+            handle = sail.Handle(0)
+            bmcv = sail.Bmcv(handle)
+            decoder = sail.Decoder("pics/1.jpg")
+            org_image = decoder.read(handle)
+
+            # 字体基本信息
+            watermark_w, watermark_h = 60, 30
+            text = ["人", "车", "狗"]
+            text_color = (255, 0, 0, 255) 
+            font = ImageFont.truetype("fonts/simhei.ttf", watermark_h, encoding="utf-8")
+
+            # 生成标签水印图
+            overlay_images = []
+            for i in range(len(text)):
+                blank_image = Image.new('RGBA', (watermark_w, watermark_h), (255,255,255,0))
+                draw = ImageDraw.Draw(blank_image)
+                draw.text((0,0), text[i], fill=text_color, font=font)
+                # blank_image.save("watermark.png")
+                buffer = blank_image.tobytes()
+                overlay_images.append(sail.BMImage(handle, buffer, watermark_h, watermark_w, sail.Format.FORMAT_ARGB_PACKED, sail.ImgDtype.DATA_TYPE_EXT_1N_BYTE))
+
+            # 经过推理等其他过程
+            # 模拟获得的水印图位置
+            overlay_info = []
+            for i in range(len(text)):
+                x = int(i*org_image.width()/len(text))
+                y = int(org_image.height()/2)
+                overlay_info.append([x, y, watermark_w, watermark_h])
+
+            ret = bmcv.bmcv_overlay(org_image, overlay_info, overlay_images)
+            ret = bmcv.imwrite("overlayed.jpg", org_image)
+

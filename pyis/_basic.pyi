@@ -108,6 +108,24 @@ class Tensor:
 
         """
         pass
+
+    def __init__(self, src: Tensor, shape: list[int], offset: int, no_copy: bool = True):
+        """
+        Create a Tensor from another existing Tensor. 
+        The created Tensor can reuse src's memory without copy.
+
+        Parameters:
+        ----------
+        shape: list[int]
+            The created Tensor's shape.
+        offset: int
+            Start reading src Tensor's momery from this offset (in element, not byte). 
+        no_copy: bool
+            If no_copy flag is set to True, the created tensor will reuse 
+            the src's memory, instead of allocating new memory.
+
+        """
+        pass
   
     def shape(self) -> list[int]: pass
  
@@ -119,6 +137,17 @@ class Tensor:
 
     def own_dev_data(self) -> bool: pass
 
+    def size(self) -> int: 
+        """ Returns the number of elements in this tensor. """
+        pass
+
+    def element_size(self) -> int: 
+        """ Returns the size in bytes of an individual element. """
+        pass
+
+    def nbytes(self) -> int: 
+        """ Return the total number of bytes occupied by all elements of Tensor. """
+        pass
 
     def asnumpy(self, shape: list[int] = None) -> numpy.ndarray[Any,numpy.dtype[Any]] : 
         """

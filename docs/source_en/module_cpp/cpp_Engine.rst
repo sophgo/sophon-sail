@@ -267,6 +267,43 @@ Set the memory location where the input/output Tensor of Engine is located: syst
             return 0;  
         }
 
+graph_is_dynamic
+>>>>>>>>>>>>>>>>>>>>>
+
+Determine whether a selected computational map is dynamic.
+
+**Interface:**
+    .. code-block:: c
+
+        bool graph_is_dynamic(const std::string& graph_name);
+
+**Parameters:**
+
+* graph_name: string
+
+Set the name of the calculation graph to be queried.
+
+**Returns:**
+
+* is_dynamic: bool
+
+A boolean value indicating whether the selected computation graph is dynamic or not.
+
+**Sample:**
+    .. code-block:: c
+
+        
+        #include "engine.h"
+
+        int main() {  
+            int dev_id = 0;
+            sail::Engine engine(dev_id);
+            std::string bmodel_path = "your_bmodel.bmodel";
+            engine.load(bmodel_path);
+            std::vector<std::string> bmodel_names = engine.get_graph_names();
+            bool is_dynamic = engine.graph_is_dynamic(bmodel_names[0]);
+            return 0;  
+        }
 
 get_input_names
 >>>>>>>>>>>>>>>>>>>>>

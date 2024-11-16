@@ -54,6 +54,8 @@ public:
 
   bool load(const void* bmodel_ptr, size_t bmodel_size);
 
+  bool graph_is_dynamic(const std::string& graph_name);
+
   std::vector<std::string> get_graph_names();
 
   std::vector<std::string> get_input_names(const std::string& graph_name);
@@ -243,7 +245,7 @@ int Engine::Engine_CC::init_bmrt() {
   p_bmrt_ = bmrt_create(handle_.data());
   if (!p_bmrt_) {
     SPDLOG_ERROR("bmrt_create failed.");
-    exit(SAIL_ERR_ENGINE_INIT);
+    return SAIL_ERR_ENGINE_INIT;
   }
   return 0;
 }
@@ -264,21 +266,21 @@ int Engine::Engine_CC::is_input_shape_valid(
     auto it = std::find(input_names.begin(), input_names.end(), tensor_name);
     if (it == input_names.end()) {
       SPDLOG_ERROR("Bad input tensor '{}' for {}.", tensor_name, graph_name);
-      exit(SAIL_ERR_ENGINE_SHAPE);
+      throw SailEngineError("bad input");
     }
     std::vector<int>& max_shape = max_input_shapes_[graph_name][tensor_name];
     if (item.second.size() != max_shape.size()) {
       SPDLOG_ERROR("Bad dimension of input tensor {} for {}, {}(N) vs {}(Y)",
                     tensor_name, graph_name, item.second.size(),
                     max_shape.size());
-      exit(SAIL_ERR_ENGINE_SHAPE);
+      throw SailEngineError("bad input");
     }
     if (p_info->is_dynamic) {
       std::string msg("Invalid value at dim {} for input tensor '{}': {}");
       for (size_t i = 0; i < max_shape.size(); ++i) {
         if (item.second[i] > max_shape[i] || item.second[i] <= 0) {
           SPDLOG_ERROR(msg.c_str(), i, tensor_name, item.second[i]);
-          exit(SAIL_ERR_ENGINE_SHAPE);
+          throw SailEngineError("bad input");
         }
       }
     } else {
@@ -301,7 +303,7 @@ int Engine::Engine_CC::is_input_shape_valid(
       if (!flag) {
         SPDLOG_ERROR("Invalid shape for input tensor '{}': [{}]",
                       tensor_name, fmt::join(item.second, ", "));
-        exit(SAIL_ERR_ENGINE_SHAPE);
+        throw SailEngineError("bad input");
       }
     }
   }
@@ -320,7 +322,7 @@ int Engine::Engine_CC::alloc_tensors() {
                                                  &output_shapes_[graph_name]);
     if (ret) {
       SPDLOG_ERROR("Allocate tensors failed.");
-      exit(SAIL_ERR_ENGINE_SHAPE);
+      return ret;
     }
   }
   had_alloc_flag_ = true;
@@ -334,7 +336,7 @@ int Engine::Engine_CC::alloc_tensors_gragp(std::string& graph_name){
                                                &output_shapes_[graph_name]);
   if (ret) {
     SPDLOG_ERROR("Allocate tensors failed.");
-    exit(SAIL_ERR_ENGINE_INIT);
+    return ret;
   }
   set_alloc_flag(graph_name,true);
   return ret;
@@ -381,11 +383,11 @@ bool Engine::Engine_CC::load(const std::string& bmodel_path) {
   struct stat buffer;
   if (stat(bmodel_path.c_str(), &buffer) != 0) {
     spdlog::error("bmodel {} does not exist", bmodel_path);
-    exit(SAIL_ERR_ENGINE_INIT);
+    return false;
   }
   if (!bmrt_load_bmodel(p_bmrt_, bmodel_path.c_str())) {
     spdlog::error("Load {} failed", bmodel_path);
-    exit(SAIL_ERR_ENGINE_INIT);
+    return false;
   }
   std::vector<std::string> current_graph_names = get_graph_names();
   if(current_graph_names.size() == previous_graph_names.size()) {
@@ -402,12 +404,12 @@ bool Engine::Engine_CC::load(const void* bmodel_ptr, size_t bmodel_size) {
   // check bmodel is exist or not
   if (bmodel_size <= 0) {
     SPDLOG_ERROR("bmodel path does not exist");
-    exit(SAIL_ERR_ENGINE_INIT);
+    return false;
   }
   std::vector<std::string> previous_graph_names = get_graph_names();
   if (!bmrt_load_bmodel_data(p_bmrt_, bmodel_ptr, bmodel_size)) {
     SPDLOG_ERROR("Load bmodel failed");
-    exit(SAIL_ERR_ENGINE_INIT);
+    return false;
   }
   std::vector<std::string> current_graph_names = get_graph_names();
   if(current_graph_names.size() == previous_graph_names.size()) {
@@ -418,6 +420,12 @@ bool Engine::Engine_CC::load(const void* bmodel_ptr, size_t bmodel_size) {
       current_graph_names.end());
   update_status(update_graph_names);
   return true;
+}
+
+bool Engine::Engine_CC::graph_is_dynamic(const std::string& graph_name){
+    const bm_net_info_t* p_info = bmrt_get_network_info(p_bmrt_,
+                                                      graph_name.c_str());
+    return p_info->is_dynamic;
 }
 
 std::vector<std::string> Engine::Engine_CC::get_graph_names() {
@@ -529,7 +537,7 @@ int Engine::Engine_CC::reshape(
   int ret = is_input_shape_valid(graph_name, input_shapes);
   if (ret) {
     SPDLOG_ERROR("Reshape failed.");
-    exit(SAIL_ERR_ENGINE_SHAPE);
+    return ret;
   }
   input_shapes_[graph_name] = input_shapes;
   graphs_[graph_name]->reshape();
@@ -563,7 +571,7 @@ void Engine::Engine_CC::set_io_mode(const std::string& graph_name, IOMode io_mod
     }else if (iter_temp_a->second == true){
       if(iter_temp->second != io_mode){
         SPDLOG_ERROR("Had Alloc but iomode different!");
-        exit(SAIL_ERR_ENGINE_INIT);
+        throw SailEngineError("Engine related error");
       }
     }
   }
@@ -573,7 +581,7 @@ IOMode Engine::Engine_CC::get_io_mode(std::string& graph_name){
   auto iter_temp = graphs_mode_.find(graph_name);
   if(iter_temp == graphs_mode_.end()){
     SPDLOG_ERROR("Error graph name:{}!",graph_name);
-    exit(SAIL_ERR_ENGINE_BASIC);
+    throw SailEngineError("invalid argument");
   }
   return iter_temp->second;
 }
@@ -629,7 +637,9 @@ void Engine::Engine_CC::set_alloc_flag(std::string& graph_name, bool alloc_flag)
 
 Engine::Engine(int tpu_id)
     :_impl(new Engine_CC(DEVIO, tpu_id)){
-  _impl->init_bmrt();
+  if (_impl->init_bmrt()) {
+    throw SailEngineError("Engine related error");
+  }
 }
 
 Engine::Engine(
@@ -638,15 +648,14 @@ Engine::Engine(
     IOMode             mode)
     :_impl(new Engine_CC(mode, tpu_id)){
   if (_impl->init_bmrt()) {
-    return;
+    throw SailEngineError("Engine related error");
   }
   if (!_impl->load(bmodel_path)) {
     spdlog::error("Load {} failed!", bmodel_path);
-    exit(SAIL_ERR_ENGINE_INIT);
-    return;
+    throw SailEngineError("invalid bmodel");
   }
   if (_impl->alloc_tensors()) {
-    return;
+    throw SailEngineError("Engine related error");
   }
 }
 
@@ -657,21 +666,22 @@ Engine::Engine(
     IOMode      mode)
     :_impl(new Engine_CC(mode, tpu_id)){
   if (_impl->init_bmrt()) {
-    return;
+    throw SailEngineError("Engine related error");
   }
   if (!_impl->load(bmodel_ptr, bmodel_size)) {
     spdlog::error("Load bmodel failed!");
-    exit(SAIL_ERR_ENGINE_INIT);
-    return;
+    throw SailEngineError("invalid bmodel");
   }
   if (_impl->alloc_tensors()) {
-    return;
+    throw SailEngineError("Engine related error");
   }
 }
 
 Engine::Engine(const Handle& handle)
     :_impl(new Engine_CC(DEVIO, handle)){
-  _impl->init_bmrt();
+  if (_impl->init_bmrt()) {
+    throw SailEngineError("Engine related error");
+  }
 }
 
 Engine::Engine(
@@ -680,15 +690,14 @@ Engine::Engine(
     IOMode             mode)
     :_impl(new Engine_CC(mode, handle)){
   if (_impl->init_bmrt()) {
-    return;
+    throw SailEngineError("Engine related error");
   }
   if (!_impl->load(bmodel_path)) {
     spdlog::error("Load {} failed!", bmodel_path);
-    exit(SAIL_ERR_ENGINE_INIT);
-    return;
+    throw SailEngineError("invalid bmodel");
   }
   if (_impl->alloc_tensors()) {
-    return;
+    throw SailEngineError("Engine related error");
   }
 }
 
@@ -699,15 +708,14 @@ Engine::Engine(
     IOMode             mode)
     :_impl(new Engine_CC(mode, handle)){
   if (_impl->init_bmrt()) {
-    return;
+    throw SailEngineError("Engine related error");
   }
   if (!_impl->load(bmodel_ptr, bmodel_size)) {
     spdlog::error("Load bmodel failed!");
-    exit(SAIL_ERR_ENGINE_INIT);
-    return;
+    throw SailEngineError("invalid bmodel");
   }
   if (_impl->alloc_tensors()) {
-    return;
+    throw SailEngineError("Engine related error");
   }
 }
 
@@ -742,6 +750,10 @@ bool Engine::load(const std::string& bmodel_path) {
 
 bool Engine::load(const void* bmodel_ptr, size_t bmodel_size) {
   return _impl->load(bmodel_ptr, bmodel_size);
+}
+
+bool Engine::graph_is_dynamic(const std::string& graph_name){
+  return _impl->graph_is_dynamic(graph_name);
 }
 
 std::vector<std::string> Engine::get_graph_names() {
@@ -852,6 +864,7 @@ void Engine::scale_input_tensor(
     scale_fp32_to_int32(data, target, scale, size);
   }else{
       SPDLOG_ERROR("scale_input_tensor() not support!");
+      throw SailEngineError("not supported");
   }
 }
 
@@ -867,7 +880,7 @@ void Engine::scale_output_tensor(
   void* tensor = _impl->get_output_tensor_sys_mem(graph_name,tensor_name);
     if (NULL == tensor) {
         SPDLOG_ERROR("sys_data() is null, must set own_sys_data is True");
-        return;
+        throw SailEngineError("invalid Tensor");
     }
 
   std::vector<int> shape = get_output_shape(graph_name, tensor_name);
@@ -890,6 +903,7 @@ void Engine::scale_output_tensor(
     scale_int32_to_fp32(src, data, scale, size);
   }else{
       SPDLOG_ERROR("scale_output_tensor() not support!");
+      throw SailEngineError("not supported");
   }
 }
 
@@ -1065,13 +1079,18 @@ void Engine::process(
     std::map<std::string, void*>&            input_tensors,
     std::vector<int>                         core_list) {
     TRACE_POINT;
-  reshape(graph_name, input_shapes);
+  int ret = reshape(graph_name, input_shapes);
+  if (ret) {
+    SPDLOG_ERROR("reshape '{}' failed, please check graph name and input tensor"
+               " shapes", graph_name);
+    throw SailEngineError("Engine related error");
+  }
   for (auto& item : input_tensors) {
     if (_impl->input_dtypes_[graph_name][item.first] == BM_FLOAT32) {
       _impl->graphs_[graph_name]->reset_input_tensor(item.first, item.second);
     }else{
         SPDLOG_ERROR("input_dtype {} is {}, not supported", item.first, _impl->input_dtypes_[graph_name][item.first]);
-        exit(EXIT_FAILURE);
+        throw SailEngineError("bad input");
     }
   }
   _impl->graphs_[graph_name]->inference(core_list);
@@ -1089,22 +1108,22 @@ void Engine::process(
   for (auto& item : input_tensors) {
     if (item.second->sys_data() == NULL && input_mode_sys){
       SPDLOG_ERROR("IOMode Error!, Not found system memory in input tensor: {}",item.first);
-      exit(SAIL_ERR_ENGINE_INPUT);
+      throw SailEngineError("bad input");
     }
     if (item.second->dev_data().u.device.device_addr == 0 || item.second->dev_data().size <= 0){
       SPDLOG_ERROR("Input Tensor Error!, Not found device memory in input tensor: {}",item.first);
-      exit(SAIL_ERR_ENGINE_INPUT);
+      throw SailEngineError("bad input");
     }
   }
   bool output_mode_sys = _impl->output_mode_sys(graph_name_temp);
   for (auto& item : output_tensors) {
     if (item.second->sys_data() == NULL && output_mode_sys){
       SPDLOG_ERROR("IOMode Error!, Not found system memory in output tensor: {}",item.first);
-      exit(SAIL_ERR_ENGINE_OUTPUT);
+      throw SailEngineError("bad output");
     }
     if (item.second->dev_data().u.device.device_addr == 0 || item.second->dev_data().size <= 0){
       SPDLOG_ERROR("Output Tensor Error!, Not found device memory in input tensor: {}",item.first);
-      exit(SAIL_ERR_ENGINE_OUTPUT);
+      throw SailEngineError("bad output");
     }
   }
   _impl->output_shapes_[graph_name] = _impl->graphs_[graph_name]->inference(
@@ -1122,22 +1141,22 @@ void Engine::process(
   for (auto& item : input_tensors) {
     if (item.second->sys_data() == NULL && input_mode_sys){
       SPDLOG_ERROR("IOMode Error!, Not found system memory in input tensor: {}",item.first);
-      exit(SAIL_ERR_ENGINE_INPUT);
+      throw SailEngineError("bad input");
     }
     if (item.second->dev_data().u.device.device_addr == 0 || item.second->dev_data().size <= 0){
       SPDLOG_ERROR("Input Tensor Error!, Not found device memory in input tensor: {}",item.first);
-      exit(SAIL_ERR_ENGINE_INPUT);
+      throw SailEngineError("bad input");
     }
   }
   bool output_mode_sys = _impl->output_mode_sys(graph_name_temp);
   for (auto& item : output_tensors) {
     if (item.second->sys_data() == NULL && output_mode_sys){
       SPDLOG_ERROR("IOMode Error!, Not found system memory in output tensor: {}",item.first);
-      exit(SAIL_ERR_ENGINE_OUTPUT);
+      throw SailEngineError("bad output");
     }
     if (item.second->dev_data().u.device.device_addr == 0 || item.second->dev_data().size <= 0){
       SPDLOG_ERROR("Output Tensor Error!, Not found device memory in output tensor: {}",item.first);
-      exit(SAIL_ERR_ENGINE_OUTPUT);
+      throw SailEngineError("bad output");
     }
   }
   _impl->output_shapes_[graph_name] = _impl->graphs_[graph_name]->inference(
@@ -1156,19 +1175,18 @@ Engine::Engine(
   ssize_t size;
   if (PYBIND11_BYTES_AS_STRING_AND_SIZE(bmodel.ptr(), &bmodel_ptr, &size)) {
     SPDLOG_ERROR("Unable to extract bytes contents!");
-    exit(SAIL_ERR_ENGINE_INIT);
+    throw SailEngineError("invalid bmodel");
   }
   if (bmodel_size != static_cast<int>(size)) {
     SPDLOG_ERROR("Wrong bmodel_size.");
-    exit(SAIL_ERR_ENGINE_INIT);
+    throw SailEngineError("invalid argument");
   }
   if (_impl->init_bmrt()) {
     return;
   }
   if (!_impl->load(bmodel_ptr, bmodel_size)) {
     spdlog::error("Load bmodel failed!");
-    exit(SAIL_ERR_ENGINE_INIT);
-    return;
+    throw SailEngineError("invalid bmodel");
   }
   if (_impl->alloc_tensors()) {
     return;
@@ -1185,18 +1203,18 @@ Engine::Engine(
   ssize_t size;
   if (PYBIND11_BYTES_AS_STRING_AND_SIZE(bmodel.ptr(), &bmodel_ptr, &size)) {
     SPDLOG_ERROR("Unable to extract bytes contents!");
-    exit(SAIL_ERR_ENGINE_INIT);
+    throw SailEngineError("invalid bmodel");
   }
   if (bmodel_size != static_cast<int>(size)) {
     SPDLOG_ERROR("Wrong bmodel_size.");
-    exit(SAIL_ERR_ENGINE_INIT);
+    throw SailEngineError("invalid argument");
   }
   if (_impl->init_bmrt()) {
     return;
   }
   if (!_impl->load(bmodel_ptr, bmodel_size)) {
     spdlog::error("Load bmodel failed!");
-    exit(SAIL_ERR_ENGINE_INIT);
+    throw SailEngineError("invalid bmodel");
     return;
   }
   if (_impl->alloc_tensors()) {
@@ -1211,15 +1229,14 @@ bool Engine::load(
   ssize_t size;
   if (PYBIND11_BYTES_AS_STRING_AND_SIZE(bmodel.ptr(), &bmodel_ptr, &size)) {
     SPDLOG_ERROR("Unable to extract bytes contents!");
-    exit(SAIL_ERR_ENGINE_INIT);
+    return false;
   }
   if (bmodel_size != static_cast<int>(size)) {
     SPDLOG_ERROR("Wrong bmodel_size.");
-    exit(SAIL_ERR_ENGINE_INIT);
+    return false;
   }
   if (!load(bmodel_ptr, bmodel_size)) {
     spdlog::error("Load bmodel failed!");
-    exit(SAIL_ERR_ENGINE_INIT);
     return false;
   }
   return true;
@@ -1234,7 +1251,7 @@ std::map<std::string, pybind11::array_t<float>> Engine::process(
   bool input_mode_sys = _impl->input_mode_sys(graph_name_temp);
   if (input_mode_sys == false){
     SPDLOG_ERROR("Error IOMode! If input type is numpy.array, IOMode must be SYSIO or SYSI!");
-    exit(SAIL_ERR_ENGINE_INFER);
+    throw SailEngineError("bad input");
   }
 
   std::map<std::string, std::vector<int>> shapes;

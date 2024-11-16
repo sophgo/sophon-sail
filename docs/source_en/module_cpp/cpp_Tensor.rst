@@ -71,6 +71,52 @@ Indicates whether the Tensor has device memory
             return 0;  
         }
 
+**Interface:**
+
+This initialization method creates a new Tensor based on an existing source Tensor and reuses a portion of the source Tensor's device memory without copying device memory. 
+It is suitable for scenarios such as LLM inference where memory reuse is required.
+
+During the use of this Tensor, it is necessary to ensure that the source Tensor is not released.
+
+    .. code-block:: cpp
+
+        Tensor(const Tensor& src, const std::vector<int>& shape, unsigned int offset)
+
+**Parameters:**
+
+* src: sail::Tensor
+
+The source Tensor used to create the Tensor
+
+* shape: std::vector<int>
+
+The shape of the created Tensor, which is a sequence of integers. 
+The number of elements corresponding to the new shape must not exceed the number of elements in the source Tensor.
+
+* offset: unsigned int
+
+The offset of the Tensor's device memory relative to the source Tensor's device memory, in bytes of the dtype.
+
+**Example Code:**
+    .. code-block:: cpp
+
+        #include <sail/tensor.h>
+        #include <vector>
+
+        int main() {
+            sail::Handle handle(0);
+            int height = 1080;
+            int width = 1920;
+            std::vector<int> src_shape = {1, 3, height, width};
+            sail::Tensor src_tensor(handle, src_shape, BM_INT32, false, true);
+
+            std::vector<int> dst_shape = {1, 1, height, width};
+            unsigned int offset = height * width;
+            sail::Tensor dst_tensor(src_tensor, dst_shape, offset);
+
+            return 0;
+        }
+
 shape
 >>>>>>>>>>>>>>>>>>>>>
 
@@ -830,6 +876,96 @@ fill memory with ones.
             input_tensor = std::make_shared<sail::Tensor>(handle, input_shape, input_dtype, true, true); 
             // prepare data
             input_tensor->ones();
+
+            return 0;
+        }
+
+
+size
+>>>>>>>>>>>>>>>>>>>>>
+
+Return the number of elements contained in the Tensor.
+
+**Interface:**
+    .. code-block:: c
+
+        int size() const;
+
+**Sample:**
+    .. code-block:: c
+
+        int main() {
+            int dev_id = 0;
+            int ret;
+            sail::Handle handle(dev_id);
+            std::shared_ptr<sail::Tensor> input_tensor;
+            std::vector<int> input_shape = {10,10};
+            bm_data_type_t input_dtype = BM_FLOAT32; 
+
+            // init tensor
+            input_tensor = std::make_shared<sail::Tensor>(handle, input_shape, input_dtype, true, true); 
+            // Output result
+            std::cout << input_tensor->size() << " ";
+
+            return 0;
+        }
+
+
+element_size
+>>>>>>>>>>>>>>>>>>>>>
+
+Returns the size in bytes of an individual element.
+
+**Interface:**
+    .. code-block:: c
+
+        int element_size() const;
+
+**Sample:**
+    .. code-block:: c
+
+        int main() {
+            int dev_id = 0;
+            int ret;
+            sail::Handle handle(dev_id);
+            std::shared_ptr<sail::Tensor> input_tensor;
+            std::vector<int> input_shape = {10,10};
+            bm_data_type_t input_dtype = BM_FLOAT32; 
+
+            // init tensor
+            input_tensor = std::make_shared<sail::Tensor>(handle, input_shape, input_dtype, true, true); 
+            // Output result
+            std::cout << input_tensor->element_size() << " ";
+
+            return 0;
+        }
+
+
+nbytes
+>>>>>>>>>>>>>>>>>>>>>
+
+Return the total number of bytes occupied by all elements of Tensor.
+
+**Interface:**
+    .. code-block:: c
+
+        int nbytes() const;
+
+**Sample:**
+    .. code-block:: c
+
+        int main() {
+            int dev_id = 0;
+            int ret;
+            sail::Handle handle(dev_id);
+            std::shared_ptr<sail::Tensor> input_tensor;
+            std::vector<int> input_shape = {10,10};
+            bm_data_type_t input_dtype = BM_FLOAT32; 
+
+            // init tensor
+            input_tensor = std::make_shared<sail::Tensor>(handle, input_shape, input_dtype, true, true); 
+            // Output result
+            std::cout << input_tensor->nbytes() << " ";
 
             return 0;
         }

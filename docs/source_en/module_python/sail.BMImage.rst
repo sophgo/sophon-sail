@@ -17,6 +17,15 @@ ____________
                     format: bm_image_format_ext, 
                     dtype: sail.bm_image_data_format_ext)
 
+        def __init__(self, handle: sail.Handle, 
+                     buffer: bytes | np.array, 
+                     h: int, 
+                     w: int, 
+                     format: sail.Format, 
+                     dtype: sail.ImgDtype = DATA_TYPE_EXT_1N_BYTE, 
+                     strides: list[int] = None, 
+                     offset: int = 0)
+
 **Parameters**
 
 * handle : sail.Handle
@@ -33,11 +42,28 @@ The width of img
 
 * format : bm_image_format_ext
 
-The format of img
+The pixel format of img. 
+Supported formats are listed in `sail.Format <0_enum_type/sail.Format.html>`_ .
 
 * dtype: sail.bm_image_data_format_ext
 
-The data type of img
+The data type of img.
+Supported data types are listed in `ImgDtype <0_enum-type/sail.ImgDtype.html>`_ .
+
+* buffer: bytes | np.array
+
+The buffer used to create a BMImage, which contains pixel values
+
+* strides
+
+The stride of the image when creating an image with a buffer. The unit is in bytes. 
+The default is empty, indicating that it is the same as the data width of one row.
+If specified, ensure the number of elements in the list matches the number of image planes.
+
+* offset
+
+The offset of valid data relative to the start address of the buffer when creating an image with a buffer. 
+The unit is in bytes, and the default is 0.
 
 
 width
@@ -173,6 +199,83 @@ Convert to cv Mat
 only support uint8
 
 
+asnumpy
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+Convert BMImage's data to numpy.ndarray, with original pixel format.
+
+Supported pixel formats are listed in `sail.Format <0_enum_type/sail.Format.html>`_ .
+
+Supported data type are DATA_TYPE_EXT_1N_BYTE、DATA_TYPE_EXT_1N_BYTE_SIGNED和DATA_TYPE_EXT_FLOAT32.
+
+The returned ndarray's shape is corresponding to BMImage's pixel format.
+
+.. list-table:: 
+   :widths: 50 50
+   :header-rows: 1
+
+   * - pixel format
+     - ndarray's shape
+   * - FORMAT_BGR_PACKED / FORMAT_BGR_PACKED
+     - (height, width, 3)
+   * - FORMAT_ARGB_PACKED / FORMAT_ABGR_PACKED
+     - (height, width, 4)
+   * - FORMAT_GRAY
+     - (1, height, width)
+   * - FORMAT_BGR_PLANAR / FORMAT_RGB_PLANAR
+     - (3, height, width)
+   * - FORMAT_YUV444P
+     - (3, height, width)
+   * - else
+     - (numel,)
+
+In above table, ``numel`` means the number of elements in BMImage.
+For example,
+if pixel format is YUV420P or NV12, numel = height * width * 1.5 ;
+if pixel format is BGR_PACKED or BGR_PLANAR, numel = height * width * 3 .
+
+**接口形式:**
+    .. code-block:: python
+
+        def asnumpy(self) -> numpy.ndarray
+
+**返回值说明:**
+
+* image : numpy.ndarray
+
+return data in BMImage.
+
+**示例代码:**
+    .. code-block:: python
+
+        import sophon.sail as sail
+        import numpy as np
+
+        if __name__ == '__main__':
+            devid = 0
+            handle = sail.Handle(devid)
+            height = 1080
+            width = 1920
+            dtype = sail.ImgDtype.DATA_TYPE_EXT_1N_BYTE
+            np_dtype = np.uint8
+
+            # example for BGR_PLANAR
+            format = sail.Format.FORMAT_BGR_PLANAR
+            numel = int(height * width * 3)
+            rawdata = np.random.randint(0, 255, (numel,), np_dtype)
+            img = sail.BMImage(handle, rawdata, height, width, format, dtype)
+            out_ndarray = img.asnumpy()
+            assert out_ndarray.shape == (3, height, width)
+
+            # example for YUV420P
+            format = sail.Format.FORMAT_YUV420P
+            numel = int(height * width * 1.5)
+            rawdata = np.random.randint(0, 255, (numel,), np_dtype)
+            img = sail.BMImage(handle, rawdata, height, width, format, dtype)
+            out_ndarray = img.asnumpy()
+            assert out_ndarray.shape == (numel,)
+
+
 get_plane_num
 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
@@ -292,3 +395,7 @@ return if BMImage memory contiguous,1 contiguous,0 uncontiguous
 
             # check contiguous memory
             print(BMimg.check_contiguous_memory())
+
+            # create BMImage with data from buffer
+            buf = bytes([i % 256 for i in range(int(200*100*3))])
+            img_fromRawdata = sail.BMImage(handle, buf, 200, 100, sail.Format.FORMAT_BGR_PACKED)

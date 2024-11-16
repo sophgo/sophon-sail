@@ -97,3 +97,12 @@ nms_rotated
    :maxdepth: 1
 
    sail.nms_rotated
+
+Yolov8_seg TPU post-processing acceleration interfaces
+==========================================================================
+
+.. toctree::
+   :glob:
+   :maxdepth: 1
+
+   sail.algo_yolov8_seg_post_tpu_opt

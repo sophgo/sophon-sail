@@ -17,5 +17,6 @@ SAIL Python API
    module_python/sail.Encoder
    module_python/sail.Decoder_RawStream
    module_python/sail.Bmcv
+   module_python/sail.Blend
    module_python/sail.MultiDecoder
    module_python/1_high_perform_interface/high_perform_index

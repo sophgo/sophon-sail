@@ -2,6 +2,7 @@ ImgDtype
 ______________
 
 Define several image storage formats.
+The type of values is BMCV enum ``bm_image_data_format_ext`` .
 
 **Interface:**
     .. code-block:: c

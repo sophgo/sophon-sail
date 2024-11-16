@@ -30,6 +30,7 @@ class Format(enum.Enum):
     FORMAT_BGRP_SEPARATE = 13
     FORMAT_GRAY = 14
     FORMAT_COMPRESSED = 15
+    FORMAT_ARGB_PACKED = 16
 
 class ImgDtype(enum.Enum):
     DATA_TYPE_EXT_FLOAT32 = 0
@@ -84,7 +85,16 @@ class BMImage:
     def __init__(self, handle: Handle, 
         h: int, w: int, 
         format: Format, 
-        dtype:ImgDtype) -> BMImage: pass
+        dtype: ImgDtype) -> BMImage: pass
+
+    def __init__(self, handle: Handle, 
+        buffer: bytes | numpy.ndarray, 
+        h: int, w: int, 
+        format: Format, 
+        dtype: ImgDtype = ImgDtype.DATA_TYPE_EXT_1N_BYTE, 
+        strides: list = [], 
+        offset: int = 0
+        ) -> BMImage: pass
 
     def width(self) -> int: pass
 
@@ -111,6 +121,13 @@ class BMImage:
         pass
 
     def asmat(self) -> numpy.ndarray[numpy.uint8]: pass
+
+    def asnumpy(self) -> numpy.ndarray: 
+        """
+        Convert BMImage to numpy.ndarray containing raw data, without color 
+        space convert.
+        """
+        pass
 
 
 class Decoder:
@@ -246,7 +263,7 @@ class Bmcv:
         """
         pass
 
-    def tensor_to_bm_image(self, tensor: Tensor, img: BMImage|BMImageArray, bgr2rgb: bool = False) -> None:
+    def tensor_to_bm_image(self, tensor: Tensor, img: BMImage|BMImageArray, bgr2rgb: bool = False, layout: str = 'nchw') -> None:
         """
         Convert tensor to BMImage|BMImageArray
 
@@ -256,6 +273,26 @@ class Bmcv:
             Input tensor.
         bgr2rgb : bool, optional
             Swap color channel, default is False.
+        layout : str, optional
+            Layout of the input tensor: 'nchw' or 'nhwc', default is 'nchw'.
+
+        Returns
+        -------
+        img: BMImage|BMImageArray
+            Output image
+        """
+        pass
+    
+    def tensor_to_bm_image(self, tensor: Tensor, img: BMImage|BMImageArray, format: Format) -> None:
+        """
+        Convert tensor to BMImage|BMImageArray
+
+        Parameters:
+        ----------
+        tensor : Tensor
+            Input tensor.
+        format : Format
+            Format of the BMImage.
 
         Returns
         -------
@@ -264,7 +301,7 @@ class Bmcv:
         """
         pass
 
-    def tensor_to_bm_image(self, tensor: Tensor, bgr2rgb: bool = False) -> BMImage:
+    def tensor_to_bm_image(self, tensor: Tensor, bgr2rgb: bool = False, layout: str = 'nchw') -> BMImage:
         """
         Convert tensor to BMImage
 
@@ -274,6 +311,26 @@ class Bmcv:
             Input tensor.
         bgr2rgb : bool, optional
             Swap color channel, default is False.
+        layout : str, optional
+            Layout of the input tensor: 'nchw' or 'nhwc', default is 'nchw'.
+
+        Returns
+        -------
+        img: BMImage
+            Output image
+        """
+        pass
+
+    def tensor_to_bm_image(self, tensor: Tensor, format: Format) -> BMImage:
+        """
+        Convert tensor to BMImage
+
+        Parameters:
+        ----------
+        tensor : Tensor
+            Input tensor.
+        format : Format
+            Format of the BMImage.
 
         Returns
         -------
@@ -870,7 +927,89 @@ class Bmcv:
         Return decoded BMImage, whose pixel format is in YUV color space.
         """
         pass
-    
+
+    def stft(self, input_real: numpy.ndarray, input_imag: numpy.ndarray, real_input: bool, normalize: bool, n_fft: int, hop_len: int,
+             pad_mode: int, win_mode: int) -> tuple[numpy.ndarray, numpy.ndarray]:
+        """
+        Short-Time Fourier Transform (STFT) for NumPy arrays.
+
+        Parameters:
+        ----------
+        input_real: numpy.ndarray
+            The real part of the input signal as a 1D array.
+        input_imag: numpy.ndarray
+            The imaginary part of the input signal as a 1D array.
+        real_input: bool
+            Indicates whether the input is purely real. If true, the imaginary part is ignored.
+        normalize: bool
+            Indicates whether to normalize the output.
+        n_fft: int
+            The number of points in the FFT. This defines the resolution of the frequency bins.
+        hop_len: int
+            The number of samples to hop between successive frames. This controls the overlap.
+        pad_mode: int
+            An integer indicating the padding mode to use when the input signal is shorter than the expected length:
+            - 0: Constant padding (pads with zeros).
+            - 1: Reflective padding (pads by reflecting the signal).
+        win_mode: int
+            An integer specifying the window function to apply to each segment:
+            - 0: Hann window.
+            - 1: Hamming window.
+
+        Returns:
+        ----------
+        tuple[numpy.ndarray, numpy.ndarray]
+            A tuple containing two NumPy arrays representing the STFT output:
+            - The first array is the real part of the STFT.
+            - The second array is the imaginary part of the STFT.
+        """
+        pass
+
+    def stft(self, input_real: Tensor, input_imag: Tensor, real_input: bool, normalize: bool, n_fft: int, hop_len: int,
+             pad_mode: int, win_mode: int) -> tuple[Tensor, Tensor]:
+        pass 
+
+    def istft(self, input_real: numpy.ndarray, input_imag: numpy.ndarray, real_input: bool, normalize: bool, L: int, hop_len: int,
+             pad_mode: int, win_mode: int) -> tuple[numpy.ndarray, numpy.ndarray]:
+        """
+        Inverse Short-Time Fourier Transform (ISTFT) for NumPy arrays.
+
+        Parameters:
+        ----------
+        input_real: numpy.ndarray
+            The real part of the STFT output as a 1D array.
+        input_imag: numpy.ndarray
+            The imaginary part of the STFT output as a 1D array.
+        real_input: bool
+            Indicates whether the input STFT is purely real. If true, the imaginary part is ignored.
+        normalize: bool
+            Indicates whether to normalize the output.
+        L: int
+            The length of the original time-domain signal to reconstruct.
+        hop_len: int
+            The number of samples to hop between successive frames. This controls the overlap.
+        pad_mode: int
+            An integer indicating the padding mode to use when the input signal is shorter than the expected length:
+            - 0: Constant padding (pads with zeros).
+            - 1: Reflective padding (pads by reflecting the signal).
+        win_mode: int
+            An integer specifying the window function to apply to each segment when reconstructing the signal:
+            - 0: Hann window.
+            - 1: Hamming window.
+
+        Returns:
+        ----------
+        tuple[numpy.ndarray, numpy.ndarray]
+            A tuple containing two NumPy arrays representing the reconstructed time-domain signal:
+            - The first array is the reconstructed signal.
+            - The second array is the corresponding phase information (if applicable).
+        """
+        pass
+
+    def istft(self, input_real: Tensor, input_imag: Tensor, real_input: bool, normalize: bool, L: int, hop_len: int,
+             pad_mode: int, win_mode: int) -> tuple[Tensor, Tensor]:
+        pass 
+
     def fft(self, forward: bool, input_real: Tensor) -> list[Tensor]:
         """
         1d or 2d fft (only real part)
@@ -903,7 +1042,20 @@ class Bmcv:
         return list[Tensor], The real and imaginary part of output
         """
         pass
+    
+    def bmcv_overlay(self, image: BMImage, overlay_info: list[list[int]], overlay_image: list[BMImage]) -> int:
+        """
+        Add a watermark with a transparent channel to the image
 
+        Parameters:
+        -----------
+        image: BMImage, the base image
+        overlay_info: a list of rect (x,y,w,h)
+        overlay_image: a list of watermark image with a transparent channel
+
+        Returns:
+        return ret, 0 for success and others for failed
+        """
 class BMImageArray():
     def __init__(self) -> None: ...
 

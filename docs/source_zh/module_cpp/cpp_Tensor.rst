@@ -68,6 +68,49 @@ Tensor的数据类型
             return 0;  
         }
 
+**接口形式3**
+
+该初始化方式在一个已存在的源Tensor的基础上创建新Tensor，并复用源Tensor的一部分设备内存，不发生设备内存的数据拷贝。适合LLM推理等复用内存的场景。
+
+在使用该Tensor的过程中，需要保证源Tensor不被释放。
+
+    .. code-block:: cpp
+
+        Tensor(const Tensor& src, const std::vector<int>& shape, unsigned int offset);
+
+**参数说明3:**
+
+* src: sail::Tensor
+
+创建Tensor所使用的源Tensor
+
+* shape: std::vector<int>
+
+创建Tensor的shape。需要保证新shape对应的元素个数不超过src的元素个数
+
+* offset: unsigned int
+
+Tensor的设备内存相对于src的设备内存的偏移量。单位为dtype的字节数
+
+**示例代码:**
+    .. code-block:: cpp
+
+        #include <sail/tensor.h>
+        #include <vector>
+
+        int main() {
+            sail::Handle handle(0);
+            int height = 1080;
+            int width = 1920;
+            std::vector<int> src_shape = {1, 3, height, width};
+            sail::Tensor src_tensor(handle, src_shape, BM_INT32, false, true);
+
+            std::vector<int> dst_shape = {1, 1, height, width};
+            unsigned int offset = height * width;
+            sail::Tensor dst_tensor(src_tensor, dst_shape, offset);
+
+            return 0;
+        }
 
 
 shape
@@ -813,6 +856,94 @@ ones
             input_tensor = std::make_shared<sail::Tensor>(handle, input_shape, input_dtype, true, true); 
             // prepare data
             input_tensor->ones();
+
+            return 0;
+        }
+
+size
+>>>>>>>>>>>>>>>>>>>>>
+
+返回Tensor包含的元素数量。
+
+**接口形式:**
+    .. code-block:: c
+
+        int size() const;
+
+**示例代码:**
+    .. code-block:: c
+
+        int main() {
+            int dev_id = 0;
+            int ret;
+            sail::Handle handle(dev_id);
+            std::shared_ptr<sail::Tensor> input_tensor;
+            std::vector<int> input_shape = {10,10};
+            bm_data_type_t input_dtype = BM_FLOAT32; 
+
+            // init tensor
+            input_tensor = std::make_shared<sail::Tensor>(handle, input_shape, input_dtype, true, true); 
+            // Output result
+            std::cout << input_tensor->size() << " ";
+
+            return 0;
+        }
+
+
+element_size
+>>>>>>>>>>>>>>>>>>>>>
+
+返回Tensor中单个元素占用的字节数。
+
+**接口形式:**
+    .. code-block:: c
+
+        int element_size() const;
+
+**示例代码:**
+    .. code-block:: c
+
+        int main() {
+            int dev_id = 0;
+            int ret;
+            sail::Handle handle(dev_id);
+            std::shared_ptr<sail::Tensor> input_tensor;
+            std::vector<int> input_shape = {10,10};
+            bm_data_type_t input_dtype = BM_FLOAT32; 
+
+            // init tensor
+            input_tensor = std::make_shared<sail::Tensor>(handle, input_shape, input_dtype, true, true); 
+            // Output result
+            std::cout << input_tensor->element_size() << " ";
+
+            return 0;
+        }
+
+nbytes
+>>>>>>>>>>>>>>>>>>>>>
+
+返回Tensor中所有元素占用的总字节数。
+
+**接口形式:**
+    .. code-block:: c
+
+        int nbytes() const;
+
+**示例代码:**
+    .. code-block:: c
+
+        int main() {
+            int dev_id = 0;
+            int ret;
+            sail::Handle handle(dev_id);
+            std::shared_ptr<sail::Tensor> input_tensor;
+            std::vector<int> input_shape = {10,10};
+            bm_data_type_t input_dtype = BM_FLOAT32; 
+
+            // init tensor
+            input_tensor = std::make_shared<sail::Tensor>(handle, input_shape, input_dtype, true, true); 
+            // Output result
+            std::cout << input_tensor->nbytes() << " ";
 
             return 0;
         }

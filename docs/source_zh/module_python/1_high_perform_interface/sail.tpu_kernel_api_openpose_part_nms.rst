@@ -131,6 +131,7 @@ reset_network_c
 **示例代码:**
     .. code-block:: python
 
+        from scipy.ndimage import gaussian_filter
         import sophon.sail as sail
         import numpy as np
         import cv2
@@ -158,7 +159,11 @@ reset_network_c
 
             outputs = net.process(graph_name, {input_name: img})
 
-            output = np.transpose(list(outputs.values())[0], (1, 2, 0))
+            # output = np.transpose(list(outputs.values())[0], (1, 2, 0))
+            output_array = list(outputs.values())[0]
+            output = output_array[0]
+            output = np.transpose(output, (1, 2, 0))
+            
             stride = net_h / out_h
             output = cv2.resize(output, (0, 0), fx=stride, fy=stride, interpolation=cv2.INTER_CUBIC)
             output = output[:resize_img.shape[0], :resize_img.shape[1], :]

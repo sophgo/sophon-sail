@@ -147,8 +147,8 @@ class DECL_EXPORT BMImage {
    * @brief The BMImage Constructor.
    *
    * @param handle A Handle instance
-   * @param h      Image width
-   * @param w      Image height
+   * @param h      Image height
+   * @param w      Image width
    * @param format Image format
    * @param dtype  Data type
    */
@@ -162,8 +162,8 @@ class DECL_EXPORT BMImage {
    * @brief The BMImage Constructor.
    *
    * @param handle A Handle instance
-   * @param h      Image width
-   * @param w      Image height
+   * @param h      Image height
+   * @param w      Image width
    * @param format Image format
    * @param dtype  Data type
    */
@@ -174,6 +174,54 @@ class DECL_EXPORT BMImage {
       bm_image_format_ext      format,
       bm_image_data_format_ext dtype,
       int                      *stride);
+
+  /**
+   * @brief The BMImage Constructor. Create BMImage by an existing buffer.
+   *
+   * @param handle  A Handle instance
+   * @param buffer  A buffer containing rawdata
+   * @param h       Image height
+   * @param w       Image width
+   * @param format  Image format
+   * @param dtype   Data type. Default: DATA_TYPE_EXT_1N_BYTE, i.e., uint8
+   * @param strides Strides for each plane. Default: an empty std::vector<int>
+   * @param offset  Start reading the buffer from this offset (in bytes); default: 0
+   */
+  BMImage(
+      Handle                   &handle,
+      void*                    buffer,
+      int                      h,
+      int                      w,
+      bm_image_format_ext      format,
+      bm_image_data_format_ext dtype = DATA_TYPE_EXT_1N_BYTE,
+      std::vector<int>         strides = {},
+      size_t                   offset = 0,
+      int                      size = -1);
+
+  /**
+   * @brief The BMImage Constructor. Create BMImage by a bytes object.
+   *
+   * @param handle  A Handle instance
+   * @param buffer  A buffer containing rawdata
+   * @param h       Image height
+   * @param w       Image width
+   * @param format  Image format
+   * @param dtype   Data type. Default: DATA_TYPE_EXT_1N_BYTE, i.e., uint8
+   * @param strides Strides for each plane. Default: an empty std::vector<int>
+   * @param offset  Start reading the buffer from this offset (in bytes); default: 0
+   */
+  #ifdef PYTHON
+  BMImage(
+      Handle&                     handle,
+      pybind11::buffer            &buffer,
+      int                         h,
+      int                         w,
+      bm_image_format_ext         format,
+      bm_image_data_format_ext    dtype = DATA_TYPE_EXT_1N_BYTE,
+      std::vector<int>            strides = {},
+      size_t                      offset = 0);
+  #endif // PYTHON
+
   /**
    * @brief The copy constructor of BMImage.
    */
@@ -258,6 +306,17 @@ class DECL_EXPORT BMImage {
   * @return ret.
   */
   int check_contiguous_memory() const;
+
+#ifdef PYTHON
+  /**
+  * @brief Convert BMImage to numpy.ndarray containing raw data, 
+  *        without color space convert.
+  *
+  * @return numpy.ndarray containing a copy of BMImage’s raw data.
+  */
+  pybind11::array asnumpy() const;
+#endif
+
   /**
   * @brief set IPC flag. Normally false, only set to true if IPC::sendBMImage method is called.
   *
@@ -297,6 +356,7 @@ class DECL_EXPORT BMImage {
 
   friend class Bmcv;
   friend class Decoder;
+  friend class Blend;
 };
 
 template<std::size_t N>
@@ -633,6 +693,39 @@ private:
 
 #ifdef USE_BMCV
 
+#if BMCV_VERSION_MAJOR > 1
+/**
+ * @brief A class for image stitch.
+ */
+class DECL_EXPORT Blend{
+public:
+  /**
+   * @brief blend init 
+   * @param src_h       image height
+   * @param ovlap_attr  overlapping areas width
+   * @param bd_attr     Black border of images
+   * @param wgt_phy_mem imgage weight
+   * @param wgt_mode    weight mode
+   */
+  explicit Blend(int src_h, std::vector<std::vector<short>> ovlap_attr, std::vector<std::vector<short>> bd_attr, std::vector<std::vector<string>> wgt_phy_mem,bm_stitch_wgt_mode wgt_mode);
+  ~Blend();
+
+  /**
+   * @brief blend process
+   * @param input   input images
+   * @param output  output image
+   * @return 0 for success and other for failure
+   */
+  int process(std::vector<BMImage*> &input, BMImage &output);
+  
+  BMImage process(std::vector<BMImage*> &input);
+
+private:
+  class Blend_CC;
+  Blend_CC* _impl;
+};
+#endif
+
 /**
  * @brief A class for image processing by VPP/TPU.
  */
@@ -676,10 +769,14 @@ class DECL_EXPORT Bmcv {
    * @param tensor   Input tensor
    * @param img      Output image
    * @param bgr2rgb  swap color channel
+   * @param layout   layout of the tensor: "nchw" or "nhwc", default is "nchw"
    */
-  void    tensor_to_bm_image (Tensor &tensor, BMImage &img, bool bgr2rgb=false);
-  BMImage tensor_to_bm_image (Tensor &tensor, bool bgr2rgb=false);
-  template<std::size_t N> void  tensor_to_bm_image (Tensor &tensor, BMImageArray<N> &imgs, bool bgr2rgb=false);
+  void tensor_to_bm_image(Tensor &tensor, BMImage &img, bool bgr2rgb=false, std::string layout = std::string("nchw"));
+  void tensor_to_bm_image(Tensor &tensor, BMImage &img, bm_image_format_ext format);
+  BMImage tensor_to_bm_image (Tensor &tensor, bool bgr2rgb=false, std::string layout = std::string("nchw"));
+  BMImage tensor_to_bm_image (Tensor &tensor, bm_image_format_ext format);
+  template<std::size_t N> void  tensor_to_bm_image (Tensor &tensor, BMImageArray<N> &imgs, bool bgr2rgb=false, std::string layout = std::string("nchw"));
+  template<std::size_t N> void  tensor_to_bm_image (Tensor &tensor, BMImageArray<N> &imgs, bm_image_format_ext format);
 
   /**
    * @brief Crop then resize an image.
@@ -1716,6 +1813,98 @@ class DECL_EXPORT Bmcv {
   BMImage imread(const std::string &filename);
 
   /**
+   * @brief Short-Time Fourier Transform (STFT).
+   *
+   * @param input_real The real part of the input signal as a 2D numpy array.
+   * @param input_imag The imaginary part of the input signal as a 2D numpy array.
+   * @param realInput A boolean indicating whether the input signal is purely real. 
+   *                  If true, the imaginary part is ignored.
+   * @param normalize A boolean indicating whether to normalize the output.
+   * @param n_fft The number of points used in the FFT. This determines the frequency resolution.
+   * @param hop_len The number of samples to hop between successive frames. This controls the overlap.
+   * @param pad_mode An integer indicating the padding mode to use when the input signal 
+   *                 is shorter than n_fft:
+   *                 - 0: Constant padding (pads with zeros).
+   *                 - 1: Reflective padding (pads by reflecting the signal).
+   * @param win_mode An integer specifying the window function to apply to each segment 
+   *                  before computing the FFT:
+   *                  - 0: Hann window.
+   *                  - 1: Hamming window.
+   * @return std::tuple<pybind11::array_t<float>, pybind11::array_t<float>> A tuple containing 
+   *         two numpy arrays: the first array represents the real part of the STFT output, 
+   *         and the second array represents the imaginary part of the STFT output. 
+   *         Each array has shape (batch, n_fft / 2 + 1, num_frames), where num_frames is the 
+   *         number of overlapping segments computed from the input signal.
+   */
+#if BMCV_VERSION_MAJOR > 1
+  #ifdef PYTHON
+  std::tuple<pybind11::array_t<float>, pybind11::array_t<float>> stft(
+      pybind11::array_t<float> input_real,
+      pybind11::array_t<float> input_imag,
+      bool realInput,
+      bool normalize,
+      int n_fft,
+      int hop_len,
+      int pad_mode,
+      int win_mode
+      );
+  #endif
+  std::tuple<Tensor, Tensor> stft(
+      Tensor &input_real,
+      Tensor &input_imag,
+      bool realInput,
+      bool normalize,
+      int n_fft,
+      int hop_len,
+      int pad_mode,
+      int win_mode
+      );
+
+  /**
+   * @brief Inverse Short-Time Fourier Transform (ISTFT).
+   *
+   * @param input_real The real part of the STFT output as a 3D numpy array.
+   * @param input_imag The imaginary part of the STFT output as a 3D numpy array.
+   * @param realInput A boolean indicating whether the input STFT is purely real.
+   *                  If true, the imaginary part is ignored.
+   * @param normalize A boolean indicating whether to normalize the output.
+   * @param L The length of the original time-domain signal to reconstruct.
+   * @param hop_len The number of samples to hop between successive frames. This controls the overlap.
+   * @param pad_mode An integer indicating the padding mode to use when the input signal 
+   *                 is shorter than n_fft:
+   *                 - 0: Constant padding (pads with zeros).
+   *                 - 1: Reflective padding (pads by reflecting the signal).
+   * @param win_mode An integer specifying the window function to apply to each segment 
+   *                  before computing the FFT:
+   *                  - 0: Hann window.
+   *                  - 1: Hamming window.
+   * @return pybind11::array_t<float> A numpy array representing the reconstructed time-domain signal. 
+   *         The shape of the output array is (batch, signal_length), where signal_length is the length of the reconstructed signal.
+   */
+  #ifdef PYTHON
+  std::tuple<pybind11::array_t<float>, pybind11::array_t<float>> istft(
+      pybind11::array_t<float> input_real,
+      pybind11::array_t<float> input_imag,
+      bool realInput,
+      bool normalize,
+      int L,
+      int hop_len,
+      int pad_mode,
+      int win_mode
+      );
+  #endif
+  std::tuple<Tensor, Tensor> istft(
+      Tensor &input_real,
+      Tensor &input_imag,
+      bool realInput,
+      bool normalize,
+      int L,
+      int hop_len,
+      int pad_mode,
+      int win_mode
+      );
+#endif
+  /**
    * @brief fft.
    * 
    * @param forward forward or Inverse transformation
@@ -1780,6 +1969,21 @@ class DECL_EXPORT Bmcv {
       float                        sigmaX,
       float                        sigmaY = 0.0f);
 
+#if BMCV_VERSION_MAJOR > 1
+  /**
+   * @brief Add a watermark with a transparent channel to the image.
+   * 
+   * @param image           Input image
+   * @param overlay_info    The position and size information of a set of watermarks in the format of [x,y,w,h]
+   * @param overlay_image   A group of watermark
+   * 
+   * @return 0 for success and other for failure
+   */
+  int bmcv_overlay(
+      BMImage&                      image, 
+      std::vector<std::vector<int>> overlay_info, 
+      std::vector<const BMImage *>        overlay_image);
+#endif
 
 #ifdef PYTHON
   pybind11::array_t<float> nms(pybind11::array_t<float> input_proposal, float threshold);
@@ -1859,7 +2063,7 @@ Tensor Bmcv::bm_image_to_tensor (BMImageArray<N> &imgs)
 }
 
 template<std::size_t N>
-void Bmcv::tensor_to_bm_image (Tensor &tensor, BMImageArray<N> &imgs, bool bgr2rgb)
+void Bmcv::tensor_to_bm_image (Tensor &tensor, BMImageArray<N> &imgs, bool bgr2rgb, std::string layout)
 {
   auto shape = tensor.shape();
   int n = shape[0];
@@ -1867,12 +2071,48 @@ void Bmcv::tensor_to_bm_image (Tensor &tensor, BMImageArray<N> &imgs, bool bgr2r
     spdlog::error("Batch size mis-matched, Tensor batch size: {}, BMImageArray size: {}!",n,N);
     return;
   }
-
-  int h = shape[2];
-  int w = shape[3];
+  int h, w;
+  if(strcmp(layout.c_str(), "nchw") == 0) {
+    h = shape[2];
+    w = shape[3];
+  } else if (strcmp(layout.c_str(), "nhwc") == 0) {
+    h = shape[1];
+    w = shape[2];
+  } else {
+    spdlog::error("Invalid layout!");
+    return;
+  }
 
   bm_image_data_format_ext dtype = get_bm_image_data_format(tensor.dtype());
   check_create_not_alloc(imgs, h, w, dtype, false, bgr2rgb ? FORMAT_RGB_PLANAR : FORMAT_BGR_PLANAR);
+
+  bm_device_mem_t mem = tensor.dev_data();
+  bm_image_attach_contiguous_mem(imgs.size(), imgs.data(), mem);
+}
+
+template<std::size_t N> 
+void Bmcv::tensor_to_bm_image (Tensor &tensor, BMImageArray<N> &imgs, bm_image_format_ext format)
+{
+  auto shape = tensor.shape();
+  int n = shape[0];
+  if (n != N) {
+    spdlog::error("Batch size mis-matched, Tensor batch size: {}, BMImageArray size: {}!",n,N);
+    return;
+  }
+  int h, w;
+  if(format == FORMAT_RGB_PLANAR || format == FORMAT_BGR_PLANAR) { //nchw
+    h = shape[2];
+    w = shape[3];
+  } else if (format == FORMAT_RGB_PACKED || format == FORMAT_BGR_PACKED) { //nhwc
+    h = shape[1];
+    w = shape[2];
+  } else {
+    spdlog::error("Invalid format!");
+    return;
+  }
+
+  bm_image_data_format_ext dtype = get_bm_image_data_format(tensor.dtype());
+  check_create_not_alloc(imgs, h, w, dtype, false, format);
 
   bm_device_mem_t mem = tensor.dev_data();
   bm_image_attach_contiguous_mem(imgs.size(), imgs.data(), mem);
@@ -2257,12 +2497,13 @@ BMImageArray<N> Bmcv::convert_format(
   {
     if (!output.is_created() || !input.is_created()){
       SPDLOG_ERROR("input or output must be created before!");
-      exit(SAIL_ERR_BMI_EMPTY);
+      return SAIL_ERR_BMI_EMPTY;
     }
     for(int i = 0; i < N; ++i) {
       int ret = image_copy_to(input.at(i), output.at(i), start_x, start_y);
       if (ret != 0){
-        exit(SAIL_ERR_BMI_BMCV);
+        SPDLOG_ERROR("image_copy_to failed, ret = {}, start_x {} start_y {}", ret, start_x, start_y);
+        return ret;
       }
     }
     return BM_SUCCESS;
@@ -2275,12 +2516,12 @@ BMImageArray<N> Bmcv::convert_format(
   {
     if (!output.is_created() || !input.is_created()){
       SPDLOG_ERROR("input or output must be created before!");
-      exit(SAIL_ERR_BMI_EMPTY);
+      return SAIL_ERR_BMI_EMPTY;
     }
     for(int i = 0; i < N; ++i) {
       int ret = image_copy_to_padding(input.at(i), output.at(i),padding_r, padding_g, padding_b, start_x, start_y);
       if (ret != 0){
-        exit(SAIL_ERR_BMI_BMCV);
+        return ret;
       }
     }
     return BM_SUCCESS;

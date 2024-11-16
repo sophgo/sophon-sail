@@ -16,11 +16,21 @@ BMImage也是通过Bmcv接口进行其他图像处理操作的基本数据类型
         BMImage();
 
         BMImage(
-           Handle&                  handle,
-           int                      h,
-           int                      w,
-           bm_image_format_ext      format,
-           bm_image_data_format_ext dtype);
+            Handle&                  handle,
+            int                      h,
+            int                      w,
+            bm_image_format_ext      format,
+            bm_image_data_format_ext dtype);
+
+        BMImage(
+            Handle                   &handle,
+            void*                    buffer,
+            int                      h,
+            int                      w,
+            bm_image_format_ext      format,
+            bm_image_data_format_ext dtype = DATA_TYPE_EXT_1N_BYTE,
+            std::vector<int>         strides = {},
+            size_t                   offset = 0);
 
 **参数说明:**
 
@@ -38,12 +48,26 @@ BMImage也是通过Bmcv接口进行其他图像处理操作的基本数据类型
 
 * format : bm_image_format_ext
 
-图像的格式。
+图像的像素格式。
+支持 `sail.Format <0_enum-type/cpp_Format.html>`_ 中的像素格式。
 
 * dtype: bm_image_data_format_ext
 
 图像的数据类型。
+支持 `ImgDtype <0_enum-type/cpp_ImgDtype.html>`_ 中的数据类型。
 
+* buffer: void*
+
+用buffer创建图像时buffer的地址。
+
+* strides: std::vector<int>
+
+用buffer创建图像时图像的步长。单位为byte，默认为空，表示和一行的数据宽度相同。
+如果需要指定，注意stride元素个数要与图像plane数一致
+
+* offset: int
+
+用buffer创建图像时有效数据相对buffer起始地址的偏移量。单位为byte，默认为0
 
 width
 >>>>>>>>>>>
@@ -279,7 +303,7 @@ check_contiguous_memory
             }
             std::cout << "is align: " << BMimg.check_align() << std::endl;      
 
-            // Unaling the image
+            // unalign the image
             ret = BMimg.unalign();
             if (ret != 0) {  
                 std::cout << "Failed to unalign the image!" << std::endl;    
@@ -289,6 +313,12 @@ check_contiguous_memory
             // check contiguous memory
             std::cout << "is continues: " <<BMimg.check_contiguous_memory()<< std::endl;
 
-            return 0;  
+            // create BMImage with data from buffer
+            std::vector<uint8_t> buf(200 * 100 * 3);
+            for (int i = 0; i < 200 * 100 * 3; ++i) {
+                buf[i] = i % 256;
+            }
+            sail::BMImage img_fromRawdata(handle, buf.data(), 200, 100, sail::Format::FORMAT_BGR_PACKED);
 
+            return 0;  
         }

@@ -2,7 +2,7 @@ C++ SAIL的编译与安装
 ______________________
 
 ..
- .. |ver| replace:: 3.8.0
+ .. |ver| replace:: 3.9.0
 
 编译可被C++接口调用的动态库及头文件
 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
@@ -596,9 +596,9 @@ PCIE MODE
 SOC MODE
 ::::::::::::::::
 
-**.SOC板卡上编译程序**
+**.SOC设备上编译程序**
 
-在SOC板卡上安装好libsophon,sophon-ffmpeg,sophon-opencv,及SAIL之后,您可以参考PCIE MODE的开发方法使用cmake将SAIL中的库链接到自己的程序中,
+在SOC设备上安装好libsophon,sophon-ffmpeg,sophon-opencv,及SAIL之后,您可以参考PCIE MODE的开发方法使用cmake将SAIL中的库链接到自己的程序中,
 如果需要使用SAIL多媒体相关的功能,
 也需要将libsophon,sophon-ffmpeg,sophon-opencv的头文件目录及动态库目录添加到自己的程序中。
 
