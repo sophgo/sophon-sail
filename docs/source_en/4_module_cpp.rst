@@ -17,5 +17,6 @@ SAIL C++ API
    module_cpp/cpp_Encoder
    module_cpp/cpp_Decoder_RawStream
    module_cpp/cpp_Bmcv
+   module_cpp/cpp_Blend
    module_cpp/cpp_MultiDecoder
    module_cpp/1_high_perform_interface/high_perform_index_cpp

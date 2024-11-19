@@ -128,7 +128,8 @@ template<std::size_t N>
 static void registerBMImageArrayFunctions(py::class_<Bmcv> &cls) {
   cls.def("bm_image_to_tensor",  (void            (Bmcv::*)(BMImageArray<N>&, Tensor&))       &Bmcv::bm_image_to_tensor)
      .def("bm_image_to_tensor",  (Tensor          (Bmcv::*)(BMImageArray<N>&))                &Bmcv::bm_image_to_tensor)
-     .def("tensor_to_bm_image",  (void            (Bmcv::*)(Tensor&, BMImageArray<N>&, bool)) &Bmcv::tensor_to_bm_image, py::arg("tensor"), py::arg("img"), py::arg("bgr2rgb")=false)
+     .def("tensor_to_bm_image",  (void            (Bmcv::*)(Tensor&, BMImageArray<N>&, bool, std::string)) &Bmcv::tensor_to_bm_image, py::arg("tensor"), py::arg("img"), py::arg("bgr2rgb")=false, py::arg("layout")=std::string("nchw"))
+     .def("tensor_to_bm_image",  (void            (Bmcv::*)(Tensor&, BMImageArray<N>&, bm_image_format_ext)) &Bmcv::tensor_to_bm_image, py::arg("tensor"), py::arg("img"), py::arg("format"))
      .def("crop_and_resize",     (BMImageArray<N> (Bmcv::*)(BMImageArray<N>&, int, int, int, int, int, int, bmcv_resize_algorithm)) &Bmcv::crop_and_resize,
       py::arg("input"),py::arg("crop_x0"), py::arg("crop_y0"), py::arg("crop_w"),py::arg("crop_h"),py::arg("resize_w"), py::arg("resize_h"), py::arg("resize_alg")=BMCV_INTER_NEAREST)
      .def("crop",                (BMImageArray<N> (Bmcv::*)(BMImageArray<N>&, int, int, int, int))           &Bmcv::crop)
@@ -248,7 +249,7 @@ py::register_exception<ExceptionName>(m, #ExceptionName);
     .value("SYSIO", IOMode::SYSIO)
     .value("DEVIO", IOMode::DEVIO)
     .export_values();
-  
+
   py::enum_<LogLevel>(m, "LogLevel")
     .value("TRACE",     LogLevel::TRACE)
     .value("DEBUG",     LogLevel::DEBUG)
@@ -272,7 +273,6 @@ py::register_exception<ExceptionName>(m, #ExceptionName);
     .def("get_device_id", &Handle::get_device_id)
     .def("get_sn",        &Handle::get_sn)
     .def("get_target",    &Handle::get_target);
-
   py::class_<Tensor>(m, "Tensor")
     .def(py::init<Handle, py::array_t<float>&>(),   py::arg("handle"), py::arg("data"))
     .def(py::init<Handle, py::array_t<int8_t>&>(),  py::arg("handle"), py::arg("data"))
@@ -285,6 +285,10 @@ py::register_exception<ExceptionName>(m, #ExceptionName);
     .def(py::init<Handle, const std::vector<int>&, bm_data_type_t, bool, bool>(),
       py::arg("handle"),py::arg("shape"),py::arg("dtype"),py::arg("own_sys_data")=false,py::arg("own_dev_data")=false)
     .def(py::init<Tensor&, std::vector<std::pair<int, int>> &, bool>(), py::arg("tensor"), py::arg("ranges"), py::arg("d2d_flag")=true)
+    .def(py::init<Tensor&, std::vector<int> &, unsigned int, bool>(), 
+      py::arg("src"), py::arg("shape"), py::arg("offset"), py::arg("no_copy") = true,
+      "Create a tensor from another existing tensor. The created Tensor can "
+      "reuse src's memory without copy.")
     .def("shape",                 &Tensor::shape)
     .def("reshape",               &Tensor::reshape)
     .def("own_sys_data",          &Tensor::own_sys_data)
@@ -317,6 +321,8 @@ py::register_exception<ExceptionName>(m, #ExceptionName);
     .def("ones",                  &Tensor::ones)
     .def("dtype",                 &Tensor::dtype)
     .def("size",                  &Tensor::size)
+    .def("element_size",          &Tensor::element_size)
+    .def("nbytes",                &Tensor::nbytes)
     .def("is_dev_data_valid",     &Tensor::is_dev_data_valid)
     .def("is_sys_data_valid",     &Tensor::is_sys_data_valid)
     .def("__getitem__",
@@ -357,6 +363,7 @@ py::register_exception<ExceptionName>(m, #ExceptionName);
     .def("get_device_id",         &Engine::get_device_id)
     .def("get_graph_names",       &Engine::get_graph_names)
     .def("set_io_mode",           &Engine::set_io_mode)
+    .def("graph_is_dynamic",      &Engine::graph_is_dynamic)
     .def("get_input_names",       &Engine::get_input_names)
     .def("get_output_names",      &Engine::get_output_names)
     .def("get_max_input_shapes",  &Engine::get_max_input_shapes)
@@ -503,6 +510,8 @@ py::register_exception<ExceptionName>(m, #ExceptionName);
     .value("FORMAT_BGRP_SEPARATE", bm_image_format_ext::FORMAT_BGRP_SEPARATE)
     .value("FORMAT_GRAY",          bm_image_format_ext::FORMAT_GRAY)
     .value("FORMAT_COMPRESSED",    bm_image_format_ext::FORMAT_COMPRESSED)
+    .value("FORMAT_ARGB_PACKED",    bm_image_format_ext::FORMAT_ARGB_PACKED)
+    .value("FORMAT_ABGR_PACKED",    bm_image_format_ext::FORMAT_ABGR_PACKED)
     .export_values();
 
   py::enum_<bm_image_data_format_ext>(m, "ImgDtype")
@@ -526,6 +535,9 @@ py::register_exception<ExceptionName>(m, #ExceptionName);
     .def(py::init<>())
     .def(py::init<bm_image&>())
     .def(py::init<Handle&, int, int, bm_image_format_ext, bm_image_data_format_ext>())
+    .def(py::init<Handle&, pybind11::buffer&, int, int, bm_image_format_ext, bm_image_data_format_ext, std::vector<int>, size_t>(),
+      py::arg("handle"),py::arg("buffer"),py::arg("h"),py::arg("w"),py::arg("format"),py::arg("dtype")=DATA_TYPE_EXT_1N_BYTE, 
+      py::arg("strides")=std::vector<int>(),py::arg("offset")=0)
     .def("width",                &BMImage::width)
     .def("height",               &BMImage::height)
     .def("format",               &BMImage::format)
@@ -542,7 +554,9 @@ py::register_exception<ExceptionName>(m, #ExceptionName);
     .def("align",                (int (BMImage::*)())                &BMImage::align)
     .def("check_align",          (int (BMImage::*)() const)          &BMImage::check_align)
     .def("unalign",              (int (BMImage::*)())                &BMImage::unalign)
-    .def("check_contiguous_memory",              (int (BMImage::*)() const)          &BMImage::check_contiguous_memory);
+    .def("check_contiguous_memory",              (int (BMImage::*)() const)          &BMImage::check_contiguous_memory)
+    .def("asnumpy",              (pybind11::array (BMImage::*)() const)          &BMImage::asnumpy)
+    ;
     
   declareBMImageArray<2>(m); // BMImageArray2D
   declareBMImageArray<3>(m); // BMImageArray3D
@@ -569,8 +583,10 @@ py::register_exception<ExceptionName>(m, #ExceptionName);
     .def(py::init<Handle&>())
     .def("bm_image_to_tensor",  (void    (Bmcv::*)(BMImage&, Tensor&))       &Bmcv::bm_image_to_tensor)
     .def("bm_image_to_tensor",  (Tensor  (Bmcv::*)(BMImage&))                &Bmcv::bm_image_to_tensor)
-    .def("tensor_to_bm_image",  (void    (Bmcv::*)(Tensor&, BMImage&, bool)) &Bmcv::tensor_to_bm_image, py::arg("tensor"), py::arg("img"), py::arg("bgr2rgb")=false)
-    .def("tensor_to_bm_image",  (BMImage (Bmcv::*)(Tensor&, bool))           &Bmcv::tensor_to_bm_image, py::arg("tensor"), py::arg("bgr2rgb")=false)
+    .def("tensor_to_bm_image",  (void    (Bmcv::*)(Tensor&, BMImage&, bool, std::string)) &Bmcv::tensor_to_bm_image, py::arg("tensor"), py::arg("img"), py::arg("bgr2rgb")=false, py::arg("layout")=std::string("nchw"))
+    .def("tensor_to_bm_image",  (void    (Bmcv::*)(Tensor&, BMImage&, bm_image_format_ext)) &Bmcv::tensor_to_bm_image, py::arg("tensor"), py::arg("img"), py::arg("format"))
+    .def("tensor_to_bm_image",  (BMImage (Bmcv::*)(Tensor&, bool, std::string))           &Bmcv::tensor_to_bm_image, py::arg("tensor"), py::arg("bgr2rgb")=false, py::arg("layout")=std::string("nchw"))
+    .def("tensor_to_bm_image",  (BMImage (Bmcv::*)(Tensor&, bm_image_format_ext))         &Bmcv::tensor_to_bm_image, py::arg("tensor"), py::arg("format"))
     .def("crop_and_resize",     (BMImage (Bmcv::*)(BMImage&, int, int, int, int, int, int, bmcv_resize_algorithm)) &Bmcv::crop_and_resize,
       py::arg("input"),py::arg("crop_x0"), py::arg("crop_y0"), py::arg("crop_w"),py::arg("crop_h"),py::arg("resize_w"), py::arg("resize_h"), py::arg("resize_alg")=BMCV_INTER_NEAREST)
     .def("crop",                (BMImage (Bmcv::*)(BMImage&, int, int, int, int))           &Bmcv::crop)
@@ -654,6 +670,20 @@ py::register_exception<ExceptionName>(m, #ExceptionName);
     .def("imencode",            (pybind11::array_t<uint8_t> (Bmcv::*)(std::string&, BMImage&)) &Bmcv::imencode)
     .def("imread",              (BMImage (Bmcv::*)(const std::string &))             &Bmcv::imread,
       py::arg("filename"))
+  #if BMCV_VERSION_MAJOR > 1
+    .def("stft",           (std::tuple<pybind11::array_t<float>, pybind11::array_t<float>> (Bmcv::*)(pybind11::array_t<float>, pybind11::array_t<float>, bool, bool, int, int, int, int)) &Bmcv::stft,
+          "Short-Time Fourier Transform",
+      py::arg("input_real"), py::arg("input_imag"), py::arg("realInput"), py::arg("normalize"), py::arg("n_fft"), py::arg("hop_len"), py::arg("pad_mode"), py::arg("win_mode"))
+    .def("stft",           (std::tuple<Tensor, Tensor> (Bmcv::*)(Tensor&, Tensor&, bool, bool, int, int, int, int)) &Bmcv::stft,
+          "Short-Time Fourier Transform",
+      py::arg("input_real"), py::arg("input_imag"), py::arg("realInput"), py::arg("normalize"), py::arg("n_fft"), py::arg("hop_len"), py::arg("pad_mode"), py::arg("win_mode"))
+    .def("istft",            (std::tuple<pybind11::array_t<float>, pybind11::array_t<float>> (Bmcv::*)(pybind11::array_t<float>, pybind11::array_t<float>, bool, bool, int, int, int, int)) &Bmcv::istft,
+          "Inverse Short-Time Fourier Transform",
+      py::arg("input_real"), py::arg("input_imag"), py::arg("realInput"), py::arg("normalize"), py::arg("L"), py::arg("hop_len"), py::arg("pad_mode"), py::arg("win_mode"))
+    .def("istft",            (std::tuple<Tensor, Tensor> (Bmcv::*)(Tensor&, Tensor&, bool, bool, int, int, int, int)) &Bmcv::istft,
+          "Inverse Short-Time Fourier Transform",
+      py::arg("input_real"), py::arg("input_imag"), py::arg("realInput"), py::arg("normalize"), py::arg("L"), py::arg("hop_len"), py::arg("pad_mode"), py::arg("win_mode"))
+  #endif
     .def("fft",                 (std::vector<Tensor> (Bmcv::*)(bool, Tensor&)) &Bmcv::fft)
     .def("fft",                 (std::vector<Tensor> (Bmcv::*)(bool, Tensor&, Tensor&)) &Bmcv::fft)
     // .def("convert_yuv420p_to_gray",                  &Bmcv::convert_yuv420p_to_gray)
@@ -663,6 +693,9 @@ py::register_exception<ExceptionName>(m, #ExceptionName);
       py::arg("input"), py::arg("output"))
     .def("convert_yuv420p_to_gray_",     (int (Bmcv::*)(bm_image&, bm_image&))            &Bmcv::convert_yuv420p_to_gray_,
       py::arg("input"), py::arg("output"))
+#if BMCV_VERSION_MAJOR > 1
+    .def("bmcv_overlay", &Bmcv::bmcv_overlay, py::arg("image"), py::arg("overlay_info"), py::arg("overlay_image"))
+#endif
 #if defined(USE_BMCV) && defined(USE_OPENCV) && defined(PYTHON)
     .def("mat_to_bm_image",     (BMImage (Bmcv::*)(pybind11::array_t<uint8_t>&)) &Bmcv::mat_to_bm_image, py::arg("input_array").noconvert())
     .def("mat_to_bm_image",     (int (Bmcv::*)(pybind11::array_t<uint8_t>&, BMImage&)) &Bmcv::mat_to_bm_image, py::arg("input_array").noconvert(), py::arg("img"));
@@ -725,7 +758,7 @@ auto byte_size = input_arr.dtype().itemsize();
             return get_ndarray<int64_t>(handle,input_size,input);
         }else {
             SPDLOG_ERROR("ERROR array_type, supported [float,uint8,int8,int16,int32,int64] vs {}", array_type);
-            exit(SAIL_ERR_BMI_DTYPE);
+            throw SailBMImageError("not supported");
         }
     },"base64 decoder for numpy.array",
     py::arg("handle"),py::arg("encode_arr_bytes"),py::arg("array_type")="uint8");
@@ -737,6 +770,19 @@ auto byte_size = input_arr.dtype().itemsize();
             .def("read", (int (Decoder_RawStream::*)(pybind11::bytes, BMImage&, bool)) &Decoder_RawStream::read)
             .def("release",              &Decoder_RawStream::release);
     #endif
+
+#if BMCV_VERSION_MAJOR > 1
+  py::enum_<bm_stitch_wgt_mode>(m, "blend_wgt_mode")
+    .value("BM_STITCH_WGT_YUV_SHARE", bm_stitch_wgt_mode::BM_STITCH_WGT_YUV_SHARE)
+    .value("BM_STITCH_WGT_UV_SHARE", bm_stitch_wgt_mode::BM_STITCH_WGT_UV_SHARE)
+    .value("BM_STITCH_WGT_SEP", bm_stitch_wgt_mode::BM_STITCH_WGT_SEP)
+    .export_values();
+
+  py::class_<Blend>(m, "Blend")
+    .def(py::init<int, std::vector<std::vector<short>>, std::vector<std::vector<short>>, std::vector<std::vector<string>>, bm_stitch_wgt_mode>())
+    .def("process", (int     (Blend::*)(std::vector<BMImage*>&, BMImage&)) &Blend::process)
+    .def("process", (BMImage (Blend::*)(std::vector<BMImage*>&)) &Blend::process);
+#endif
 
 #endif
     py::class_<MultiEngine>(m, "MultiEngine")
@@ -893,6 +939,23 @@ auto byte_size = input_arr.dtype().itemsize();
           &algo_yolov5_post_cpu_opt::process)
     .def("reset_anchors",     &algo_yolov5_post_cpu_opt::reset_anchors);
 
+    py::class_<algo_yolov8_seg_post_tpu_opt>(m, "algo_yolov8_seg_post_tpu_opt")
+    .def(py::init<std::string, int, const std::vector<int>&, const std::vector<int>&, int, int> (),
+      py::arg("bmodel_file"),
+      py::arg("dev_id"),
+      py::arg("detection_shape"),
+      py::arg("segmentation_shape"),
+      py::arg("network_h"),
+      py::arg("network_w"))
+    .def("process",
+        (py::list
+          (algo_yolov8_seg_post_tpu_opt::*)(TensorPTRWithName&, TensorPTRWithName&, int&, int&, float&, float&, bool, bool))
+          &algo_yolov8_seg_post_tpu_opt::process)
+    .def("process",
+        (py::list
+          (algo_yolov8_seg_post_tpu_opt::*)(std::map<std::string, Tensor&>&, std::map<std::string, Tensor&>&, int&, int&, float&, float&, bool, bool))
+          &algo_yolov8_seg_post_tpu_opt::process);
+
     py::class_<sort_tracker_controller>(m, "sort_tracker_controller")
     .def(py::init< float, int, int> (),
           py::arg("max_iou_distance") = 0.7, py::arg("max_age") = 30, py::arg("n_init") = 3)
@@ -1027,6 +1090,16 @@ auto byte_size = input_arr.dtype().itemsize();
     .def("get_input_scale",   &Perf::get_input_scale)
     .def("get_input_dtype",   &Perf::get_input_dtype)
     .def("GetResult",         &Perf::GetResult, py::call_guard<py::gil_scoped_release>());
+
+    py::class_<DecoderImages>(m, "DecoderImages")
+      .def(py::init<std::vector<std::string>&,int,int>())
+      .def("setResizeAttr",    (int  (DecoderImages::*)(int,int,bmcv_resize_algorithm))  &DecoderImages::setResizeAttr,
+          py::arg("width"), py::arg("height"),py::arg("resize_alg")=BMCV_INTER_LINEAR)
+      .def("start",           &DecoderImages::start)
+      .def("read",            &DecoderImages::read)
+      .def("get_schedule",    &DecoderImages::get_schedule)
+      .def("stop",            &DecoderImages::stop);
+
 
     m.def("argmax",   &argmax, py::call_guard<py::gil_scoped_release>());
     m.def("argmin",   &argmin, py::call_guard<py::gil_scoped_release>());

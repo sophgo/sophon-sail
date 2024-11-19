@@ -538,5 +538,87 @@ namespace sail{
          */
         EngineImagePreProcess& operator=(const EngineImagePreProcess& other) = delete;
     };
+
+    class DECL_EXPORT  DecoderImages{
+    public:
+        /**
+         * @brief Construct a new Image List Decoder object
+         * 
+         * @param image_list image name list
+         * @param tpu_id     TPU ID. You can use bm-smi to see available IDs.
+         * @param queue_size max queue size
+         */
+        explicit DecoderImages(
+                    std::vector<std::string>& image_list,
+                    int tpu_id,
+                    int queue_size);
+        
+        /**
+         * @brief Destroy the Image List Decoder object
+         * 
+         */
+        ~DecoderImages();
+
+
+        /**
+         * @brief Set the Resize Attr object
+         * 
+         * @param width output width
+         * @param height output height
+         * @param resize_alg Resize algorithm, defalut BMCV_INTER_LINEAR
+         * @return int, 0 for success and other for failure 
+         */
+        int setResizeAttr(int width, int height, bmcv_resize_algorithm resize_alg = BMCV_INTER_LINEAR);
+
+        /**
+         * @brief Start read images
+         * 
+         * @return int, 0 for success and other for failure 
+         */
+        int start();
+
+        /**
+         * @brief 
+         * 
+         * @param image 
+         * @return int 0:success, 1:queue empty, -1:stop and exit
+         */
+        int read(BMImage &image);
+
+        /**
+         * @brief stop thread
+         * 
+         */
+        void stop();
+
+        /**
+         * @brief Get the schedule object
+         * 
+         * @return int The number of decoded images
+         */
+        int get_schedule();
+
+    private:
+        class DecoderImages_CC;
+        class DecoderImages_CC* const _impl;
+
+        /**
+         * @brief Forbidden copy constructor.
+         * @brief Copy constructor.
+         *
+         * @param other An other DecoderImages instance.
+         */
+        DecoderImages(const DecoderImages& other) = delete;
+
+        /**
+         * @brief Forbidden assignment function.
+         * @brief Assignment function.
+         *
+         * @param other An other DecoderImages instance.
+         * @return Reference of a DecoderImages instance.
+         */
+        DecoderImages& operator=(const DecoderImages& other) = delete;
+    };
+
 #endif
 }

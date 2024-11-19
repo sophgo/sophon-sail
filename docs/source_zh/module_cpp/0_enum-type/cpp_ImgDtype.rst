@@ -2,6 +2,7 @@ ImgDtype
 ______________
 
 定义几种图像的存储形式。
+类型为BMCV的枚举类 ``bm_image_data_format_ext`` 。
 
 **接口形式:**
     .. code-block:: c

@@ -110,7 +110,7 @@ tpu_kernel_api_yolov5_detect_out::tpu_kernel_api_yolov5_detect_out_cc::tpu_kerne
 {
     if (shapes.size() <= 0){
         SPDLOG_ERROR("ERROR Shapes size: {}!",shapes.size());
-        exit(1);
+        throw SailRuntimeError("invalid argument");
     }
     memset(&api_params,0,sizeof(tpu_kernel_api_yolov5NMS_t));
 
@@ -149,11 +149,11 @@ tpu_kernel_api_yolov5_detect_out::tpu_kernel_api_yolov5_detect_out_cc::tpu_kerne
     for(int i=0;i<input_num;++i){
         if(shapes[i].size() != 4){
             SPDLOG_ERROR("ERROR DIMS 4 vs. {}!",shapes[i].size());
-            exit(1);
+            throw SailRuntimeError("invalid argument");
         }
         if(shapes[i][1]/3-5 != class_num){
             SPDLOG_ERROR("ERROR Shapes!");
-            exit(1);
+            throw SailRuntimeError("invalid argument");
         }
         max_dete_count += 3*shapes[i][2]*shapes[i][3];
         std::vector<int> temp_shape;
@@ -165,7 +165,7 @@ tpu_kernel_api_yolov5_detect_out::tpu_kernel_api_yolov5_detect_out_cc::tpu_kerne
     handle_ = new Handle(device_id_);
     if(!handle_){
         SPDLOG_ERROR("Create Handle failed, using device {}!",device_id_);
-        exit(1);
+        throw SailDeviceError("invalid device id or environment");
     }
     tpu_kernel_module_t tpu_module = tpu_kernel_load_module_file(handle_->data(), module_file.c_str()); 
     func_id = tpu_kernel_get_function(handle_->data(), tpu_module, "tpu_kernel_api_yolov5_detect_out");
@@ -452,7 +452,7 @@ tpu_kernel_api_yolov5_out_without_decode::tpu_kernel_api_yolov5_out_without_deco
     // shapes: [batch_size, max_dete_count, (class_num + 5) * 3]
     if (shapes.size() != 3){
         SPDLOG_ERROR("ERROR Shapes size: {}!",shapes.size());
-        exit(1);
+        throw SailRuntimeError("invalid argument");
     }
     memset(&api_params, 0, sizeof(tpu_kernel_api_yolov5NMS_v2_t));
     
@@ -462,7 +462,7 @@ tpu_kernel_api_yolov5_out_without_decode::tpu_kernel_api_yolov5_out_without_deco
     handle_ = new Handle(device_id_);
     if(!handle_){
         SPDLOG_ERROR("Create Handle failed, using device {}!",device_id_);
-        exit(1);
+        throw SailDeviceError("invalid device id or environment");
     }
     tpu_kernel_module_t tpu_module = tpu_kernel_load_module_file(handle_->data(), module_file.c_str()); 
     func_id = tpu_kernel_get_function(handle_->data(), tpu_module, "tpu_kernel_api_yolov5_out_without_decode");
@@ -657,7 +657,7 @@ tpu_kernel_api_openpose_part_nms::tpu_kernel_api_openpose_part_nms_cc::tpu_kerne
 {
     if (network_c <= 0){
         SPDLOG_ERROR("ERROR channel size: {}!", network_c);
-        exit(1);
+        throw SailRuntimeError("invalid argument");
     }
     memset(&api_params, 0, sizeof(tpu_kernel_api_openpose_part_nms_postprocess_t));
     api_params.input_c = network_c;
@@ -665,7 +665,7 @@ tpu_kernel_api_openpose_part_nms::tpu_kernel_api_openpose_part_nms_cc::tpu_kerne
     handle_ = new Handle(device_id_);
     if(!handle_){
         SPDLOG_ERROR("Create Handle failed, using device {}!", device_id_);
-        exit(1);
+        throw SailDeviceError("invalid device id or environment");
     }
     tpu_kernel_module_t tpu_module = tpu_kernel_load_module_file(handle_->data(), module_file.c_str()); 
     func_id = tpu_kernel_get_function(handle_->data(), tpu_module, "tpu_kernel_api_openpose_part_nms_postprocess");
@@ -845,7 +845,7 @@ std::tuple<std::vector<std::vector<int>>, std::vector<std::vector<float>>, std::
 {
     if (input.size() != 1) {
         SPDLOG_ERROR("Only support single input, but get {}!", input.size());
-        exit(1);
+        throw SailRuntimeError("invalid argument");
     }
     
     TensorPTRWithName input_data;

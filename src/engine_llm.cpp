@@ -160,11 +160,13 @@ GraphLLM::GraphLLM(
         SPDLOG_ERROR("Error while constructing Graph: bmruntime is null");
         throw SailEngineError("Graph related error!");
     }
-    check_return_status( init_graph_info() );
+    int ret = init_graph_info();
+    SAIL_CHECK_RET( ret );
     // only create sail::Tensor when io alone, i.e., addr_mode = 1
     if (addr_mode_ == 1) 
     {
-        check_return_status( init_internal_tensors() );
+        ret = init_internal_tensors();
+        SAIL_CHECK_RET( ret );
     }
 }
 
@@ -828,14 +830,17 @@ EngineLLM::EngineLLM_CC::EngineLLM_CC(const std::string& bmodel_path, std::vecto
         SPDLOG_ERROR("bmodel {} does not exist", bmodel_path);
         throw SailEngineError("EngineLLM bmodel error!");
     }
-    check_return_status( create_handles() );
+    int ret = 0;
+    ret = create_handles();
+    SAIL_CHECK_RET( ret );
 
     if(bmrt_load_bmodel(p_bmrt_, bmodel_path.c_str()) == false){
         SPDLOG_ERROR("Load bmodel {} failed", bmodel_path);
         throw SailEngineError("EngineLLM related error!");
     }
 
-    int ret = init_graph_names(); // init graph_names
+    ret = init_graph_names(); // init graph_names
+    SAIL_CHECK_RET( ret );
 
     for (auto graph_name : graph_names_) {
         // std::shared_ptr<GraphLLM> graph(new GraphLLM(handles_[0], p_bmrt_, graph_name, tpu_ids));
@@ -851,14 +856,17 @@ EngineLLM::EngineLLM_CC::EngineLLM_CC(
         std::vector<int>  tpu_ids)
     :p_bmrt_(nullptr),device_ids_(tpu_ids),handles_({}),graph_num_(NULL),graph_names_({})
 {
-    check_return_status( create_handles() );
+    int ret = 0;
+    ret = create_handles();
+    SAIL_CHECK_RET( ret );
 
     if (!bmrt_load_bmodel_data(p_bmrt_, bmodel_ptr, bmodel_size)) {
         SPDLOG_ERROR("Load bmodel failed");
         throw SailEngineError("EngineLLM related error!");
     }
 
-    int ret = init_graph_names(); // init graph_names
+    ret = init_graph_names(); // init graph_names
+    SAIL_CHECK_RET( ret );
 
     for (auto graph_name : graph_names_) {
         auto graph = std::make_shared<GraphLLM>(handles_, p_bmrt_, graph_name, device_ids_);
@@ -873,7 +881,9 @@ EngineLLM::EngineLLM_CC::EngineLLM_CC(
         std::vector<int>  tpu_ids)
     :p_bmrt_(nullptr),device_ids_(tpu_ids),handles_({}),graph_num_(NULL),graph_names_({})
 {
-    check_return_status( create_handles() );
+    int ret = 0;
+    ret = create_handles();
+    SAIL_CHECK_RET( ret );
 
     char* bmodel_ptr = nullptr;
     ssize_t size;
@@ -893,7 +903,7 @@ EngineLLM::EngineLLM_CC::EngineLLM_CC(
         throw SailEngineError("EngineLLM related error!");
     }
 
-    int ret = SAIL_SUCCESS;
+    ret = SAIL_SUCCESS;
     ret = init_graph_names(); // init graph_names
 
     for (auto graph_name : graph_names_) {
@@ -1008,7 +1018,7 @@ void EngineLLM::EngineLLM_CC::process(
     const std::vector<int> &core_list)
 {
     int ret = graphs_.at(graph_name)->inference(input, output, core_list);
-    check_return_status( ret );
+    SAIL_CHECK_RET( ret );
 }
 
 std::map<int, Tensor *> EngineLLM::EngineLLM_CC::get_input_tensors(const std::string &graph_name, const int stage)

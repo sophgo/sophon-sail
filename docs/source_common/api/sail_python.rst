@@ -1757,7 +1757,7 @@ _________
 
     .. code-block:: python
 
-        def tensor_to_bm_image(tensor, bgr2rgb=False):
+        def tensor_to_bm_image(tensor, bgr2rgb=False, layout='nchw'):
             """ Convert tensor to image.
 
             Parameters
@@ -1766,6 +1766,24 @@ _________
                 Tensor instance
             bgr2rgb : bool, default: False
                 Swap color channel
+            layout : str, default: 'nchw'
+                Layout of the input tensor
+
+            Returns
+            -------
+            image : sail.BMImage
+                BMImage instance
+            """
+
+        def tensor_to_bm_image(tensor, format):
+            """ Convert tensor to image.
+
+            Parameters
+            ----------
+            tensor : sail.Tensor
+                Tensor instance
+            format : sail.Format
+                Format of the BMImage
 
             Returns
             -------
@@ -1773,7 +1791,7 @@ _________
                 BMImage instance
             """
         
-        def tensor_to_bm_image(tensor, img, bgr2rgb=False):
+        def tensor_to_bm_image(tensor, img, bgr2rgb=False, layout='nchw'):
             """ Convert tensor to image.
 
             Parameters
@@ -1784,6 +1802,26 @@ _________
                 BMImage/BMImageArray instance
             bgr2rgb : bool, default: False
                 Swap color channel
+            layout : str, default: 'nchw'
+                Layout of the input tensor
+
+            Returns
+            -------
+            image : sail.BMImage
+                BMImage instance
+            """
+        
+        def tensor_to_bm_image(tensor, img, format):
+            """ Convert tensor to image.
+
+            Parameters
+            ----------
+            tensor : sail.Tensor
+                Tensor instance
+            img : sail.BMImage | sail.BMImageArray
+                BMImage/BMImageArray instance
+            format : sail.Format
+                Format of the BMImage
 
             Returns
             -------
@@ -2999,6 +3037,96 @@ _________
         ----------
         return encoded array
         """
+
+**39). stft**
+
+    .. code-block:: python
+
+        def stft(self, input_real: numpy.ndarray, input_imag: numpy.ndarray, real_input: bool, normalize: bool, n_fft: int, hop_len: int,
+                pad_mode: int, win_mode: int) -> tuple[numpy.ndarray, numpy.ndarray]:
+            """
+            Short-Time Fourier Transform (STFT) for NumPy arrays.
+
+            Parameters:
+            ----------
+            input_real: numpy.ndarray
+                The real part of the input signal as a 1D array.
+            input_imag: numpy.ndarray
+                The imaginary part of the input signal as a 1D array.
+            real_input: bool
+                Indicates whether the input is purely real. If true, the imaginary part is ignored.
+            normalize: bool
+                Indicates whether to normalize the output.
+            n_fft: int
+                The number of points in the FFT. This defines the resolution of the frequency bins.
+            hop_len: int
+                The number of samples to hop between successive frames. This controls the overlap.
+            pad_mode: int
+                An integer indicating the padding mode to use when the input signal is shorter than the expected length:
+                - 0: Constant padding (pads with zeros).
+                - 1: Reflective padding (pads by reflecting the signal).
+            win_mode: int
+                An integer specifying the window function to apply to each segment:
+                - 0: Hann window.
+                - 1: Hamming window.
+
+            Returns:
+            ----------
+            tuple[numpy.ndarray, numpy.ndarray]
+                A tuple containing two NumPy arrays representing the STFT output:
+                - The first array is the real part of the STFT.
+                - The second array is the imaginary part of the STFT.
+            """
+            pass
+
+        def stft(self, input_real: Tensor, input_imag: Tensor, real_input: bool, normalize: bool, n_fft: int, hop_len: int,
+                pad_mode: int, win_mode: int) -> tuple[Tensor, Tensor]:
+            pass 
+
+**40). istft**
+
+    .. code-block:: python
+
+        def istft(self, input_real: numpy.ndarray, input_imag: numpy.ndarray, real_input: bool, normalize: bool, L: int, hop_len: int,
+                pad_mode: int, win_mode: int) -> tuple[numpy.ndarray, numpy.ndarray]:
+            """
+            Inverse Short-Time Fourier Transform (ISTFT) for NumPy arrays.
+
+            Parameters:
+            ----------
+            input_real: numpy.ndarray
+                The real part of the STFT output as a 1D array.
+            input_imag: numpy.ndarray
+                The imaginary part of the STFT output as a 1D array.
+            real_input: bool
+                Indicates whether the input STFT is purely real. If true, the imaginary part is ignored.
+            normalize: bool
+                Indicates whether to normalize the output.
+            L: int
+                The length of the original time-domain signal to reconstruct.
+            hop_len: int
+                The number of samples to hop between successive frames. This controls the overlap.
+            pad_mode: int
+                An integer indicating the padding mode to use when the input signal is shorter than the expected length:
+                - 0: Constant padding (pads with zeros).
+                - 1: Reflective padding (pads by reflecting the signal).
+            win_mode: int
+                An integer specifying the window function to apply to each segment when reconstructing the signal:
+                - 0: Hann window.
+                - 1: Hamming window.
+
+            Returns:
+            ----------
+            tuple[numpy.ndarray, numpy.ndarray]
+                A tuple containing two NumPy arrays representing the reconstructed time-domain signal:
+                - The first array is the reconstructed signal.
+                - The second array is the corresponding phase information (if applicable).
+            """
+            pass
+
+        def istft(self, input_real: Tensor, input_imag: Tensor, real_input: bool, normalize: bool, L: int, hop_len: int,
+                pad_mode: int, win_mode: int) -> tuple[Tensor, Tensor]:
+            pass 
 
             
 sail.MultiDecoder

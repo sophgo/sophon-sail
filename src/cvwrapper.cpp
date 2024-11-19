@@ -120,8 +120,7 @@ namespace sail {
                 assert(0);
         }
         spdlog::error("No matching bm_data_type_t from bm_image_data_format_ext ({}).", sfmt);
-        exit(SAIL_ERR_BMI_DTYPE);
-        // return BM_FLOAT32;
+        throw SailBMImageError("not supported");
     }
 
     bm_image_data_format_ext get_bm_image_data_format_sail(bm_data_type_t dtype) {
@@ -152,8 +151,7 @@ namespace sail {
                 assert(0);
         }
         spdlog::error("No matching bm_image_data_format_ext from bm_data_type_t ({}).", sfmt);
-        exit(SAIL_ERR_BMI_DTYPE);
-        // return DATA_TYPE_EXT_FLOAT32;
+        throw SailBMImageError("not supported");
     }
 #endif  //USE_BMCV
 
@@ -193,20 +191,19 @@ namespace sail {
             default:
                 assert(0);
         }
-        spdlog::error("No matching cv depth from bm_data_type_t ({}).", sfmt);
-        exit(SAIL_ERR_BMI_DTYPE);
-        // return CV_32F;
+        spdlog::error("No matching cv dtype from bm_data_type_t ({}).", sfmt);
+        throw SailBMImageError("not supported");
     }
 
     template<typename T>
     void mat_to_tensor_(std::vector<cv::Mat> &mats, Tensor &tensor) {
         if (!check_shape(mats)) {
             spdlog::error("mat_to_tensor(): check mat shape failed.");
-            exit(SAIL_ERR_BMI_CVT);
+            throw SailBMImageError("invalid argument");
         }
         if (!tensor.own_sys_data() || !tensor.own_dev_data()) {
             spdlog::error("mat_to_tensor(): tensor should own sys & dev memory.");
-            exit(SAIL_ERR_BMI_CVT);
+            throw SailBMImageError("invalid argument");
         }
 
         int n = static_cast<int>(mats.size());
@@ -536,6 +533,7 @@ namespace sail {
             av_dict_set(&opts, "rtsp_transport", rtsp_transport_value.c_str(), 0);
             // set timeout (same as opencv),ost is 10000000
             av_dict_set(&opts, "stimeout", stimeout_value.c_str(), 0);
+            av_dict_set(&opts, "timeout", stimeout_value.c_str(), 0);
 
             // add same as opencv
             av_dict_set(&opts, "rtsp_flags", rtsp_flags_value.c_str(), 0);
@@ -546,8 +544,7 @@ namespace sail {
                 //add timestamp
                 av_dict_set(&opts, "keep_rtsp_timestamp", "1", 0);
             }
-            
-            
+
             if (probesize != "0" && analyzeduration != "0"){
                 av_dict_set(&opts, "probesize", probesize.c_str(), 0);
                 av_dict_set(&opts, "analyzeduration", analyzeduration.c_str(), 0);
@@ -586,21 +583,18 @@ namespace sail {
                                       input_fmt, &opts);
         if (ret < 0) {
             SPDLOG_ERROR("Failed to open input file: {}", file_path_);
-            //exit(SAIL_ERR_DECODER_INIT);
             throw std::runtime_error("Failed to open input file");
         }
         // retrieve stream information
         ret = avformat_find_stream_info(fmt_ctx_, nullptr);
         if (ret < 0) {
             spdlog::error("Failed to find stream information.");
-            //exit(SAIL_ERR_DECODER_INIT);
             throw std::runtime_error("Failed to find stream information");
         }
 
         ret = av_find_best_stream(fmt_ctx_, AVMEDIA_TYPE_VIDEO, -1, -1, nullptr, 0);
         if (ret < 0) {
             spdlog::error("Failed to find a video stream.");
-            //exit(SAIL_ERR_DECODER_INIT);
             throw std::runtime_error("Failed to find a video stream");
         }
         video_stream_idx_ = ret;
@@ -609,7 +603,6 @@ namespace sail {
         AVCodec *dec = avcodec_find_decoder(video_stream_->codecpar->codec_id);
         if (!dec) {
             spdlog::error("Failed to find codec.");
-            //exit(SAIL_ERR_DECODER_INIT);
             throw std::runtime_error("Failed to find codec");
         }
 
@@ -619,7 +612,6 @@ namespace sail {
         ret = avcodec_open2(video_dec_ctx_, dec, &opts);
         if (ret < 0) {
             spdlog::error("Failed to open codec");
-            //exit(SAIL_ERR_DECODER_INIT);
             throw std::runtime_error("Failed to open codec");
 
         }
@@ -1180,13 +1172,13 @@ namespace sail {
         int curr_id = bm_get_devid(handle_);
         if (curr_id != tpu_id_){
             SPDLOG_ERROR("Input Handle error, Decoder TPU:{} vs. Handle TPU:{}",tpu_id_,curr_id);
-            exit(SAIL_ERR_DEC_READ);
+            return SAIL_ERR_DEV_HANDLE;
         }
         if (is_pic_file_) {
             return decode_jpeg(handle, image);
         }
         if (!opened_){
-            return BM_ERR_PARAM;
+            return SAIL_ERR_DEC_OPEN;
         }
         //reconnect
         if (errcnt_ >= 20) {
@@ -1196,14 +1188,14 @@ namespace sail {
         int ret = grab(frame_);
         if (!ret) {
             errcnt_++;
-            return 1;
+            return SAIL_ERR_DEC_READ;
         }
         AVFrame *p_frame = frame_.get();
 
         if (p_frame->height <= 0 || p_frame->width <= 0) {
             spdlog::error("fatal error: {} {}", p_frame->width, p_frame->height);
             errcnt_++;
-            return 1;
+            return SAIL_ERR_DEC_READ;
         }
 
         if (p_frame->format != AV_PIX_FMT_NV12 &&
@@ -1252,7 +1244,7 @@ namespace sail {
 #endif      
                 if (BM_SUCCESS != ret) {
                     SPDLOG_ERROR("bm_image_alloc_dev_mem_heap_mask err={}", ret);
-                    exit(EXIT_FAILURE);
+                    return SAIL_ERR_DEV_MALLOC;
                 }
                 // need copy to device memory
                 src_plane[0] = p_frame->data[0];
@@ -1264,7 +1256,7 @@ namespace sail {
                 assert(ret == 0);
                 if (BM_SUCCESS != ret) {
                     SPDLOG_ERROR("bm_image_copy_host_to_device err={}", ret);
-                    exit(EXIT_FAILURE);
+                    return SAIL_ERR_DEV_MCOPY;
                 }
             }
         }
@@ -1282,6 +1274,7 @@ namespace sail {
             av_packet_unref(&pkt_);
             if (video_dec_ctx_) {
                 avcodec_close(video_dec_ctx_);
+                avcodec_free_context(&video_dec_ctx_);
             }
             avformat_close_input(&fmt_ctx_);
         }
@@ -1329,16 +1322,24 @@ namespace sail {
             // Init the decoders, with reference counting
             av_dict_set(&opts, "refcounted_frames", "1", 0);
             // frame buffer set,same as opencv, ost is 20
-            av_dict_set(&opts, "extra_frame_buffer_num", "5", 0);
+            av_dict_set(&opts, "extra_frame_buffer_num",
+                        extra_frame_buffer_num_value.c_str(), 0);
             // set tcp
-            av_dict_set(&opts, "rtsp_transport", "tcp", 0);
+            av_dict_set(&opts, "rtsp_transport", rtsp_transport_value.c_str(),
+                        0);
             // set timeout (same as opencv),ost is 10000000
-            av_dict_set(&opts, "stimeout", "20000000", 0);
+            av_dict_set(&opts, "stimeout", stimeout_value.c_str(), 0);
+            av_dict_set(&opts, "timeout", stimeout_value.c_str(), 0);
 
             // add same as opencv
-            av_dict_set(&opts, "rtsp_flags", "prefer_tcp", 0);
-            av_dict_set_int(&opts, "buffer_size", 1024000, 0);
-            av_dict_set_int(&opts, "max_delay", 500000, 0);
+            av_dict_set(&opts, "rtsp_flags", rtsp_flags_value.c_str(), 0);
+            av_dict_set_int(&opts, "buffer_size", buffer_size_value, 0);
+            av_dict_set_int(&opts, "max_delay", max_delay_value, 0);
+
+            if(keep_timestap){
+                //add timestamp
+                av_dict_set(&opts, "keep_rtsp_timestamp", "1", 0);
+            }
         }
         if (!is_pic_file_ && compressed_) {
             // set compressed output
@@ -1369,43 +1370,34 @@ namespace sail {
                                       input_fmt, &opts);
         if (ret < 0) {
             SPDLOG_ERROR("Failed to open input file: {}", file_path_);
-            //exit(SAIL_ERR_DECODER_INIT);
             throw SailDecoderError("Failed to open input file");
         }
         // retrieve stream information
         ret = avformat_find_stream_info(fmt_ctx_, nullptr);
         if (ret < 0) {
             spdlog::error("Failed to find stream information.");
-            //exit(SAIL_ERR_DECODER_INIT);
             throw SailDecoderError("Failed to find stream information");
         }
 
         ret = av_find_best_stream(fmt_ctx_, AVMEDIA_TYPE_VIDEO, -1, -1, nullptr, 0);
         if (ret < 0) {
             spdlog::error("Failed to find a video stream.");
-            //exit(SAIL_ERR_DECODER_INIT);
             throw SailDecoderError("Failed to find a video stream");
         }
         video_stream_idx_ = ret;
         video_stream_ = fmt_ctx_->streams[video_stream_idx_];
 
-#if LIBAVCODEC_VERSION_MAJOR > 58
         video_dec_ctx_ = avcodec_alloc_context3(NULL);
 		avcodec_parameters_to_context(video_dec_ctx_, video_stream_->codecpar);
-#else
-		video_dec_ctx_ = video_stream_->codec;
-#endif
 
         AVCodec *dec = avcodec_find_decoder(video_dec_ctx_->codec_id);
         if (!dec) {
             spdlog::error("Failed to find codec.");
-            //exit(SAIL_ERR_DECODER_INIT);
             throw SailDecoderError("Failed to find codec");
         }
         ret = avcodec_open2(video_dec_ctx_, dec, &opts);
         if (ret < 0) {
             spdlog::error("Failed to open codec");
-            //exit(SAIL_ERR_DECODER_INIT);
             throw SailDecoderError("Failed to open codec");
         }
         height_ = video_dec_ctx_->height;
@@ -1669,7 +1661,18 @@ namespace sail {
             av_frame_free(&pFrame);
             pFrame = nullptr; 
         }
-        avformat_close_input(&pFormatCtx);
+        
+        if (pkt) {
+            av_packet_free(&pkt); // 释放 AVPacket
+            pkt = nullptr;
+        }
+
+        if (pFormatCtx) {
+            avformat_close_input(&pFormatCtx); // 关闭输入流，如果 pFormatCtx 非空
+            avformat_free_context(pFormatCtx); // 释放格式上下文
+            pFormatCtx = nullptr; // 确保指针设置为 nullptr 避免野指针
+        }
+
         if (dec_ctx) {
             avcodec_close(dec_ctx);
             dec_ctx = nullptr; 
@@ -1680,9 +1683,9 @@ namespace sail {
         }
 
         if (avio_ctx) {
-            av_freep(&avio_ctx->buffer);
-            av_freep(&avio_ctx);
-            avio_ctx = nullptr; 
+            av_freep(&avio_ctx->buffer); // 释放 AVIO 上下文的缓冲区
+            av_freep(&avio_ctx); // 释放 AVIO 上下文本身
+            avio_ctx = nullptr;
         }
     }
 
@@ -1769,21 +1772,39 @@ namespace sail {
             bs_obj.pos =0;
         }
             
-        if (bs_obj.pos ==0)//连续读帧，调用一次读一次，但是只能初始化一次
-        {       
-            avio_ctx = avio_alloc_context(aviobuffer, aviobuf_size, 0,
-                                        (void*)(&bs_obj), read_buffer, NULL, NULL);
-            if (avio_ctx == NULL)
-            {
+        if (bs_obj.pos == 0) {
+            // 每次从头开始时关闭并重新打开流
+            if (avio_ctx) {
+                avformat_close_input(&pFormatCtx); // 关闭输入流，同时会释放 pFormatCtx->pb
+                av_freep(&avio_ctx->buffer); // 释放 AVIO 上下文的缓冲区
+                av_freep(&avio_ctx); // 释放 AVIO 上下文本身
+                avio_ctx = nullptr;
+                avformat_free_context(pFormatCtx);
+            }
+
+            // 创建新的 AVIO 上下文
+            avio_ctx = avio_alloc_context(aviobuffer, aviobuf_size, 0, (void*)(&bs_obj), read_buffer, NULL, NULL);
+            if (!avio_ctx) {
+                av_free(aviobuffer);
                 throw std::runtime_error("avio_alloc_context failed");
             }
+
+            // 确保 AVFormatContext 已正确分配
+            if (!pFormatCtx) {
+                pFormatCtx = avformat_alloc_context();
+                if (!pFormatCtx) {
+                    throw std::runtime_error("Failed to allocate AVFormatContext");
+                }
+            }
             pFormatCtx->pb = avio_ctx;
-            /* Open an input stream */
+
+            // 打开输入流
             if (avformat_open_input(&pFormatCtx, NULL, iformat, NULL) < 0) {
                 throw std::runtime_error("Couldn't open input stream.");
             }
         }
         
+        av_packet_unref(pkt);
         if (av_read_frame(pFormatCtx, pkt) >= 0) {
             while (true)
             {
@@ -1825,21 +1846,38 @@ namespace sail {
             bs_obj.pos =0;
         }
             
-        if (bs_obj.pos ==0)//连续读帧，调用一次读一次，但是只能初始化一次
-        {       
-            avio_ctx = avio_alloc_context(aviobuffer, aviobuf_size, 0,
-                                        (void*)(&bs_obj), read_buffer, NULL, NULL);
-            if (avio_ctx == NULL)
-            {
+        if (bs_obj.pos == 0) {
+            // 每次从头开始时关闭并重新打开流
+            if (avio_ctx) {
+                avformat_close_input(&pFormatCtx); // 关闭输入流，同时会释放 pFormatCtx->pb
+                av_freep(&avio_ctx->buffer); // 释放 AVIO 上下文的缓冲区
+                av_freep(&avio_ctx); // 释放 AVIO 上下文本身
+                avio_ctx = nullptr;
+                avformat_free_context(pFormatCtx);
+            }
+
+            // 创建新的 AVIO 上下文
+            avio_ctx = avio_alloc_context(aviobuffer, aviobuf_size, 0, (void*)(&bs_obj), read_buffer, NULL, NULL);
+            if (!avio_ctx) {
+                av_free(aviobuffer);
                 throw std::runtime_error("avio_alloc_context failed");
             }
+
+            // 确保 AVFormatContext 已正确分配
+            if (!pFormatCtx) {
+                pFormatCtx = avformat_alloc_context();
+                if (!pFormatCtx) {
+                    throw std::runtime_error("Failed to allocate AVFormatContext");
+                }
+            }
             pFormatCtx->pb = avio_ctx;
-            /* Open an input stream */
+
+            // 打开输入流
             if (avformat_open_input(&pFormatCtx, NULL, iformat, NULL) < 0) {
                 throw std::runtime_error("Couldn't open input stream.");
             }
         }
-        
+        av_packet_unref(pkt);
         if (av_read_frame(pFormatCtx, pkt) >= 0) {
             while (true)
             {
@@ -1858,7 +1896,7 @@ namespace sail {
                     SPDLOG_ERROR("Decode Error");
                     return ret;
                 }
-            }  
+            }
         }
         SPDLOG_INFO("Decode End.");
         return -1; // Or return other values as needed
@@ -1889,6 +1927,17 @@ namespace sail {
             bm_image_data_format_ext dtype,
             int *stride);
 
+        BMImage_CC(
+            Handle &handle,
+            void *buffer,
+            int h,
+            int w,
+            bm_image_format_ext format,
+            bm_image_data_format_ext dtype,
+            std::vector<int> strides,
+            size_t offset,
+            int size);
+
         ~BMImage_CC(){
             if(mat_buffer){
                 // delete mat_buffer;
@@ -1915,7 +1964,7 @@ namespace sail {
             format = pybind11::format_descriptor<uint8_t>::format();
         }else{
             SPDLOG_ERROR("Mat type not support: {}",cv_mat.type());
-            exit(1);
+            throw SailBMImageError("not supported");
         }
         
         int stride_temp = FFALIGN(cv_mat.cols * 3 * item_size, SAIL_ALIGN); // ceiling to 64 * N
@@ -1977,6 +2026,9 @@ namespace sail {
         int check_align() const;
         int unalign();
         int check_contiguous_memory() const;
+#ifdef PYTHON
+        pybind11::array asnumpy() const;
+#endif
         void set_ipc_flag(bool f);
         bool need_to_free_;
 
@@ -2030,6 +2082,91 @@ namespace sail {
     ) : img_({}), need_to_free_(false) {
         create(handle, h, w, format, dtype, stride);
         allocate();
+    }
+
+    BMImage::BMImage_CC::BMImage_CC(
+        Handle &handle,
+        void *buffer,
+        int h,
+        int w,
+        bm_image_format_ext format,
+        bm_image_data_format_ext dtype,
+        std::vector<int> strides,
+        size_t offset,
+        int size) : img_({}), need_to_free_(false)
+    {
+        // check input params
+        if (buffer == nullptr)
+        {
+            throw SailBMImageError("buf is invalid!");
+        }
+        if (h <= 0 || w <= 0)
+        {
+            throw SailBMImageError("height or width is invalid!");
+        }
+
+        int dtype_size = 0;
+        switch (dtype)
+        {
+        case DATA_TYPE_EXT_FLOAT32:
+#if !((BMCV_VERSION_MAJOR == 2) && !defined(BMCV_VERSION_MINOR))
+        case DATA_TYPE_EXT_4N_BYTE_SIGNED:
+        case DATA_TYPE_EXT_4N_BYTE:
+#endif
+            dtype_size = 4;
+            break;
+        case DATA_TYPE_EXT_1N_BYTE_SIGNED:
+        case DATA_TYPE_EXT_1N_BYTE:
+            dtype_size = 1;
+            break;
+        default:
+            throw SailBMImageError("The input dtype is not supported!");
+        }
+        spdlog::debug("BMImage_CC dtype {}, dtype_size = {}", dtype, dtype_size);
+
+        // create bm_image and alloc dev mem
+        spdlog::debug("BMImage_CC strides.empty()? = {}", strides.empty());
+        int *pstrides = strides.empty() ? nullptr : strides.data();
+        create(handle, h, w, format, dtype, pstrides);
+        allocate();
+
+        // s2d
+        int ret = 0;
+        int plane_num = bm_image_get_plane_num(img_);
+        spdlog::debug("BMImage_CC format {}, plane_num = {}", format, plane_num);
+        std::vector<int> true_strides(plane_num);
+        ret = bm_image_get_stride(img_, true_strides.data());
+        if (BM_SUCCESS != ret)
+        {
+            throw SailBMImageError("BMImage init, bm_image_get_stride fail!");
+        }
+        spdlog::debug("BMImage_CC format {}, true strides[0] = {}",
+                      format, true_strides[0]);
+
+        std::vector<int> bytesizes(plane_num);
+        ret = bm_image_get_byte_size(img_, bytesizes.data());
+        if (BM_SUCCESS != ret)
+        {
+            SPDLOG_ERROR("bm_image_get_byte_size failed");
+            throw SailBMImageError("BMImage init failed!");
+        }
+        std::vector<void *> s2d_buffers(plane_num);
+        spdlog::debug("BMImage_CC buffer = {}", buffer);
+        s2d_buffers[0] = buffer + offset;
+        for (int i = 1; i < plane_num; i++)
+        {
+            spdlog::debug("plane {}, bytesizes = {}", i, bytesizes[i - 1]);
+            char *buffer_i = static_cast<char *>(s2d_buffers[i - 1]) +
+                             bytesizes[i - 1];
+            s2d_buffers[i] = static_cast<void *>(buffer_i);
+        }
+        spdlog::trace("BMImage_CC before s2d");
+        ret = bm_image_copy_host_to_device(img_, s2d_buffers.data());
+        spdlog::trace("BMImage_CC after s2d");
+        if (BM_SUCCESS != ret)
+        {
+            throw SailBMImageError("BMImage init, s2d failed!");
+        }
     }
 
     void BMImage::BMImage_CC::create(
@@ -2142,7 +2279,7 @@ namespace sail {
             int ret = bm_image_free_contiguous_mem(1, &img_);
             if(ret !=0){
                 SPDLOG_ERROR("bm_image_free_contiguous_mem failed!");
-                exit(-1);
+                throw SailBMImageError("bmcv api fail");
             }
             need_to_free_ = false;
         }
@@ -2152,7 +2289,7 @@ namespace sail {
             int ret = bm_image_get_device_mem(img_, mem);
             if(ret !=0){
                 SPDLOG_ERROR("bm_image_get_device_mem failed!");
-                exit(-1);
+                throw SailBMImageError("bmcv api fail");
             }
             int planes = bm_image_get_plane_num(img_);
             for (int i = 0; i < planes; ++i) {
@@ -2647,6 +2784,85 @@ namespace sail {
 
         return if_contiguous;
     }
+
+#ifdef PYTHON  // asnumpy Python
+    pybind11::array BMImage::BMImage_CC::asnumpy() const {
+        if (is_created() == false) {
+            SPDLOG_ERROR("This BMImage is empty!");
+            throw SailBMImageError("Empty BMImage");
+        }
+        int plane_num = bm_image_get_plane_num(img_);
+        std::vector<bm_device_mem_t> mem(plane_num);
+        int ret = 0;
+        ret = bm_image_get_device_mem(img_, mem.data());
+        std::vector<int> bytesizes(plane_num);
+        ret = bm_image_get_byte_size(img_, bytesizes.data());
+        int total_bytesize = 0;
+        for (int i = 0; i < plane_num; ++i) {
+            total_bytesize += bytesizes.at(i);
+        }
+        pybind11::dtype out_dtype;
+        int out_numel = total_bytesize;
+        switch (img_.data_type) {
+            case DATA_TYPE_EXT_FLOAT32:
+                out_dtype = pybind11::dtype("float32");
+                out_numel = int(total_bytesize / 4);
+                break;
+            case DATA_TYPE_EXT_1N_BYTE:
+                out_dtype = pybind11::dtype("uint8");
+                break;
+            case DATA_TYPE_EXT_1N_BYTE_SIGNED:
+                out_dtype = pybind11::dtype("int8");
+            default:
+                SPDLOG_ERROR("This BMImage's data type {} is not supported!",
+                             img_.data_type);
+                throw SailBMImageError("Not Support");
+        }
+        pybind11::array out_array(out_dtype, out_numel);
+        void *ptr = out_array.request().ptr;
+        pybind11::gil_scoped_release release;
+        // d2s
+        int dst_offset = 0;
+        bm_handle_t handle = bm_image_get_handle(const_cast<bm_image *>(&img_));
+        for (int i = 0; i < plane_num; ++i) {
+            void *dst =
+                static_cast<void *>(static_cast<char *>(ptr) + dst_offset);
+            ret = bm_memcpy_d2s(handle, dst, mem[i]);
+            if (ret != BM_SUCCESS) {
+                SPDLOG_ERROR("{} failed for d2s error", __func__);
+                throw SailBMImageError("Empty BMImage");
+            }
+            dst_offset += bytesizes[i];
+        }
+        // ajust shape
+        std::vector<int> strides(plane_num);
+        ret = bm_image_get_stride(img_, strides.data());
+        std::vector<int> out_shape;
+        switch (img_.image_format) {
+            case FORMAT_BGR_PACKED:
+            case FORMAT_RGB_PACKED:
+                out_shape = {img_.height, int(strides[0] / 3), 3};
+                break;
+            case FORMAT_ARGB_PACKED:
+            case FORMAT_ABGR_PACKED:
+                out_shape = {img_.height, int(strides[0] / 4), 4};
+                break;
+            case FORMAT_BGR_PLANAR:
+            case FORMAT_RGB_PLANAR:
+            case FORMAT_YUV444P:
+                out_shape = {3, img_.height, strides[0]};
+                break;
+            case FORMAT_GRAY:
+                out_shape = {1, img_.height, strides[0]};
+                break;
+        }
+        pybind11::gil_scoped_acquire gil;
+        if (!out_shape.empty()) {
+            out_array.resize(out_shape);
+        }
+        return out_array;
+    }
+#endif  // asnumpy PYTHON
     
     void BMImage::BMImage_CC::set_ipc_flag(bool f) {
         ipc_recv_flag = f;
@@ -2676,6 +2892,39 @@ namespace sail {
     BMImage::BMImage(BMImage &&other) : _impl(new BMImage_CC()){
         *this = std::move(other);
     }
+
+    BMImage::BMImage(
+        Handle &handle,
+        void *buffer,
+        int h,
+        int w,
+        bm_image_format_ext format,
+        bm_image_data_format_ext dtype,
+        std::vector<int> strides,
+        size_t offset,
+        int size)
+        : _impl(new BMImage_CC(handle, buffer, h, w, format, dtype, strides,
+                               offset, size)) {}
+
+#ifdef PYTHON
+    BMImage::BMImage(
+        Handle &handle,
+        pybind11::buffer &buffer,
+        int h,
+        int w,
+        bm_image_format_ext format,
+        bm_image_data_format_ext dtype,
+        std::vector<int> strides,
+        size_t offset)
+        : _impl(new BMImage_CC())
+    {
+        auto buf_info = buffer.request();
+        // TODO check buffer size whether enough for h*strides
+        auto shape = buf_info.shape;
+        void *ptr = buf_info.ptr;
+        *this = BMImage(handle, ptr, h, w, format, dtype, strides, offset);
+    }
+#endif // PYTHON
 
     BMImage &BMImage::operator=(BMImage &&other) {
         if (this != &other) {
@@ -2790,6 +3039,13 @@ namespace sail {
     int BMImage::check_contiguous_memory() const { 
         return _impl->check_contiguous_memory(); 
     }
+
+#ifdef PYTHON // asnumpy Python
+    pybind11::array BMImage::asnumpy() const { 
+        return _impl->asnumpy(); 
+    }
+#endif // asnumpy Python
+
     void BMImage::set_ipc_flag(bool f) {
         return _impl->set_ipc_flag(f);
     }
@@ -3061,7 +3317,7 @@ namespace sail {
             sprintf(error_info,"bm_image_alloc_contiguous_mem error:%d,N[%d],h[%d],w[%d],format[%d],dtype[%d]", 
                 ret, N, h, w, format, dtype);
             SPDLOG_ERROR(error_info);
-            exit(1);
+            throw SailBMImageError("bmcv api fail");
         }
         need_to_free_ = true;
     }
@@ -3083,7 +3339,7 @@ namespace sail {
             ret = bm_image_create(handle.data(), h, w, format, dtype, &this->at(i), stride);
             if(ret != BM_SUCCESS) {
                 SPDLOG_ERROR("bm_image_create failed: {}!",ret);
-                exit(1);
+                throw SailBMImageError("bmcv api fail");
             }
         }
         need_to_free_ = false;
@@ -3137,7 +3393,7 @@ namespace sail {
             // int ret = bm_image_alloc_contiguous_mem_heap_mask(N, this->data(),6);
             if(ret != BM_SUCCESS) {
                 SPDLOG_ERROR("bm_image_alloc_contiguous_mem err={}",ret);
-                exit(1);
+                throw SailRuntimeError("device memory not enough");
             }
             need_to_free_ = true;
         }
@@ -3149,7 +3405,7 @@ namespace sail {
             int ret = bm_image_free_contiguous_mem(N, this->data());
             if(ret != 0){
                 SPDLOG_ERROR("bm_image_free_contiguous_mem err={}", ret);
-                exit(-1);
+                throw SailBMImageError("bmcv api fail");
             }
             need_to_free_ = false;
         }
@@ -3189,12 +3445,12 @@ namespace sail {
         ret = bm_image_get_contiguous_device_mem(N, this->data(), &addr);
         if (ret != BM_SUCCESS) {
             SPDLOG_ERROR("bm_image_to_tensor err={}", ret);
-            exit(EXIT_FAILURE);
+            throw SailBMImageError("bmcv api fail");
         }
 
         if (addr.u.device.device_addr == 0) {
             SPDLOG_ERROR("to_tensor: dev_data is null!");
-            exit(SAIL_ERR_TENSOR_DEVMEM);
+            throw SailBMImageError("invalid argument");
         }
 
         int h = this->at(0).height;
@@ -3227,7 +3483,8 @@ namespace sail {
 #if defined(PYTHON)
     BMImage Bmcv::mat_to_bm_image(pybind11::array_t<uint8_t> &input_array){
         BMImage img;
-        SAIL_CHECK_RET( mat_to_bm_image(input_array, img) );
+        int ret = mat_to_bm_image(input_array, img);
+        SAIL_CHECK_RET(ret);
         return img; 
     }
     int Bmcv::mat_to_bm_image(pybind11::array_t<uint8_t> &input_array, BMImage &img){
@@ -3281,7 +3538,8 @@ namespace sail {
 
     BMImage Bmcv::mat_to_bm_image(cv::Mat &mat) {
         BMImage img;
-        SAIL_CHECK_RET( mat_to_bm_image(mat, img) );
+        int ret = mat_to_bm_image(mat, img);
+        SAIL_CHECK_RET(ret);
         // return std::move(img);
         return img;
     }
@@ -3297,7 +3555,8 @@ namespace sail {
 
     cv::Mat Bmcv::bm_image_to_mat(BMImage &img) {
         cv::Mat mat;
-        SAIL_CHECK_RET( bm_image_to_mat(img, mat) );
+        int ret = bm_image_to_mat(img, mat);
+        SAIL_CHECK_RET(ret);
         return std::move(mat);
     }
 
@@ -3311,14 +3570,14 @@ namespace sail {
         int ret = bm_image_get_device_mem(img.data(), &addr);
         if (ret != 0){
             SPDLOG_ERROR("bm_image_to_tensor err={}, bm_image_get_device_mem failed", ret);
-            exit(-1);
+            throw SailBMImageError("bmcv api fail");
         }
 
         int stride = 0;
         ret = bm_image_get_stride(img.data(),&stride);
         if (ret != 0){
             SPDLOG_ERROR("bm_image_to_tensor err={}, bm_image_get_stride failed", ret);
-            exit(-1);
+            throw SailBMImageError("bmcv api fail");
         }
 
         int h = img.height();
@@ -3330,7 +3589,7 @@ namespace sail {
             tensor.reset({1, h, w, 3}, dtype);
         }else{
             SPDLOG_ERROR("Image format not supported, Please convert it first.");
-            exit(SAIL_ERR_BMI_FORMAT);
+            throw SailBMImageError("not supported");
         }
             
         tensor.reset_dev_data(addr);
@@ -3341,7 +3600,7 @@ namespace sail {
         ret = bm_memcpy_d2s_partial(get_handle().data(), sys_data,addr, addr.size);
         if (ret != 0){
             SPDLOG_ERROR("bm_image_to_tensor err={}, bm_memcpy_d2s_partial failed", ret);
-            exit(-1);
+            throw SailBMImageError("bmlib api fail");
         }
         PRINT_TIME_MS("bm_memcpy_d2s_partial", process_start_time_d2s)
         delete [] sys_data;
@@ -3355,10 +3614,68 @@ namespace sail {
         return std::move(tensor);
     }
 
-    void Bmcv::tensor_to_bm_image(Tensor &tensor, BMImage &img, bool bgr2rgb/*false*/) {
+    void Bmcv::tensor_to_bm_image(Tensor& tensor, BMImage& img, bool bgr2rgb,
+                            std::string layout) {
         auto shape = tensor.shape();
-        int h = shape[2];
-        int w = shape[3];
+        int h, w;
+        if (strcmp(layout.c_str(), "nchw") == 0) {
+            h = shape[2];
+            w = shape[3];
+        } else if (strcmp(layout.c_str(), "nhwc") == 0) {
+            h = shape[1];
+            w = shape[2];
+        } else {
+            throw std::invalid_argument("Invalid layout!");
+        }
+
+        bm_image_data_format_ext dtype = get_bm_image_data_format(tensor.dtype());
+
+        if (img.need_to_free()) {
+            img.destroy();
+        }
+        if(img.is_created()){
+            img.detach();
+        }
+        else {
+            int dtype_size = bm_image_data_type_size(dtype);
+            // int stride = FFALIGN(w * dtype_size, SAIL_ALIGN); // ceiling to 64 * N
+            if (strcmp(layout.c_str(), "nchw") == 0) {
+                img.create(
+                        handle_,
+                        h,
+                        w,
+                        bgr2rgb ? FORMAT_RGB_PLANAR : FORMAT_BGR_PLANAR,
+                        dtype);
+            } else {
+                img.create(
+                        handle_,
+                        h,
+                        w,
+                        bgr2rgb ? FORMAT_RGB_PACKED : FORMAT_BGR_PACKED,
+                        dtype);
+            }
+        }
+
+        bm_device_mem_t mem = tensor.dev_data();
+        int ret = bm_image_attach(img.data(), &mem);
+        if (ret != 0){
+            SPDLOG_ERROR("tensor_to_bm_image err={}, bm_image_attach failed", ret);
+            throw SailBMImageError("bmcv api fail");
+        }
+    }
+
+    void Bmcv::tensor_to_bm_image(Tensor &tensor, BMImage &img, bm_image_format_ext format) {
+        auto shape = tensor.shape();
+        int h, w;
+        if(format == FORMAT_RGB_PLANAR || format == FORMAT_BGR_PLANAR) { //nchw
+            h = shape[2];
+            w = shape[3];
+        } else if (format == FORMAT_RGB_PACKED ||format == FORMAT_BGR_PACKED) { //nhwc
+            h = shape[1];
+            w = shape[2];
+        } else {
+            throw std::invalid_argument("Invalid format!");
+        }
 
         bm_image_data_format_ext dtype = get_bm_image_data_format(tensor.dtype());
 
@@ -3375,7 +3692,7 @@ namespace sail {
                     handle_,
                     h,
                     w,
-                    bgr2rgb ? FORMAT_RGB_PLANAR : FORMAT_BGR_PLANAR,
+                    format,
                     dtype);
         }
 
@@ -3383,13 +3700,19 @@ namespace sail {
         int ret = bm_image_attach(img.data(), &mem);
         if (ret != 0){
             SPDLOG_ERROR("tensor_to_bm_image err={}, bm_image_attach failed", ret);
-            exit(-1);
+            throw SailBMImageError("bmcv api fail");
         }
     }
 
-    BMImage Bmcv::tensor_to_bm_image(Tensor &tensor, bool bgr2rgb/*false*/) {
+    BMImage Bmcv::tensor_to_bm_image(Tensor &tensor, bool bgr2rgb/*false*/, std::string layout/*nchw*/) {
         BMImage img;
-        tensor_to_bm_image(tensor, img, bgr2rgb);
+        tensor_to_bm_image(tensor, img, bgr2rgb, layout);
+        return std::move(img);
+    }
+
+    BMImage Bmcv::tensor_to_bm_image(Tensor &tensor, bm_image_format_ext format) {
+        BMImage img;
+        tensor_to_bm_image(tensor, img, format);
         return std::move(img);
     }
 
@@ -3522,7 +3845,8 @@ namespace sail {
             int crop_w,
             int crop_h) {
         BMImage output;
-        SAIL_CHECK_RET( crop(input, output, crop_x0, crop_y0, crop_w, crop_h) );
+        int ret = crop(input, output, crop_x0, crop_y0, crop_w, crop_h);
+        SAIL_CHECK_RET(ret);
         return std::move(output);
     }
 
@@ -3840,7 +4164,8 @@ namespace sail {
             PaddingAtrr &padding_in,
             bmcv_resize_algorithm resize_alg) {
         BMImage output;
-        SAIL_CHECK_RET( vpp_crop_and_resize_padding(input, output, crop_x0, crop_y0, crop_w, crop_h, resize_w, resize_h, padding_in, resize_alg) );
+        int ret = vpp_crop_and_resize_padding(input, output, crop_x0, crop_y0, crop_w, crop_h, resize_w, resize_h, padding_in, resize_alg);
+        SAIL_CHECK_RET(ret);
         return std::move(output);
     }
 
@@ -3862,7 +4187,8 @@ namespace sail {
             int crop_w,
             int crop_h) {
         BMImage output;
-        SAIL_CHECK_RET( vpp_crop(input, output, crop_x0, crop_y0, crop_w, crop_h) );
+        int ret = vpp_crop(input, output, crop_x0, crop_y0, crop_w, crop_h);
+        SAIL_CHECK_RET(ret);
         return std::move(output);
     }
 
@@ -3882,7 +4208,8 @@ namespace sail {
             int resize_h,
             bmcv_resize_algorithm resize_alg) {
         BMImage output;
-        SAIL_CHECK_RET( vpp_resize(input, output, resize_w, resize_h, resize_alg) );
+        int ret = vpp_resize(input, output, resize_w, resize_h, resize_alg);
+        SAIL_CHECK_RET(ret);
 
         /*
         if (bm_image_get_plane_num(output.data()) != 1 || bm_image_get_plane_num(input.data()) != 3)
@@ -3911,7 +4238,8 @@ namespace sail {
             PaddingAtrr &padding_in,
             bmcv_resize_algorithm resize_alg) {
         BMImage output;
-        SAIL_CHECK_RET( vpp_resize_padding(input, output, resize_w, resize_h, padding_in, resize_alg) );
+        int ret = vpp_resize_padding(input, output, resize_w, resize_h, padding_in, resize_alg);
+        SAIL_CHECK_RET(ret);
         return std::move(output);
     }
 
@@ -3996,7 +4324,8 @@ namespace sail {
             int use_bilinear,
             bool similar_to_opencv) {
         BMImage output;
-        SAIL_CHECK_RET( warp(input, output, matrix, use_bilinear, similar_to_opencv) );
+        int ret = warp(input, output, matrix, use_bilinear, similar_to_opencv);
+        SAIL_CHECK_RET(ret);
         return std::move(output);
     }
 
@@ -4238,7 +4567,8 @@ namespace sail {
                     std::pair<float, float>> &alpha_beta
     ) {
         BMImage output;
-        SAIL_CHECK_RET( convert_to(input, output, alpha_beta) );
+        int ret = convert_to(input, output, alpha_beta);
+        SAIL_CHECK_RET(ret);
         return std::move(output);
     }
 
@@ -4275,7 +4605,8 @@ namespace sail {
 
     BMImage Bmcv::yuv2bgr(BMImage &input) {
         BMImage output;
-        SAIL_CHECK_RET( yuv2bgr(input, output) );
+        int ret = yuv2bgr(input, output);
+        SAIL_CHECK_RET(ret);
         return std::move(output);
     }
 
@@ -4322,7 +4653,8 @@ namespace sail {
 
     BMImage Bmcv::vpp_convert_format(BMImage &input, bm_image_format_ext image_format) {
         BMImage output = sail::BMImage(handle_, input.height(), input.width(), image_format, input.dtype());
-        SAIL_CHECK_RET( vpp_convert_format(input, output) );
+        int ret = vpp_convert_format(input, output);
+        SAIL_CHECK_RET(ret);
         return output;
     }
 
@@ -4403,7 +4735,7 @@ namespace sail {
         BMImage output = sail::BMImage(handle_, input.height(), input.width(), image_format, input.dtype());
         if(BM_SUCCESS != convert_format(input, output)) {
             SPDLOG_ERROR("convert_format failed!");
-            exit(SAIL_ERR_BMI_CVT);
+            throw SailBMImageError("bmcv api fail");
         }
 
         return output;
@@ -4586,7 +4918,10 @@ namespace sail {
             image.format() != FORMAT_NV21 &&
             image.format() != FORMAT_NV16 &&
             image.format() != FORMAT_NV61){
-            SPDLOG_ERROR("input BMImage's pixel format not supported!");
+            SPDLOG_ERROR("input BMImage's pixel format is not supported!\n"
+                         "Support pixel formats for putText: FORMAT_GRAY, "
+                         "FORMAT_YUV420P, FORMAT_YUV422P, FORMAT_YUV444P, "
+                         "FORMAT_NV12, FORMAT_NV21, FORMAT_NV16, FORMAT_NV61");
             print_image(image.data(),"input");
             return SAIL_ERR_BMI_NOTSUP;
         }
@@ -4636,7 +4971,10 @@ namespace sail {
             image.image_format != FORMAT_NV21 &&
             image.image_format != FORMAT_NV16 &&
             image.image_format != FORMAT_NV61){
-            SPDLOG_ERROR("input BMImage's pixel format not supported!");
+            SPDLOG_ERROR("input BMImage's pixel format is not supported!\n"
+                         "Support pixel formats for putText: FORMAT_GRAY, "
+                         "FORMAT_YUV420P, FORMAT_YUV422P, FORMAT_YUV444P, "
+                         "FORMAT_NV12, FORMAT_NV21, FORMAT_NV16, FORMAT_NV61");
             print_image(image,"input");
             return SAIL_ERR_BMI_NOTSUP;
         }
@@ -4736,7 +5074,8 @@ namespace sail {
       float             beta,
       float             gamma){
         BMImage output;
-        SAIL_CHECK_RET( image_add_weighted(input1,alpha,input2,beta, gamma,output) );
+        int ret = image_add_weighted(input1,alpha,input2,beta, gamma,output);
+        SAIL_CHECK_RET(ret);
         return std::move(output);
     }
     
@@ -4930,7 +5269,7 @@ namespace sail {
             &bm_image_temp);
         if (BM_SUCCESS != ret){
             SPDLOG_ERROR("bmcv_image_resize err={}", ret);
-            exit(-1);
+            throw SailBMImageError("bmcv api fail");
         }else{
             bmcv_copy_to_atrr_t copy_att;
             copy_att.start_x = padding_in.dst_crop_stx;
@@ -4946,7 +5285,7 @@ namespace sail {
                 bm_image_result);
             if (BM_SUCCESS != ret){
                 SPDLOG_ERROR("bmcv_image_resize err={}", ret);
-                exit(-1);
+                throw SailBMImageError("bmcv api fail");
             }
         }
 
@@ -5010,15 +5349,15 @@ namespace sail {
         if(output.is_created()){
             if (input.format() != output.format()){
                 SPDLOG_ERROR("Output Format must same as input!");
-                exit(SAIL_ERR_BMI_NOTSUP);
+                throw SailBMImageError("mismatch BMImage");
             }
         }else{
             SPDLOG_ERROR("Output has not created!");
-            exit(SAIL_ERR_BMI_EMPTY);
+            throw SailBMImageError("invalid argument");
         }
         int ret = image_copy_to(input.data(),output.data(),start_x,start_y);
         if(ret != BM_SUCCESS){
-            exit(SAIL_ERR_BMI_BMCV);
+            throw SailBMImageError("bmcv api fail");
         }
         return ret;
     }
@@ -5029,11 +5368,11 @@ namespace sail {
     {
         if(input.width + start_x > output.width ){
             SPDLOG_ERROR("Input width add start_x must less than output width!");
-            return 1;
+            return SAIL_ERR_BMI_PARAM;
         }
         if(input.height + start_y > output.height){
             SPDLOG_ERROR("Input height add start_y must less than output width!");
-            return 1;
+            return SAIL_ERR_BMI_PARAM;
         }
 
         bmcv_copy_to_atrr_t copy_to_attr;
@@ -5058,15 +5397,15 @@ namespace sail {
         if(output.is_created()){
             if (input.format() != output.format()){
                 SPDLOG_ERROR("Output Format must same as input!");
-                exit(SAIL_ERR_BMI_NOTSUP);
+                throw SailBMImageError("mismatch BMImage");
             }
         }else{
             SPDLOG_ERROR("Output has not created!");
-            exit(SAIL_ERR_BMI_EMPTY);
+            throw SailBMImageError("invalid argument");
         }
         int ret = image_copy_to_padding(input.data(),output.data(),padding_r,padding_g,padding_b,start_x,start_y);
         if(ret != BM_SUCCESS){
-            exit(SAIL_ERR_BMI_BMCV);
+            throw SailBMImageError("bmcv api fail");
         }
         return ret;      
     }
@@ -5081,7 +5420,245 @@ namespace sail {
             bm_mem_from_system(output_proposal));
         return output_proposal;
     }
+#if BMCV_VERSION_MAJOR > 1
+    static int bm_dmem_read_bin(bm_handle_t handle, bm_device_mem_t* dmem, const char *input_name, unsigned int size){
+        if (access(input_name, F_OK) != 0 || strlen(input_name) == 0 || 0 >= size){
+            SPDLOG_ERROR("file is not exist or wrong size");
+            return BM_ERR_FAILURE;
+        }
 
+        char input_ptr[size];
+        FILE *fp_src = fopen(input_name, "rb+");
+
+        if (fread(input_ptr, 1, size, fp_src) < (unsigned int)size){
+            SPDLOG_ERROR("file size is less than {} required bytes", size);
+            fclose(fp_src);
+            return BM_ERR_FAILURE;
+        };
+        fclose(fp_src);
+
+        if (BM_SUCCESS != bm_malloc_device_byte(handle, dmem, size)){
+            SPDLOG_ERROR("bm_malloc_device_byte failed");
+            return BM_ERR_FAILURE;
+        }
+
+        if (BM_SUCCESS != bm_memcpy_s2d(handle, *dmem, input_ptr)){
+            SPDLOG_ERROR("bm_memcpy_s2d failed");
+            return BM_ERR_FAILURE;
+        }
+
+        return BM_SUCCESS;
+    }
+
+    /**
+    * @brief A class for image stitch.
+    */
+    class Blend::Blend_CC{
+    public:
+        /**
+         * @brief blend init 
+         * @param src_h       image height
+         * @param ovlap_attr  overlapping areas width
+         * @param bd_attr     Black border of images
+         * @param wgt_phy_mem imgage weight
+         * @param wgt_mode    weight mode
+         */
+        explicit Blend_CC(int src_h, std::vector<std::vector<short>> ovlap_attr, std::vector<std::vector<short>> bd_attr, std::vector<std::vector<string>> wgt_phy_mem,bm_stitch_wgt_mode wgt_mode);
+        ~Blend_CC();
+
+        /**
+         * @brief blend process
+         * @param input   input images
+         * @param output  output image
+         * @return 0 for success and other for failure
+         */
+        int process(std::vector<BMImage*> &input, BMImage &output);
+        
+        BMImage process(std::vector<BMImage*> &input);
+        
+        struct stitch_param blend_config;
+        int ovlap_width;
+        Handle handle_;
+    };
+
+    int Blend::Blend_CC::process(std::vector<BMImage*> &input, BMImage &output){
+        //the num of input images
+        int input_num = input.size();
+        //input for bmcv_blending 
+        bm_image blend_img[input_num];
+        //if need convert
+        bool need_convert[input_num];
+        //output width 
+        int output_width = 0;
+        
+        int ret;
+
+        if(input_num < 2 || input_num > 4){
+            SPDLOG_ERROR("The number of input images must be between 2 and 4");
+            return BM_ERR_FAILURE;
+        }
+        
+        //dst_format
+        auto dst_format = input[0] -> format();
+        if(!(   dst_format == FORMAT_RGBP_SEPARATE ||
+                dst_format == FORMAT_GRAY ||
+                dst_format == FORMAT_BGRP_SEPARATE ||
+                dst_format == FORMAT_YUV420P ||
+                dst_format == FORMAT_YUV422P ||
+                dst_format == FORMAT_YUV444P ||
+                dst_format == FORMAT_GRAY ))    dst_format = FORMAT_YUV420P;
+        
+        //convert format 
+        for(int i = 0; i < input_num; i++){
+            if(input[i] -> format() != dst_format){
+                ret = bm_image_create(handle_.data(), input[i] -> height(), input[i] -> width(), dst_format, DATA_TYPE_EXT_1N_BYTE, &blend_img[i], NULL);
+                if(ret != BM_SUCCESS) {
+                    SPDLOG_ERROR("bm_image_create error");
+                    goto fail;
+                }
+
+                ret = bm_image_alloc_dev_mem(blend_img[i], 1);
+                if(ret != BM_SUCCESS) {
+                    SPDLOG_ERROR("bm_image_alloc_dev_mem error");
+                    goto fail;
+                }
+
+                ret = bmcv_image_vpp_convert(handle_.data(), 1, input[i] -> data(), &blend_img[i]);
+                if(ret != BM_SUCCESS) {
+                    SPDLOG_ERROR("bmcv_image_vpp_convert error");
+                    goto fail;
+                }
+
+                need_convert[i] = true;
+            }else{
+                blend_img[i] = input[i] -> data();
+                need_convert[i] = false;
+            }
+        }
+
+        //create output BMImage
+        for (int i = 0; i < input_num; i++){
+            output_width += input[i] -> width();
+        }
+        output_width -= ovlap_width;
+        // align 32
+        output_width = (output_width + 32 -1) & ~(32 - 1);
+        if (output.is_created()) {
+            if (output_width != output.width() || input[0] -> height() != output.height()){
+                output.reset(output_width, input[0] -> height());
+                SPDLOG_INFO("output will be reset to {}x{}",output_width, input[0] -> height());
+            }
+            if (output.format() != dst_format){
+                SPDLOG_ERROR("The output format must be the same as the input format {}!", dst_format);
+                ret = BM_ERR_FAILURE;
+                goto fail;
+            }
+        }
+        if (!output.is_created()) {
+            output.create(
+                    handle_,
+                    input[0] -> height(),
+                    output_width,
+                    dst_format, // force to this format
+                    DATA_TYPE_EXT_1N_BYTE
+            );
+            output.allocate();
+        }
+        //blend work
+
+        ret = bmcv_blending(handle_.data(), input_num, blend_img, output.data(), blend_config);
+        if(ret != BM_SUCCESS){
+            SPDLOG_ERROR("bmcv_blending error");
+            goto fail;
+        }
+        //destroy 
+    fail:
+        for(int i = 0; i < input_num; i++) if(need_convert[i]) bm_image_destroy(blend_img[i]);
+        return ret;
+    }
+        
+
+    BMImage Blend::Blend_CC::process(std::vector<BMImage*> &input){
+        BMImage output;
+        int ret = process(input, output);
+        if(ret != BM_SUCCESS){
+            SPDLOG_ERROR("blend err={}", ret);
+            throw SailRuntimeError("blend process error");
+        }
+        return std::move(output);
+    }
+
+    Blend::Blend_CC::Blend_CC(int src_h, std::vector<std::vector<short>> ovlap_attr, std::vector<std::vector<short>> bd_attr, std::vector<std::vector<string>> wgt_phy_mem,bm_stitch_wgt_mode wgt_mode) : handle_(0) {
+        memset(&blend_config, 0, sizeof(blend_config));
+        ovlap_width = 0;
+
+        int ovlap_num = ovlap_attr[0].size();
+        if(wgt_phy_mem.size() != ovlap_num){
+            SPDLOG_ERROR("Wrong config; please check wgt_phy_mem.size(),ensure it's equal to the number of overlapping areas");
+            throw SailRuntimeError("blend config error");
+        }   
+        
+        for(int i = 0; i < ovlap_num; i++){
+            blend_config.ovlap_attr.ovlp_lx[i] = ovlap_attr[0][i];
+            blend_config.ovlap_attr.ovlp_rx[i] = ovlap_attr[1][i];
+            int wgtwidth = blend_config.ovlap_attr.ovlp_rx[i] - blend_config.ovlap_attr.ovlp_lx[i] + 1;
+            ovlap_width += wgtwidth;
+            // align 16
+            wgtwidth = (wgtwidth + 16 -1) & ~(16 - 1);
+            int wgtheight = src_h;
+            int wgt_len = wgtwidth * wgtheight;
+            for (int j = 0; j < 2; j++) {
+                int ret = bm_dmem_read_bin(handle_.data(), &blend_config.wgt_phy_mem[i][j], wgt_phy_mem[i][j].c_str(), wgt_len);
+                if(ret != BM_SUCCESS){
+                    SPDLOG_ERROR("bm_dmem_read_bin error");
+                    throw SailRuntimeError("bm_dmem_read_bin error");
+                }
+            }
+        }
+    }
+
+    Blend::Blend_CC::~Blend_CC() {}
+
+    Blend::Blend(int src_h, std::vector<std::vector<short>> ovlap_attr, std::vector<std::vector<short>> bd_attr, std::vector<std::vector<string>> wgt_phy_mem,bm_stitch_wgt_mode wgt_mode):_impl(new Blend_CC(src_h, ovlap_attr, bd_attr, wgt_phy_mem, wgt_mode)){}
+
+    int Blend::process(std::vector<BMImage*> &input, BMImage &output){
+        return _impl -> process(input, output);
+    }
+
+    BMImage Blend::process(std::vector<BMImage*> &input){
+        return _impl -> process(input);
+    }
+    
+    Blend::~Blend(){
+        delete _impl;
+    }
+
+    int Bmcv::bmcv_overlay(BMImage& image, std::vector<std::vector<int>> overlay_info, std::vector<const BMImage *> overlay_image){
+        if (overlay_info.size() != overlay_image.size()){
+            SPDLOG_ERROR("the number of overlay_info is not equal to overlay_image");
+            throw SailBMImageError("parameter error");
+        }
+
+        int overlay_num = overlay_info.size();
+        std::vector<bmcv_rect_t> overlay_info_bmcv;
+        std::vector<bm_image> overlay_image_bmcv; 
+        for (int i = 0; i < overlay_num; ++i){
+            overlay_info_bmcv.emplace_back(bmcv_rect_t{overlay_info[i][0], overlay_info[i][1], overlay_info[i][2], overlay_info[i][3]});
+            auto tmp = overlay_image[i]->data();
+            if (tmp.image_format != FORMAT_ARGB_PACKED && tmp.image_format != FORMAT_ARGB4444_PACKED && tmp.image_format != FORMAT_ARGB1555_PACKED){
+                SPDLOG_ERROR("overlay_image Format Error, unsupport format {}", tmp.image_format);
+                throw SailBMImageError("parameter error"); 
+            }
+            overlay_image_bmcv.emplace_back(tmp);
+        }
+        auto ret = bmcv_image_overlay(handle_.data(), image.data(), overlay_num, overlay_info_bmcv.data(), overlay_image_bmcv.data());
+        if (BM_SUCCESS != ret) {
+            SPDLOG_ERROR("overlay error: call bmcv_image_overlay failed!");
+            return ret;
+        }
+        return ret;
+    }
+#endif
     BMImage Bmcv::warp_perspective(
         BMImage                     &input,
         const std::tuple<
@@ -5097,17 +5674,17 @@ namespace sail {
     {
         if (format != FORMAT_BGR_PLANAR && format != FORMAT_RGB_PLANAR){
             SPDLOG_ERROR("Output Format Error, Only support FORMAT_BGR_PLANAR and FORMAT_RGB_PLANAR!");
-            exit(SAIL_ERR_BMI_FORMAT);
+            throw SailBMImageError("not supported");
         }
 #if (BMCV_VERSION_MAJOR == 2) && !defined(BMCV_VERSION_MINOR)
         if (dtype != DATA_TYPE_EXT_1N_BYTE){
             SPDLOG_ERROR("Output dtype Error, Only support DATA_TYPE_EXT_1N_BYTE!");
-            exit(SAIL_ERR_BMI_DTYPE);
+            throw SailBMImageError("not supported");
         }
 #else
         if (dtype != DATA_TYPE_EXT_1N_BYTE && dtype != DATA_TYPE_EXT_4N_BYTE){
             SPDLOG_ERROR("Output dtype Error, Only support DATA_TYPE_EXT_1N_BYTE and DATA_TYPE_EXT_4N_BYTE!");
-            exit(SAIL_ERR_BMI_DTYPE);
+            throw SailBMImageError("not supported");
         }
 #endif
         BMImage output_image = sail::BMImage(handle_, output_height, output_width, format, dtype);
@@ -5131,7 +5708,7 @@ namespace sail {
                 handle_.data(),1,coord,&input.data(), &output_image.data(), use_bilinear);
             if(ret != BM_SUCCESS){
                 SPDLOG_ERROR("bmcv_image_warp_perspective_with_coordinate err={}", ret);
-                exit(SAIL_ERR_BMI_BMCV);
+                throw SailBMImageError("bmcv api fail");
             }
         }else{
             BMImage input_convert = sail::BMImage(handle_, input.height(), input.width(), format, dtype);
@@ -5144,7 +5721,7 @@ namespace sail {
                 handle_.data(),1,coord,&input_convert.data(), &output_image.data(), use_bilinear);
             if(ret != BM_SUCCESS){
                 SPDLOG_ERROR("bmcv_image_warp_perspective_with_coordinate err={}", ret);
-                exit(SAIL_ERR_BMI_BMCV);
+                throw SailBMImageError("bmcv api fail");
             }   
         }
         return output_image;
@@ -5395,44 +5972,384 @@ namespace sail {
 
     int Bmcv::imread(const std::string &filename, BMImage &dst)
     {
-        // read jpeg data from file
-        std::ifstream file(filename, std::ios::binary | std::ios::ate);
-        if(!file.is_open()) return SAIL_ERR_DEC_OPEN;
-        size_t size = file.tellg();
-        file.seekg(0, std::ios::beg);
-        std::vector<unsigned char> jpeg_data(size);
-        if (!file.read(reinterpret_cast<char*>(jpeg_data.data()), size))
-            return SAIL_ERR_DEC_OPEN;
-        file.close();
-        bm_image &bmcv_dst = dst.data();
-        memset((char*)&bmcv_dst, 0, sizeof(bm_image));
+        std::string extension = filename.substr(filename.find_last_of('.') + 1);
+        bool jpeg_decoded = false;
 
-        // decode jpeg data to yuv
-        auto jpeg_data_ptr = jpeg_data.data();
-        int ret = bmcv_image_jpeg_dec(handle_.data(), reinterpret_cast<void**>(&jpeg_data_ptr), &size, 1, &bmcv_dst);
-        if (ret != 0 || bmcv_dst.width == 0 || bmcv_dst.height == 0 ||
-            !(bmcv_dst.image_format == FORMAT_YUV420P || bmcv_dst.image_format == FORMAT_YUV422P ||
-              bmcv_dst.image_format == FORMAT_YUV444P || bmcv_dst.image_format == FORMAT_GRAY))
+        // Modify environment variables for JPEG 2000
+        std::string variableName = "OPENCV_IO_ENABLE_JASPER";
+        std::string variableValue = "1"; 
+        if (extension == "j2k" || extension == "jp2") 
         {
-            spdlog::error("{}:{}:{} imread fail", __FILE__, __func__, __LINE__);
-            return SAIL_ERR_DEC_JPEG;
+            const char* currentValue = getenv(variableName.c_str());
+            if (currentValue == nullptr) 
+            {
+        #ifdef _WIN32
+                if (SetEnvironmentVariable(variableName.c_str(), variableValue.c_str())) {
+        #else
+                if (setenv(variableName.c_str(), variableValue.c_str(), 1) == 0) {
+        #endif
+                    spdlog::info("Environment variable {} set to {} successfully.", variableName, variableValue);
+                } else 
+                {
+                    spdlog::warn("Failed to set environment variable {}.", variableName);
+                }
+            }
         }
+
+        if (extension == "jpeg" || extension == "jpg") {
+            // read jpeg data from file
+            std::ifstream file(filename, std::ios::binary | std::ios::ate);
+            if (!file.is_open()) return SAIL_ERR_DEC_OPEN;
+            size_t size = file.tellg();
+            file.seekg(0, std::ios::beg);
+            std::vector<unsigned char> jpeg_data(size);
+            if (!file.read(reinterpret_cast<char*>(jpeg_data.data()), size))
+                return SAIL_ERR_DEC_OPEN;
+            file.close();
+            bm_image &bmcv_dst = dst.data();
+            memset((char*)&bmcv_dst, 0, sizeof(bm_image));
+
+            // decode jpeg data to yuv
+            auto jpeg_data_ptr = jpeg_data.data();
+            int ret = bmcv_image_jpeg_dec(handle_.data(), reinterpret_cast<void**>(&jpeg_data_ptr), &size, 1, &bmcv_dst);
+            if (ret == 0 && bmcv_dst.width > 0 && bmcv_dst.height > 0 &&
+                (bmcv_dst.image_format == FORMAT_YUV420P || bmcv_dst.image_format == FORMAT_YUV422P ||
+                bmcv_dst.image_format == FORMAT_YUV444P || bmcv_dst.image_format == FORMAT_GRAY))
+            {
+                jpeg_decoded = true;
+            } else {
+                spdlog::error("{}:{}:{} Hardware decode failed, trying software decode", __FILE__, __func__, __LINE__);
+            }
+        }
+
+        if (!jpeg_decoded) {
+            cv::Mat img = cv::imread(filename, cv::IMREAD_UNCHANGED);
+            if (img.empty()) {
+                spdlog::error("{}:{}:{} imread fail, image is empty", __FILE__, __func__, __LINE__);
+                return SAIL_ERR_DEC_OPEN;
+            }
+            std::shared_ptr<cv::Mat> cached_mat = std::make_shared<cv::Mat>(img);
+            dst.cache_ost_mat(cached_mat);
+            bm_image &bmcv_dst = dst.data();
+            memset(&bmcv_dst, 0, sizeof(bm_image));
+            bm_handle_t handle = img.u->hid ? img.u->hid : cv::bmcv::getCard();
+            bm_image_data_format_ext data_format;
+            bm_image_format_ext image_format;
+
+            if (!img.u || !img.u->addr) {
+                spdlog::error("Memory allocated by user, no device memory assigned. Not support BMCV!");
+                return BM_NOT_SUPPORTED;
+            }
+            if (img.type() == 16) { data_format = DATA_TYPE_EXT_1N_BYTE; image_format = FORMAT_BGR_PACKED; }
+            else if (img.type() == 24) {data_format = DATA_TYPE_EXT_1N_BYTE; image_format = FORMAT_ABGR_PACKED; }
+            else if (img.type() == 0) {data_format = DATA_TYPE_EXT_1N_BYTE; image_format = FORMAT_GRAY; }
+            else return BM_NOT_SUPPORTED;
+            int step[1] = { (int)img.step[0] };
+            int ret = bm_image_create(handle, img.rows, img.cols, image_format, data_format, &bmcv_dst, step);
+            if (ret != BM_SUCCESS) {
+                spdlog::error("bm_image_create() err {},{}", __FILE__, __LINE__);
+                return BM_NOT_SUPPORTED;
+            }
+
+            uint len, off;
+            bm_device_mem_t mem;
+            off = img.data - img.datastart;
+            len = img.rows * img.step[0];
+            mem = bm_mem_from_device(img.u->addr + off, len);
+            ret = bm_image_attach(bmcv_dst, &mem);
+            if (ret != BM_SUCCESS) {
+                spdlog::error("bm_image_attach() err {},{}", __FILE__, __LINE__);
+                return BM_NOT_SUPPORTED;
+            }
+        }
+
         return SAIL_SUCCESS;
     }
 
     BMImage Bmcv::imread(const std::string &filename)
     {
         BMImage dst;
-        SAIL_CHECK_RET(imread(filename, dst));
+        int ret = imread(filename, dst);
+        SAIL_CHECK_RET(ret);
         return std::move(dst);
     }
+#if BMCV_VERSION_MAJOR > 1
+extern "C" {
+    bm_status_t bmcv_stft(bm_handle_t handle, float* XRHost, float* XIHost, float* YRHost,
+                    float* YIHost, int batch, int L, bool realInput,
+                    int pad_mode, int n_fft, int win_mode, int hop_len, bool normalize) __attribute__((weak));
+    bm_status_t bmcv_istft(bm_handle_t handle, float* XRHost, float* XIHost, float* YRHost,
+                    float* YIHost, int batch, int L, bool realInput,
+                    int pad_mode, int n_fft, int win_mode, int hop_len, bool normalize) __attribute__((weak));
+}
+
+#ifdef PYTHON
+    std::tuple<pybind11::array_t<float>, pybind11::array_t<float>> Bmcv::stft(
+        pybind11::array_t<float> input_real,
+        pybind11::array_t<float> input_imag,
+        bool realInput,
+        bool normalize,
+        int n_fft,
+        int hop_len,
+        int pad_mode,
+        int win_mode
+    )
+    {
+        if (!bmcv_stft) {
+            SPDLOG_ERROR("stft is not available in this version, please upgrade sdk to v1.8 or later.");
+            throw std::runtime_error("stft is not available in this version, please upgrade sdk to v1.8 or later.");
+        }
+        if (n_fft <= 0) {
+            SPDLOG_ERROR("n_fft must be a positive integer.");
+            throw std::invalid_argument("n_fft must be a positive integer.");
+        }
+        if (input_real.shape(1) < n_fft) {
+            SPDLOG_ERROR("Input length must be greater than n_fft.");
+            throw std::invalid_argument("Input length must be greater than n_fft.");
+        }
+        if (input_real.ndim() != 2 || input_imag.ndim() != 2) {
+            SPDLOG_ERROR("Both inputs must be 2D arrays.");
+            throw std::invalid_argument("Both inputs must be 2D arrays.");
+        }
+        if (input_real.shape(0) != input_imag.shape(0) || 
+            input_real.shape(1) != input_imag.shape(1)) {
+            SPDLOG_ERROR("Both input arrays must have the same shape.");
+            throw std::invalid_argument("Both input arrays must have the same shape.");
+        }
+
+        // Check if input is a C-contiguous array
+        if (!pybind11::detail::check_flags(input_real.ptr(), pybind11::detail::npy_api::NPY_ARRAY_C_CONTIGUOUS_)) {
+            pybind11::module np = pybind11::module::import("numpy");
+            input_real = np.attr("ascontiguousarray")(input_real, "dtype"_a="float32");
+        }
+
+        if (!pybind11::detail::check_flags(input_imag.ptr(), pybind11::detail::npy_api::NPY_ARRAY_C_CONTIGUOUS_)) {
+            pybind11::module np = pybind11::module::import("numpy");
+            input_imag = np.attr("ascontiguousarray")(input_imag, "dtype"_a="float32");
+        }
+        
+        pybind11::buffer_info real_buf_info = input_real.request();
+        pybind11::buffer_info imag_buf_info = input_imag.request();
+
+        int batch = input_real.shape(0);
+        int L = input_real.shape(1);
+        int num_frames = 1 + L / hop_len; // col
+        int row_num = n_fft / 2 + 1; // row
+        pybind11::array_t<float> output_real = pybind11::array_t<float>({batch, row_num, num_frames});
+        pybind11::array_t<float> output_imag = pybind11::array_t<float>({batch, row_num, num_frames});
+
+        int ret = bmcv_stft(handle_.data(), static_cast<float*>(real_buf_info.ptr), static_cast<float*>(imag_buf_info.ptr), 
+                static_cast<float*>(output_real.request().ptr), 
+                static_cast<float*>(output_imag.request().ptr),
+                batch, L, realInput, pad_mode, n_fft, win_mode, hop_len, normalize);
+        
+        if (BM_SUCCESS != ret) {
+            SPDLOG_ERROR("stft error: stft execute failed err={}", ret);
+            throw std::runtime_error("stft execution failed with error code: " + std::to_string(ret));
+        }
+
+        return std::make_tuple(output_real, output_imag);
+    }
+#endif
+
+    std::tuple<Tensor, Tensor> Bmcv::stft(
+        Tensor &input_real,
+        Tensor &input_imag,
+        bool realInput,
+        bool normalize,
+        int n_fft,
+        int hop_len,
+        int pad_mode,
+        int win_mode
+    ) {
+        if (!bmcv_stft) {
+            SPDLOG_ERROR("stft is not available in this version, please upgrade sdk to v1.8 or later.");
+            throw std::runtime_error("stft is not available in this version, please upgrade sdk to v1.8 or later.");
+        }
+
+        auto input_real_shape = input_real.shape();
+        auto input_imag_shape = input_imag.shape();
+        if (n_fft <= 0) {
+            SPDLOG_ERROR("n_fft must be a positive integer.");
+            throw std::invalid_argument("n_fft must be a positive integer.");
+        }
+        if (input_real_shape[1] < n_fft) {
+            SPDLOG_ERROR("Input length must be greater than n_fft.");
+            throw std::invalid_argument("Input length must be greater than n_fft.");
+        }
+        if (input_real_shape.size() != 2 || input_imag_shape.size() != 2) {
+            SPDLOG_ERROR("Both inputs must be 2D arrays.");
+            throw std::invalid_argument("Both inputs must be 2D arrays.");
+        }
+        if (input_real_shape[0] != input_imag_shape[0] || 
+            input_real_shape[1] != input_imag_shape[1]) {
+            SPDLOG_ERROR("Both input arrays must have the same shape.");
+            throw std::invalid_argument("Both input arrays must have the same shape.");
+        }
+
+        int batch = input_real_shape[0];
+        int L = input_real_shape[1];
+        int num_frames = 1 + L / hop_len; // col
+        int row_num = n_fft / 2 + 1; // row
+        size_t size = batch * row_num * num_frames;
+
+        std::vector<float> output_real(size);
+        std::vector<float> output_imag(size);
+
+        float* real_ptr = static_cast<float*>(input_real.sys_data());
+        float* imag_ptr = static_cast<float*>(input_imag.sys_data());
+        int ret = bmcv_stft(handle_.data(), real_ptr, imag_ptr, 
+                            output_real.data(), 
+                            output_imag.data(),
+                            batch, L, realInput, pad_mode, n_fft, win_mode, hop_len, normalize);
+        
+        if (BM_SUCCESS != ret) {
+            SPDLOG_ERROR("stft error: stft execute failed err={}", ret);
+            throw std::runtime_error("stft execution failed with error code: " + std::to_string(ret));
+        }
+
+        Tensor output_real_tensor = Tensor(handle_, {batch, row_num, num_frames}, BM_FLOAT32, true, false);
+        Tensor output_imag_tensor = Tensor(handle_, {batch, row_num, num_frames}, BM_FLOAT32, true, false);
+        
+        std::vector<int> shape = {batch, row_num, num_frames};
+        output_real_tensor.reset_sys_data(output_real.data(), shape);
+        output_imag_tensor.reset_sys_data(output_imag.data(), shape);
+
+        return std::make_tuple(output_real_tensor, output_imag_tensor);
+    }
+
+#ifdef PYTHON
+    std::tuple<pybind11::array_t<float>, pybind11::array_t<float>> Bmcv::istft(
+        pybind11::array_t<float> input_real,
+        pybind11::array_t<float> input_imag,
+        bool realInput,
+        bool normalize,
+        int L,
+        int hop_len,
+        int pad_mode,
+        int win_mode
+    )
+    {
+        if (!bmcv_istft) {
+            SPDLOG_ERROR("istft is not available in this version, please upgrade sdk to v1.8 or later.");
+            throw std::runtime_error("istft is not available in this version, please upgrade sdk to v1.8 or later.");
+        }
+        if (input_real.shape(0) != input_imag.shape(0) || 
+            input_real.shape(1) != input_imag.shape(1) || 
+            input_real.shape(2) != input_imag.shape(2)) {
+            SPDLOG_ERROR("Input shapes do not match. Real shape: ({}, {}, {}), Imaginary shape: ({}, {}, {})", 
+                        input_real.shape(0), input_real.shape(1), input_real.shape(2),
+                        input_imag.shape(0), input_imag.shape(1), input_imag.shape(2));
+            throw std::invalid_argument("Input shapes do not match.");
+        }
+
+        if (input_real.ndim() != 3 || input_imag.ndim() != 3) {
+            SPDLOG_ERROR("Both inputs must be 3D arrays. Real ndim: {}, Imaginary ndim: {}", input_real.ndim(), input_imag.ndim());
+            throw std::runtime_error("Both inputs must be 3D arrays.");
+        }
+        if (!pybind11::detail::check_flags(input_real.ptr(), pybind11::detail::npy_api::NPY_ARRAY_C_CONTIGUOUS_)) {
+            pybind11::module np = pybind11::module::import("numpy");
+            input_real = np.attr("ascontiguousarray")(input_real, "dtype"_a="float32");
+        }
+
+        if (!pybind11::detail::check_flags(input_imag.ptr(), pybind11::detail::npy_api::NPY_ARRAY_C_CONTIGUOUS_)) {
+            pybind11::module np = pybind11::module::import("numpy");
+            input_imag = np.attr("ascontiguousarray")(input_imag, "dtype"_a="float32");
+        }
+
+        int batch = input_real.shape(0);
+        int n_fft = (input_real.shape(1) - 1) *2;
+        
+        pybind11::buffer_info real_buf_info = input_real.request();
+        pybind11::buffer_info imag_buf_info = input_imag.request();
+        pybind11::array_t<float> output_real = pybind11::array_t<float>({batch, L});
+        pybind11::array_t<float> output_imag = pybind11::array_t<float>({batch, L});
+        
+        int ret = bmcv_istft(handle_.data(), static_cast<float*>(real_buf_info.ptr), static_cast<float*>(imag_buf_info.ptr), 
+                            static_cast<float*>(output_real.request().ptr), 
+                            static_cast<float*>(output_imag.request().ptr),
+                            batch, L, realInput, pad_mode, n_fft, win_mode, hop_len, normalize);
+
+        if (BM_SUCCESS != ret) {
+            SPDLOG_ERROR("istft error: istft execute failed err={}", ret);
+            throw std::runtime_error("istft execution failed with error code: " + std::to_string(ret));
+        }
+
+        return std::make_tuple(output_real, output_imag);
+    }
+#endif
+
+    std::tuple<Tensor, Tensor> Bmcv::istft(
+        Tensor &input_real,
+        Tensor &input_imag,
+        bool realInput,
+        bool normalize,
+        int L,
+        int hop_len,
+        int pad_mode,
+        int win_mode) 
+    {
+        if (!bmcv_istft) {
+            SPDLOG_ERROR("istft is not available in this version, please upgrade sdk to v1.8 or later.");
+            throw std::runtime_error("istft is not available in this version, please upgrade sdk to v1.8 or later.");
+        }
+        auto input_real_shape = input_real.shape();
+        auto input_imag_shape = input_imag.shape();
+
+        if (input_real_shape.size() != 3 || input_imag_shape.size() != 3) {
+            SPDLOG_ERROR("Both inputs must be 3D arrays. Real ndim: {}, Imaginary ndim: {}", input_real_shape.size(), input_imag_shape.size());
+            throw std::invalid_argument("Both inputs must be 3D arrays.");
+        }
+
+        auto shapes_equal = [](const auto& shape1, const auto& shape2) {
+            if (shape1.size() != shape2.size()) return false;
+            for (size_t i = 0; i < shape1.size(); ++i) {
+                if (shape1[i] != shape2[i]) return false;
+            }
+            return true;
+        };
+
+        if (!shapes_equal(input_real_shape, input_imag_shape)) {
+            SPDLOG_ERROR("Both input arrays must have the same shape.");
+            throw std::invalid_argument("Both input arrays must have the same shape.");
+        }
+
+        int batch = input_real_shape[0];
+        int n_fft = (input_real_shape[1] - 1) * 2;
+        size_t size = batch * L;
+
+        std::vector<float> output_real(size);
+        std::vector<float> output_imag(size);
+        
+        float* real_ptr = static_cast<float*>(input_real.sys_data());
+        float* imag_ptr = static_cast<float*>(input_imag.sys_data());
+        int ret = bmcv_istft(handle_.data(), real_ptr, imag_ptr, 
+                            output_real.data(), 
+                            output_imag.data(),
+                            batch, L, realInput, pad_mode, n_fft, win_mode, hop_len, normalize);
+
+        if (BM_SUCCESS != ret) {
+            SPDLOG_ERROR("istft error: istft execute failed err={}", ret);
+            throw std::runtime_error("istft execution failed with error code: " + std::to_string(ret));
+        }
+
+        Tensor output_real_tensor = Tensor(handle_, {batch, L}, BM_FLOAT32, true, false);
+        Tensor output_imag_tensor = Tensor(handle_, {batch, L}, BM_FLOAT32, true, false);
+        
+        std::vector<int> shape = {batch, L};
+        output_real_tensor.reset_sys_data(output_real.data(), shape);
+        output_imag_tensor.reset_sys_data(output_imag.data(), shape);
+
+        return std::make_tuple(output_real_tensor, output_imag_tensor);
+    }
+#endif
 
     std::vector<Tensor> Bmcv::fft(bool forward, Tensor &input_real)
     {
         if(input_real.dev_data().u.device.device_addr == 0 || input_real.dev_data().size <= 0)
         {
             SPDLOG_ERROR("fft error: input tensor does not own dev data!");
-            exit(SAIL_ERR_TENSOR_INIT);
+            throw SailBMImageError("invalid argument");
         }
         void *plan = nullptr;
         int ret = BM_SUCCESS;
@@ -5441,7 +6358,7 @@ namespace sail {
         if(1 != shape[1])
         {
             SPDLOG_ERROR("fft error: input tensor should only has 1 channel, check channel !");
-            exit(SAIL_ERR_TENSOR_INIT);
+            throw SailBMImageError("invalid argument");
         }
         if(1 == shape[2])
         {
@@ -5454,23 +6371,33 @@ namespace sail {
         else
         {
             SPDLOG_ERROR("fft error: dim must be 1 or 2, check dim!");
-            exit(SAIL_ERR_BMI_SHAPE);
+            throw SailBMImageError("invalid argument");
         }
 
         if (BM_SUCCESS != ret) {
             SPDLOG_ERROR("fft error: fft create plan failed err={}", ret);
-            exit(SAIL_ERR_BMI_BMCV);
+            throw SailBMImageError("bmcv api fail");
         }
 
         bm_device_mem_t out_real_data;
         bm_device_mem_t out_imag_data;
-        bm_malloc_device_byte(handle_.data(), &out_real_data, shape[2]*shape[3] * 4);
-        bm_malloc_device_byte(handle_.data(), &out_imag_data, shape[2]*shape[3] * 4);
+        ret = bm_malloc_device_byte(handle_.data(), &out_real_data, shape[2]*shape[3] * 4);
+        if (BM_SUCCESS != ret) {
+            SPDLOG_ERROR("bm_malloc_device_byte failed, size = {}, ret = {}",
+                         shape[2] * shape[3] * 4, ret);
+            throw SailRuntimeError("device memory not enough");
+        }
+        ret = bm_malloc_device_byte(handle_.data(), &out_imag_data, shape[2]*shape[3] * 4);
+        if (BM_SUCCESS != ret) {
+            SPDLOG_ERROR("bm_malloc_device_byte failed, size = {}, ret = {}",
+                         shape[2] * shape[3] * 4, ret);
+            throw SailRuntimeError("device memory not enough");
+        }
 
         ret = bmcv_fft_execute_real_input(handle_.data(),input_real.dev_data(),out_real_data,out_imag_data,plan);
         if (BM_SUCCESS != ret) {
             SPDLOG_ERROR("fft error: fft execute failed err={}", ret);
-            exit(SAIL_ERR_BMI_BMCV);
+            throw SailBMImageError("bmcv api fail");
         }
 
         bmcv_fft_destroy_plan(handle_.data(), plan);
@@ -5491,7 +6418,7 @@ namespace sail {
         if(input_real.dev_data().u.device.device_addr == 0 || input_real.dev_data().size <= 0)
         {
             SPDLOG_ERROR("fft error: input tensor not own dev data!");
-            exit(SAIL_ERR_TENSOR_INIT);
+            throw SailBMImageError("invalid argument");
         }
         void *plan = nullptr;
         int ret = BM_SUCCESS;
@@ -5500,7 +6427,7 @@ namespace sail {
         if(1 != shape[1])
         {
             SPDLOG_ERROR("fft error: input tensor should only has 1 channel, check channel !");
-            exit(SAIL_ERR_TENSOR_INIT);
+            throw SailBMImageError("invalid argument");
         }
         if(1 == shape[2])
         {
@@ -5513,23 +6440,33 @@ namespace sail {
         else
         {
             SPDLOG_ERROR("fft error: dim must be 1 or 2, check dim!");
-            exit(SAIL_ERR_BMI_SHAPE);
+            throw SailBMImageError("invalid argument");
         }
 
         if (BM_SUCCESS != ret) {
             SPDLOG_ERROR("fft error: fft create paln failed err={}", ret);
-            exit(SAIL_ERR_BMI_BMCV);
+            throw SailBMImageError("bmcv api fail");
         }
 
         bm_device_mem_t out_real_data;
         bm_device_mem_t out_imag_data;
-        bm_malloc_device_byte(handle_.data(), &out_real_data, shape[2]*shape[3] * 4);
-        bm_malloc_device_byte(handle_.data(), &out_imag_data, shape[2]*shape[3] * 4);
+        ret = bm_malloc_device_byte(handle_.data(), &out_real_data, shape[2]*shape[3] * 4);
+        if (BM_SUCCESS != ret) {
+            SPDLOG_ERROR("bm_malloc_device_byte failed, size = {}, ret = {}",
+                         shape[2] * shape[3] * 4, ret);
+            throw SailRuntimeError("device memory not enough");
+        }
+        ret = bm_malloc_device_byte(handle_.data(), &out_imag_data, shape[2]*shape[3] * 4);
+        if (BM_SUCCESS != ret) {
+            SPDLOG_ERROR("bm_malloc_device_byte failed, size = {}, ret = {}",
+                         shape[2] * shape[3] * 4, ret);
+            throw SailRuntimeError("device memory not enough");
+        }
 
         bmcv_fft_execute(handle_.data(),input_real.dev_data(),input_imag.dev_data(),out_real_data,out_imag_data,plan);
         if (BM_SUCCESS != ret) {
             SPDLOG_ERROR("fft error: fft execute failed err={}", ret);
-            exit(SAIL_ERR_BMI_BMCV);
+            throw SailBMImageError("bmcv api fail");
         }
 
         bmcv_fft_destroy_plan(handle_.data(), plan);
@@ -6016,7 +6953,8 @@ bm_status_t open_water(
             output.allocate();
         }
 
-        int ret = bm_image_alloc_dev_mem(output.data());
+        int ret = bm_image_alloc_contiguous_mem(1, &output.data());
+
         if (BM_SUCCESS != ret){
             SPDLOG_ERROR("in bmcv_image_gaussian_blur: bm_image_alloc_dev_mem err={}", ret);
             return BM_ERR_FAILURE;
@@ -6042,7 +6980,7 @@ bm_status_t open_water(
         int ret = gaussian_blur(input, output, kw, kh, sigmaX, sigmaY);
         if (ret != BM_SUCCESS){
             SPDLOG_ERROR("bmcv_image_gaussian_blur: bm_image_get_byte_size err={}", ret);
-            exit(-1);
+            throw SailBMImageError("bmcv api fail");
         } 
         return std::move(output);
     }
@@ -6108,7 +7046,7 @@ bm_status_t open_water(
         int ret = transpose(src,dst);
         if(ret != 0){
             SPDLOG_ERROR("bmcv_transpose err={}", ret);
-            exit(-1);
+            throw SailBMImageError("bmcv api fail");
         }
         return std::move(dst);
     }
@@ -6167,7 +7105,7 @@ bm_status_t open_water(
         if (BM_SUCCESS != ret) {
             print_image(input.data(),"input");
             SPDLOG_ERROR("bmcv_Sobel() err={}", ret);
-            exit(1);
+            throw SailBMImageError("bmcv api fail");
         }
         return std::move(output);
     }
@@ -6356,20 +7294,20 @@ bm_status_t open_water(
         pybind11::buffer_info buf = input_proposal.request();
         if(buf.ndim != 2){
             SPDLOG_ERROR("Input proposal dims must be 2");
-            exit(SAIL_ERR_BMI_SHAPE);
+            throw SailBMImageError("invalid argument");
         }
         int proposal_size = buf.shape[0];
         if (proposal_size > 56000){
             SPDLOG_ERROR("Input proposal max size is 56000");
-            exit(SAIL_ERR_BMI_SHAPE);
+            throw SailBMImageError("not supported");
         }
         if(buf.shape[1] != 5){
             SPDLOG_ERROR("Input proposal shape error, proposal must be [left,top,right,bottom,score]!");
-            exit(SAIL_ERR_BMI_SHAPE);
+            throw SailBMImageError("invalid argument");
         }
         if(buf.itemsize !=4 || buf.format != "f"){
             SPDLOG_ERROR("Type of Input proposal must be float32!");
-            exit(SAIL_ERR_BMI_DTYPE);
+            throw SailBMImageError("invalid argument");
         }
         face_rect_t *proposal_rand = (face_rect_t *)buf.ptr;
         if (!pybind11::detail::check_flags(input_proposal.ptr(), pybind11::detail::npy_api::NPY_ARRAY_C_CONTIGUOUS_)) {

@@ -1,7 +1,7 @@
 Compilation and Installation Guide
 ======================================
 
-.. |ver| replace:: 3.8.0
+.. |ver| replace:: 3.9.0
 
 The Directory Structure of the Source Code
 ____________________________________________________
@@ -31,28 +31,28 @@ The directory structure of the source code is as follows:
         │   ├── source_en
         │   └── source_zh
         ├── include                 # Includes
+        ├── pyis                    # Stub files
         ├── python                  # Wheel codes
-        │   ├── arm_pcie
-        │   ├── loongarch64
-        │   ├── pcie
-        │   ├── riscv
-        │   ├── soc
-        │   └── ...
         ├── python_wheels           # Python Wheels
         │   ├── arm_pcie
         │   ├── loongarch
         │   ├── soc_BM1684_BM1684X
         │   └── soc_BM1688
         ├── sample                  # Sample files
-        │   ├── cpp
-        │   └── python
         ├── src                     # Source codes
         └── ...
 
 
 
 
-Among them, 3rdparty mainly contains some header files of the third party on which sail needs to be compiled; cmake contains some cmake files used for compilation; include is some header files of sail; python folder contains the packaging code and scripts of python whl for each platform; src folder contains the code of each interface.
+Among them, 3rdparty mainly contains some header files of the third party on which sail needs to be compiled; 
+cmake contains some cmake files used for compilation; 
+include contains some header files of sail; 
+pyis contains some stub files for Python interfaces; 
+python folder contains the packaging code and scripts of python whl for each platform; 
+python_wheels contains come pre-compiled sail wheels; 
+sample contains some code samples for developers; 
+src folder contains the code of each interface.
 
 
 SAIL Compilation and Installation
@@ -445,12 +445,12 @@ Compile SAIL with bmcv, sophon-ffmpeg, sophon-opencv using the default installat
         cmake ..                                   
         make pysail                                                                
 
-4. Pack python wheel, the path of the generated wheel package is "python/pcie/dist" and the file name is "sophon-|ver|-py3-none-any.whl"
+4. Pack python wheel, the path of the generated wheel package is "python/dist" and the file name is "sophon-|ver|-py3-none-any.whl"
 
     .. parsed-literal::
-        cd ../python/pcie 
-        chmod +x sophon_pcie_whl.sh
-        ./sophon_pcie_whl.sh  
+        cd ../python 
+        chmod +x sophon_whl.sh
+        ./sophon_whl.sh  
 
 5. Install python wheel  
 
@@ -476,12 +476,12 @@ Compile SAIL without bmcv, sophon-ffmpeg, sophon-opencv using the default instal
         cmake -DONLY_RUNTIME=ON ..                                   
         make pysail                                      
 
-4. Pack python wheel, the path of the generated wheel package is "python/pcie/dist" and the file name is "sophon-|ver|-py3-none-any.whl"
+4. Pack python wheel, the path of the generated wheel package is "python/dist" and the file name is "sophon-|ver|-py3-none-any.whl"
 
     .. parsed-literal::
-        cd ../python/pcie
-        chmod +x sophon_pcie_whl.sh
-        ./sophon_pcie_whl.sh  
+        cd ../python
+        chmod +x sophon_whl.sh
+        ./sophon_whl.sh  
 
 5. Install python wheel  
 
@@ -510,12 +510,12 @@ The path of python3 used in this example is "python_3.8.2/bin/python3", and the 
         cmake -DPYTHON_EXECUTABLE=python_3.8.2/bin/python3 -DCUSTOM_PY_LIBDIR=python_3.8.2/lib ..                               
         make pysail                                       
 
-4. Pack python wheel, the path of the generated wheel package is "python/pcie/dist" and the file name is "sophon-|ver|-py3-none-any.whl"
+4. Pack python wheel, the path of the generated wheel package is "python/dist" and the file name is "sophon-|ver|-py3-none-any.whl"
 
     .. parsed-literal::
-        cd ../python/pcie 
-        chmod +x sophon_pcie_whl.sh
-        ./sophon_pcie_whl.sh  
+        cd ../python 
+        chmod +x sophon_whl.sh
+        ./sophon_whl.sh  
 
 7. Install python wheel  
 
@@ -585,12 +585,12 @@ The path of python3 used in this example is "python_3.8.2/bin/python3", and the 
             -DOPENCV_BASIC_PATH=sophon-mw-soc_0.4.1_aarch64/opt/sophon/sophon-opencv_0.4.1 ..                                   
         make pysail                                  
 
-4. Pack python wheel, the path of the generated wheel package is "python/soc/dist" and the file name is "sophon_arm-|ver|-py3-none-any.whl"
+4. Pack python wheel, the path of the generated wheel package is "python/dist" and the file name is "sophon_arm-|ver|-py3-none-any.whl"
 
     .. parsed-literal::
-        cd ../python/soc 
-        chmod +x sophon_soc_whl.sh
-        ./sophon_soc_whl.sh  
+        cd ../python 
+        chmod +x sophon_whl.sh
+        ./sophon_whl.sh  
 
 5. Install python wheel  
 
@@ -627,12 +627,12 @@ The path of python3 used in this example is "python_3.8.2/bin/python3", and the 
             -DLIBSOPHON_BASIC_PATH=libsophon_soc_0.4.1_aarch64/opt/sophon/libsophon-0.4.1 ..
         make pysail                                   
 
-4. Pack python wheel, the path of the generated wheel package is "python/soc/dist" and the file name is "sophon_arm-|ver|-py3-none-any.whl"
+4. Pack python wheel, the path of the generated wheel package is "python/dist" and the file name is "sophon_arm-|ver|-py3-none-any.whl"
 
     .. parsed-literal::
-        cd ../python/soc 
-        chmod +x sophon_soc_whl.sh
-        ./sophon_soc_whl.sh  
+        cd ../python 
+        chmod +x sophon_whl.sh
+        ./sophon_whl.sh  
 
 5. Install python wheel  
 
@@ -700,12 +700,12 @@ The path of python3 used in this example is "python_3.8.2/bin/python3", and the 
             -DOPENCV_BASIC_PATH=sophon-mw_0.4.1_aarch64/opt/sophon/sophon-opencv_0.4.1 ..                                   
         make pysail                                   
 
-4. Pack python wheel, the path of the generated wheel package is "python/soc/dist" and the file name is "sophon_arm_pcie-|ver|-py3-none-any.whl"
+4. Pack python wheel, the path of the generated wheel package is "python/dist" and the file name is "sophon_arm_pcie-|ver|-py3-none-any.whl"
 
     .. parsed-literal::
-        cd ../python/arm_pcie 
-        chmod +x sophon_arm_pcie_whl.sh
-        ./sophon_arm_pcie_whl.sh  
+        cd ../python 
+        chmod +x sophon_whl.sh
+        ./sophon_whl.sh  
 
 5. Install python wheel  
 
@@ -742,12 +742,12 @@ The path of python3 used in this example is "python_3.8.2/bin/python3", and the 
             -DLIBSOPHON_BASIC_PATH=libsophon_0.4.1_aarch64/opt/sophon/libsophon-0.4.1 ..
         make                                        
 
-4. Pack python wheel, the path of the generated wheel package is "python/arm_pcie/dist" and the file name is "sophon_arm_pcie-|ver|-py3-none-any.whl"
+4. Pack python wheel, the path of the generated wheel package is "python/dist" and the file name is "sophon_arm_pcie-|ver|-py3-none-any.whl"
 
     .. parsed-literal::
-        cd ../python/arm_pcie 
-        chmod +x sophon_arm_pcie_whl.sh
-        ./sophon_arm_pcie_whl.sh 
+        cd ../python 
+        chmod +x sophon_whl.sh
+        ./sophon_whl.sh 
 
 5. Install python wheel  
 
@@ -814,12 +814,12 @@ The path of python3 used in this example is "python_3.8.2/bin/python3", and the 
 
 * DLIBSOPHON_BASIC_PATH: The directory corresponding to the decompression of libsophon\_<x.y.z>_loongarch64.tar.gz under libsophon in SOPHONSDK。
 
-4. Pack python wheel, the path of the generated wheel package is "python/loongarch64/dist" and the file name is "sophon_loongarch64-|ver|-py3-none-any.whl"
+4. Pack python wheel, the path of the generated wheel package is "python/dist" and the file name is "sophon_loongarch64-|ver|-py3-none-any.whl"
 
     .. parsed-literal::
-        cd ../python/loongarch64 
-        chmod +x sophon_loongarch64_whl.sh
-        ./sophon_loongarch64_whl.sh 
+        cd ../python 
+        chmod +x sophon_whl.sh
+        ./sophon_whl.sh 
 
 5. Install python wheel  
 
@@ -868,7 +868,7 @@ Compile User Manual
    cd docs
    make pdf LANG=en
 
-The compiled user manual path is "docs/build/sophon-sail_zh.pdf"
+The compiled user manual path is "docs/build/SOPHON-SAIL_en.pdf"
 
 *If the compilation still reports errors, you can run "sudo apt-get install texlive-lang-chinese", and then re-run the above command.*
 
@@ -912,7 +912,7 @@ After compiling SAIL by cross-compiling with ARM PCIE MODE, copy the python whee
 
     .. parsed-literal::
 
-        cat /opt/sophon/
+        ls /opt/sophon/
 
 2. Check Python3 version on the ARM host
 
@@ -1003,9 +1003,9 @@ The functions in sail can be called from within your code:
 SOC MODE
 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
-**.Compile the program on the SOC board**
+**.Compile the program on the SOC device**
 
-After installing libsophon, sophon-ffmpeg, sophon-opencv, and SAIL on the SOC board, you can use cmake to link the libraries in SAIL to your application by referring to the PCIE MODE development method.
+After installing libsophon, sophon-ffmpeg, sophon-opencv, and SAIL on the SOC device, you can use cmake to link the libraries in SAIL to your application by referring to the PCIE MODE development method.
 If you need to use SAIL multimedia-related functions, you also need to add libsophon, sophon-ffmpeg, and sophon-opencv header file directories and dynamic library directories to your application.
 
 

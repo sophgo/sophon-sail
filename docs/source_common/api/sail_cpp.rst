@@ -1225,15 +1225,36 @@ _____
         *
         * @param tensor   Input tensor
         * @param img      Output image
+        * @param bgr2rgb  Swap color channel
+        * @param layout   Layout of the input tensoor
         */
-       void tensor_to_bm_image(Tensor &tensor, BMImage &img);
+       void tensor_to_bm_image(Tensor &tensor, BMImage &img, bool bgr2rgb=false, std::string layout = std::string("nchw"));
 
        /**
         * @brief Convert tensor to BMImage.
         *
         * @param tensor   Input tensor
+        * @param img      Output image
+        * @param format  Format of the BMImage
         */
-       BMImage tensor_to_bm_image(Tensor &tensor);
+       void tensor_to_bm_image(Tensor &tensor, BMImage &img, bm_image_format_ext format);
+
+       /**
+        * @brief Convert tensor to BMImage.
+        *
+        * @param tensor   Input tensor
+        * @param bgr2rgb  Swap color channel
+        * @param layout   Layout of the input tensoor
+        */
+       BMImage tensor_to_bm_image(Tensor &tensor, bool bgr2rgb=false, std::string layout = std::string("nchw"));
+
+       /**
+        * @brief Convert tensor to BMImage.
+        *
+        * @param tensor   Input tensor
+        * @param format  Format of the BMImage
+        */
+       BMImage tensor_to_bm_image (Tensor &tensor, bm_image_format_ext format);
 
 **4). crop_and_resize**
     .. code-block:: c
@@ -2042,6 +2063,89 @@ _____
         * @return bool
         */
         bool imencode(std::string& ext, BMImage &img, std::vector<u_char>& buf);
+
+**35). stft**
+    .. code-block:: c
+
+        /**
+        * @brief Compute the Short-Time Fourier Transform (STFT)
+        * 
+        * @param input_real  The real part of the input signal, type: pybind11::array_t<float>
+        * @param input_imag  The imaginary part of the input signal, type: pybind11::array_t<float>
+        * @param realInput   A flag indicating whether to use only the real input, type: bool
+        * @param normalize    A flag indicating whether to normalize the output, type: bool
+        * @param n_fft       The number of FFT points, type: int
+        * @param hop_len     The hop length for windowing, type: int
+        * @param pad_mode    The padding mode, type: int
+        * @param win_mode    The window type, type: int
+        * 
+        * @return A tuple containing two pybind11::array_t<float>:
+        *         The first element is the real part of the STFT, and the second element is the imaginary part of the STFT.
+        */
+        std::tuple<pybind11::array_t<float>, pybind11::array_t<float>> Bmcv::stft(
+            pybind11::array_t<float> input_real,
+            pybind11::array_t<float> input_imag,
+            bool realInput,
+            bool normalize,
+            int n_fft,
+            int hop_len,
+            int pad_mode,
+            int win_mode
+        );
+
+        std::tuple<Tensor, Tensor> Bmcv::stft(
+            Tensor &input_real,
+            Tensor &input_imag,
+            bool realInput,
+            bool normalize,
+            int n_fft,
+            int hop_len,
+            int pad_mode,
+            int win_mode
+        );
+
+**36). istft**
+    .. code-block:: c
+
+        /**
+        * @brief Compute the Inverse Short-Time Fourier Transform (ISTFT)
+        * 
+        * This function computes the inverse STFT from the provided real and imaginary parts
+        * of the frequency-domain representation, reconstructing the time-domain signal.
+        * 
+        * @param input_real   The real part of the STFT, type: pybind11::array_t<float>
+        * @param input_imag   The imaginary part of the STFT, type: pybind11::array_t<float>
+        * @param realInput    A flag indicating whether to use only the real input, type: bool
+        * @param normalize    A flag indicating whether to normalize the output, type: bool
+        * @param L            The length of the original time-domain signal, type: int
+        * @param hop_len      The hop length used during the STFT, type: int
+        * @param pad_mode     The padding mode, type: int
+        * @param win_mode     The window type used during the STFT, type: int
+        * 
+        * @return A pybind11::array_t<float> representing the reconstructed time-domain signal.
+        */
+        std::tuple<pybind11::array_t<float>, pybind11::array_t<float>> Bmcv::istft(
+            pybind11::array_t<float> input_real,
+            pybind11::array_t<float> input_imag,
+            bool realInput,
+            bool normalize,
+            int L,
+            int hop_len,
+            int pad_mode,
+            int win_mode
+        );
+
+        std::tuple<Tensor, Tensor> Bmcv::istft(
+            Tensor &input_real,
+            Tensor &input_imag,
+            bool realInput,
+            bool normalize,
+            int L,
+            int hop_len,
+            int pad_mode,
+            int win_mode
+        );
+
 
 
 MultiDecoder

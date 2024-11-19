@@ -75,6 +75,50 @@ Indicator of whether own device memory
             input_tensor1 = sail.Tensor(handle,input)
             input_tensor2 = sail.Tensor(handle,[1,2],sail.Dtype.BM_FLOAT32,true,true)
 
+**Interface:**
+
+This initialization method creates a new Tensor based on an existing source Tensor and reuses a portion of the source Tensor's device memory without copying device memory. 
+It is suitable for scenarios such as LLM inference where memory reuse is required.
+
+During the use of this Tensor, it is necessary to ensure that the source Tensor is not released.
+
+    .. code-block:: python
+
+        def __init__(self, src: Tensor, shape: list[int], offset: int)
+
+**Parameters:**
+
+* src: sail.Tensor
+
+The source Tensor used to create the new Tensor.
+
+* shape: list[int]
+
+The shape of the new Tensor, a sequence of integers. 
+
+The number of elements corresponding to the new shape must not exceed the number of elements in the source Tensor.
+
+* offset: int
+
+The offset of the Tensor's device memory relative to the source Tensor's device memory, in bytes of the dtype.
+
+**Sample:**
+    .. code-block:: python
+
+        import sophon.sail as sail
+        import numpy as np
+        if __name__ == '__main__':
+            handle = sail.Handle(0)
+            height = 1080
+            width = 1920
+            data_type = sail.Dtype.BM_INT32
+            src_shape = [1, 3, height, width]
+            src_tensor = sail.Tensor(handle, src_shape, data_type, False, True)
+
+            dst_shape = [1, 1, height, width]
+            offset = height * width
+            dst_tensor = sail.Tensor(src_tensor, dst_shape, offset)
+
 shape
 >>>>>>>>>>>>>>>>>>>>>
 
@@ -714,3 +758,67 @@ fill memory with ones.
             input_tensor1 = sail.Tensor(handle,(1,3),sail.Dtype.BM_FLOAT32,False,True)
 
             input_tensor1.ones()
+
+size
+>>>>>>>>>>>>>>>>>>>>>
+
+Return the number of elements contained in the Tensor.
+
+**Interface:**
+    .. code-block:: python
+
+        def size(self)->int
+
+**Sample:**
+    .. code-block:: python
+
+        import sophon.sail as sail
+        import numpy as np
+        if __name__ == '__main__':
+            handle = sail.Handle(0)
+            input_tensor1 = sail.Tensor(handle,(1,3),sail.Dtype.BM_FLOAT32,False,True)
+
+            print(input_tensor1.size())
+
+
+element_size
+>>>>>>>>>>>>>>>>>>>>>
+
+Returns the size in bytes of an individual element.
+
+**Interface:**
+    .. code-block:: python
+
+        def element_size(self)->int
+
+**Sample:**
+    .. code-block:: python
+
+        import sophon.sail as sail
+        import numpy as np
+        if __name__ == '__main__':
+            handle = sail.Handle(0)
+            input_tensor1 = sail.Tensor(handle,(1,3),sail.Dtype.BM_FLOAT32,False,True)
+
+            print(input_tensor1.element_size())
+
+nbytes
+>>>>>>>>>>>>>>>>>>>>>
+
+Return the total number of bytes occupied by all elements of Tensor.
+
+**Interface:**
+    .. code-block:: python
+
+        def nbytes(self)->int
+
+**Sample:**
+    .. code-block:: python
+
+        import sophon.sail as sail
+        import numpy as np
+        if __name__ == '__main__':
+            handle = sail.Handle(0)
+            input_tensor1 = sail.Tensor(handle,(1,3),sail.Dtype.BM_FLOAT32,False,True)
+
+            print(input_tensor1.nbytes())

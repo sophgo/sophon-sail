@@ -105,10 +105,13 @@ tensor_to_bm_image
 **接口形式1:**
     .. code-block:: c
 
-        void tensor_to_bm_image(Tensor &tensor, BMImage &img);
+        void tensor_to_bm_image(Tensor &tensor, BMImage &img, bool bgr2rgb=false, std::string layout = std::string("nchw"));
 
-        BMImage tensor_to_bm_image(Tensor &tensor);
+        void tensor_to_bm_image(Tensor &tensor, BMImage &img, bm_image_format_ext format_);
 
+        BMImage tensor_to_bm_image(Tensor &tensor, bool bgr2rgb=false, std::string layout = std::string("nchw"));
+
+        BMImage tensor_to_bm_image (Tensor &tensor, bm_image_format_ext format_);
 
 **参数说明1:**
 
@@ -1533,7 +1536,7 @@ rectangle
 fillRectangle
 >>>>>>>>>>>>>>>>>>
 
-在图像上画一个矩形。
+在图像上填充一个矩形。
 
 **接口形式:**
     .. code-block:: c
@@ -1651,9 +1654,10 @@ imwrite
 
 imwrite
 >>>>>>>>>>>>>>>>>
-
-读取和解码JPEG图片文件。该接口仅支持 JPEG baseline 格式图片。
-返回的 BMImage 保持YUV色彩空间，像素格式取决于图片文件本身的采样方式，比如YUV420。
+     
+读取和解码图片文件，仅支持 JPEG baseline 格式的硬解码。对于其他格式，如 PNG 和 BMP，则采用软解码。
+对于 JPEG baseline 图片，返回的 BMImage 将保持 YUV 色彩空间，像素格式依据图片文件本身的采样方式，例如 YUV420；
+而对于其他格式，返回的 BMImage 将保持其输入的对应色彩空间。
 
 **接口形式:**
     .. code-block:: c++
@@ -1670,7 +1674,7 @@ imwrite
 
 * output : BMImage
 
-返回解码得到的BMImage，其像素格式是基于YUV色彩空间的。
+返回解码得到的BMImage。
 
 **示例代码:**
     .. code-block:: c++
@@ -2011,7 +2015,11 @@ vpp_convert_format
 putText
 >>>>>>>>>>
 
-在图像上添加text。
+在图像上添加text。只支持英文文字。
+
+输入的BMImage支持的像素格式为：
+FORMAT_GRAY、FORMAT_YUV420P、FORMAT_YUV422P、FORMAT_YUV444P、FORMAT_NV12、
+FORMAT_NV21、FORMAT_NV16、FORMAT_NV61。
 
 **接口形式:**
     .. code-block:: c
@@ -2073,7 +2081,7 @@ putText
 如果处理成功返回0，否则返回非0值。
 
 **示例代码:**
-    .. code-block:: c
+    .. code-block:: c++
 
         #include <sail/cvwrapper.h>
         using namespace std;
@@ -2082,10 +2090,10 @@ putText
             sail::Handle handle(tpu_id);
             std::string image_name = "your_image_path";
             sail::Decoder decoder(image_name, true, tpu_id);
-            sail::BMImage BMimg = decoder.read(handle); 
+            sail::BMImage bgr_img = decoder.read(handle); 
             sail::Bmcv bmcv(handle);
-            int ret = bmcv.putText(BMimg, "snow person" , 20, 20, std::make_tuple(0, 0, 255), 1.4, 2);
-            // int ret = bmcv.putText(BMimg.data(), "snow person" , 20, 20, std::make_tuple(0, 0, 255), 1.4, 2);
+            sail::BMImage yuv_img = bmcv.convert_format(bgr_img, FORMAT_YUV420P)
+            int ret = bmcv.putText(yuv_img, "some text" , 20, 20, std::make_tuple(0, 0, 255), 1.4, 2);
             
             return 0;
         }
@@ -3454,5 +3462,155 @@ drawLines
             BMimg2 = bmcv.vpp_convert_format(BMimg,FORMAT_YUV420P);
             int ret = bmcv.drawLines(BMimg2, start_points, end_points, line_num, color, thickness);
             
+            return 0;
+        }
+
+stft
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+实现对信号的短时傅里叶变换（STFT）。
+
+**注意：请查询《BMCV开发参考手册/BMCV API》确认当前算子是否适配BM1684X。**
+
+**接口形式:**
+    .. code-block:: c
+
+        std::tuple<Tensor, Tensor> stft(
+            Tensor &input_real,
+            Tensor &input_imag,
+            bool realInput,
+            bool normalize,
+            int n_fft,
+            int hop_len,
+            int pad_mode,
+            int win_mode
+            );
+
+**参数说明:**
+
+* input_real: Tensor
+    输入信号的实数部分。
+
+* input_imag: Tensor
+    输入信号的虚数部分。
+
+* real_input: bool
+    是否仅使用实数输入的标志。
+
+* normalize: bool
+    是否对输出进行归一化的标志。
+
+* n_fft: int
+    STFT计算中使用的FFT点数。
+
+* hop_len: int
+    窗口滑动的步长。
+
+* pad_mode: int
+    输入信号的填充模式，0表示CONSTANT填充，1表示REFLECT填充。
+
+* win_mode: int
+    窗口函数的类型，0表示HANN窗，1表示HAMM窗。
+
+**返回值说明:**
+
+* result: tuple[Tensor, Tensor]
+    返回输出的实数部分和虚数部分。
+
+**示例代码:**
+    .. code-block:: c
+
+        #include <sail/cvwrapper.h>
+        using namespace std;
+        int main()
+        {
+            int tpu_id = 0;
+            sail::Handle handle(tpu_id);
+            sail::Bmcv bmcv(handle);
+            std::vector<int> shape = {2, 4096};
+            sail::Tensor input_real(shape);
+            sail::Tensor input_imag(shape);
+            bool real_input = false;
+            bool normalize = true;
+            int n_fft = 1024;
+            int hop_len = 256;
+            int pad_mode = 0;  // 填充模式示例
+            int win_mode = 1;  // 窗口类型示例
+            std::tuple<sail::Tensor, sail::Tensor> result = bmcv.stft(input_real, input_imag, realInput, normalize, n_fft, hop_len, pad_mode, win_mode);
+            return 0;
+        }
+
+istft
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+实现对信号的逆短时傅里叶变换（ISTFT）。
+
+**注意：请查询《BMCV开发参考手册/BMCV API》确认当前算子是否适配BM1684X。**
+
+**接口形式:**
+    .. code-block:: C
+
+        std::tuple<Tensor, Tensor> istft(
+            Tensor &input_real,
+            Tensor &input_imag,
+            bool realInput,
+            bool normalize,
+            int L,
+            int hop_len,
+            int pad_mode,
+            int win_mode
+            );   
+
+**参数说明:**
+
+* input_real: numpy.ndarray 或者 Tensor
+    输入信号的实数部分。
+
+* input_imag: numpy.ndarray 或者 Tensor
+    输入信号的虚数部分。
+
+* real_input: bool
+    输出的信号是否为实数， false 为复数， true 为实数。
+
+* normalize: bool
+    是否对输出进行归一化。
+
+* L: int
+    原始时域信号的长度。
+
+* hop_len: int
+    窗口滑动的步长，必须与STFT计算时使用的值相同。
+
+* pad_mode: int
+    输入信号的填充模式，必须与STFT计算时使用的值相同。
+
+* win_mode: int
+    窗口函数的类型，必须与STFT计算时使用的值相同。
+
+**返回值说明:**
+
+* result: tuple[Tensor, Tensor]
+    返回输出的实数部分和虚数部分。
+
+**示例代码:**
+    .. code-block:: C
+
+        #include <sail/cvwrapper.h>
+        using namespace std;
+        int main()
+        {
+            int tpu_id = 0;
+            sail::Handle handle(tpu_id);
+            sail::Bmcv bmcv(handle);
+            std::vector<int> shape = {2, 513, 17};
+            sail::Tensor input_real(shape);
+            sail::Tensor input_imag(shape);
+            bool real_input = false;
+            bool normalize = true;
+            int L = 4096;
+            int hop_len = 256;
+            int pad_mode = 0;  // 填充模式示例
+            int win_mode = 1;  // 窗口类型示例
+            std::tuple<sail::Tensor, sail::Tensor> result = bmcv.istft(input_real, input_imag, realInput, normalize, L, hop_len, pad_mode, win_mode);
             return 0;
         }

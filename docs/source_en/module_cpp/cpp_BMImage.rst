@@ -16,11 +16,21 @@ Initialize BMImage.
         BMImage();
 
         BMImage(
-           Handle&                  handle,
-           int                      h,
-           int                      w,
-           bm_image_format_ext      format,
-           bm_image_data_format_ext dtype);
+            Handle&                  handle,
+            int                      h,
+            int                      w,
+            bm_image_format_ext      format,
+            bm_image_data_format_ext dtype);
+
+        BMImage(
+            Handle                   &handle,
+            void*                    buffer,
+            int                      h,
+            int                      w,
+            bm_image_format_ext      format,
+            bm_image_data_format_ext dtype = DATA_TYPE_EXT_1N_BYTE,
+            std::vector<int>         strides = {},
+            size_t                   offset = 0);
 
 **Parameters:**
 
@@ -39,10 +49,27 @@ The width of the image.
 * format : bm_image_format_ext
 
 The format of the image.
+Supported formats are listed in `sail.Format <0_enum-type/cpp_Format.html>`_ .
 
 * dtype: bm_image_data_format_ext
 
 The data type of the image.
+Supported data types are listed in `ImgDtype <0_enum-type/cpp_ImgDtype.html>`_ .
+
+* buffer: bytes | np.array
+
+The address of the buffer when creating an image with a buffer.
+
+* strides
+
+The stride of the image when creating an image with a buffer. The unit is in bytes. 
+The default is empty, indicating that it is the same as the data width of one row.
+If specified, ensure the number of elements in the list matches the number of image planes.
+
+* offset
+
+The offset of valid data relative to the start address of the buffer when creating an image with a buffer. 
+The unit is in bytes, and the default is 0.
 
 
 width
@@ -278,7 +305,7 @@ Get whether the image memory in BMImage is continuous
             }
             std::cout << "is align: " << BMimg.check_align() << std::endl;      
 
-            // Unaling the image
+            // unalign the image
             ret = BMimg.unalign();
             if (ret != 0) {  
                 std::cout << "Failed to unalign the image!" << std::endl;    
@@ -288,6 +315,12 @@ Get whether the image memory in BMImage is continuous
             // check contiguous memory
             std::cout << "is continues: " <<BMimg.check_contiguous_memory()<< std::endl;
 
-            return 0;  
+            // create BMImage with data from buffer
+            std::vector<uint8_t> buf(200 * 100 * 3);
+            for (int i = 0; i < 200 * 100 * 3; ++i) {
+                buf[i] = i % 256;
+            }
+            sail::BMImage img_fromRawdata(handle, buf.data(), 200, 100, sail::Format::FORMAT_BGR_PACKED);
 
+            return 0;
         }

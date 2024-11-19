@@ -33,42 +33,44 @@ target_link_libraries(sail ${basic_link_libs})
 if (BUILD_PYSAIL)
 # build python api lib
   execute_process(
-    COMMAND ${PYTHON_EXECUTABLE} -c "import sys; print(sys.version_info.major, sys.version_info.minor)"
+    COMMAND ${PYTHON_EXECUTABLE} -c "import sys; print('{}.{}'.format(sys.version_info.major,sys.version_info.minor))"
     OUTPUT_VARIABLE PY_V
     OUTPUT_STRIP_TRAILING_WHITESPACE
   )
-  if (PY_V VERSION_GREATER_EQUAL 3.10)
+  if (PY_V VERSION_GREATER_EQUAL 3.8)
     add_subdirectory(../3rdparty/pybind11_new pybind.dir)
+    message(STATUS,"USE pybind11 new!")
   else ()
     add_subdirectory(../3rdparty/pybind11 pybind.dir)
-  endif ()
-  # add_subdirectory(../3rdparty/pybind11 pybind.dir)
+    message(STATUS,"USE pybind11 old!")
+    endif ()
+
+  add_library(pysail SHARED bind.cpp ${CORE_SRC})
 
   if(CUSTOM_PY_LIBDIR)
     link_directories(${CUSTOM_PY_LIBDIR})
+    target_include_directories(pysail PUBLIC ${PYBIND11_INCLUDE_DIR} ${PYTHON_INCLUDE_DIRS})
     message(STATUS "CUSTOM_PY_LIBDIR = ${CUSTOM_PY_LIBDIR}")
-  endif()
-  add_library(pysail MODULE bind.cpp ${CORE_SRC})
-
-  if(IS_SOC_MODE)
-    target_include_directories(pysail PUBLIC ${PYBIND11_INCLUDE_DIR}
-                             )
   else()
-    target_include_directories(pysail PUBLIC ${PYBIND11_INCLUDE_DIR}
-          ${PYTHON_INCLUDE_DIRS})
-  endif()
+    target_include_directories(pysail PUBLIC ${PYBIND11_INCLUDE_DIR} ${CMAKE_SOURCE_DIR}/3rdparty/prebuild/include )
+    endif()
 
   target_compile_definitions(pysail PUBLIC -DPYTHON=1)
 
-  if(BUILD_X86_PCIE OR BUILD_CMODEL OR BUILD_WINDOWS)
+  if(BUILD_WINDOWS)
     target_link_libraries(pysail PRIVATE ${basic_link_libs} pybind11::module pybind11::embed)
-    set_target_properties(pysail PROPERTIES PREFIX "${PYTHON_MODULE_PREFIX}"
-                          SUFFIX "${PYTHON_MODULE_EXTENSION}" OUTPUT_NAME "sail")
   else()
     target_link_libraries(pysail PRIVATE ${basic_link_libs} pybind11::module)
-    set_target_properties(pysail PROPERTIES PREFIX ""
-                          SUFFIX ".so" OUTPUT_NAME "sail")
   endif()
+  set(PYSAIL_SUFFIX "${PYTHON_MODULE_EXTENSION}")
+  if(BUILD_SOC OR BUILD_ARM_PCIE)
+    string(REPLACE "x86_64" "aarch64" PYSAIL_SUFFIX "${PYTHON_MODULE_EXTENSION}")
+  endif()
+  set_target_properties(pysail PROPERTIES PREFIX "${PYTHON_MODULE_PREFIX}"
+                                          SUFFIX "${PYSAIL_SUFFIX}" 
+                                          OUTPUT_NAME "sail")
+  message(STATUS "PREFIX: " ${PYTHON_MODULE_PREFIX})
+  message(STATUS "SUFFIX: " ${PYSAIL_SUFFIX})
 endif()
 
 set(sail_install_path "${CMAKE_INSTALL_PREFIX}/sophon-sail")
@@ -104,7 +106,6 @@ else()
 endif()
 
 INSTALL(DIRECTORY ${CMAKE_SOURCE_DIR}/3rdparty/spdlog DESTINATION "${sail_install_path}/include/sail")
-INSTALL(FILES ${CMAKE_SOURCE_DIR}/3rdparty/inireader.hpp DESTINATION "${sail_install_path}/include/sail")
 
 configure_file(${CMAKE_SOURCE_DIR}/cmake/SAILConfig.cmake.in ${CMAKE_SOURCE_DIR}/cmake/SAILConfig.cmake)
 

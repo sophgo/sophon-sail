@@ -111,9 +111,13 @@ Convert Tensor to BMImage/BMImageArray.
 **Interface 1:**
     .. code-block:: c
 
-        void tensor_to_bm_image(Tensor &tensor, BMImage &img);
+        void tensor_to_bm_image(Tensor &tensor, BMImage &img, bool bgr2rgb=false, std::string layout = std::string("nchw"));
 
-        BMImage tensor_to_bm_image(Tensor &tensor);
+        void tensor_to_bm_image(Tensor &tensor, BMImage &img, bm_image_format_ext format_);
+
+        BMImage tensor_to_bm_image(Tensor &tensor, bool bgr2rgb=false, std::string layout = std::string("nchw"));
+
+        BMImage tensor_to_bm_image (Tensor &tensor, bm_image_format_ext format_);
 
 
 **Parameters 1:**
@@ -1660,8 +1664,9 @@ Returns 0 if the save is successful, otherwise returns a non-zero value.
 imread
 >>>>>>>>>>>>>>>>>
 
-Read and decode one JPEG image file. This method only supports JPEG baseline file. 
-The returned BMImage keeps YUV color space, and the pixel format depends on the sampling information in the file like YUV420. 
+Read and decode one image files and supports hard decoding only for JPEG baseline format. For other formats, such as PNG and BMP, soft decoding is used.
+The returned BMImage for JPEG baseline images keeps YUV color space, and the pixel format depends on the sampling information in the file like YUV420. 
+The returned BMImage for other formats will maintain the corresponding color space of their input.
 
 **Interface:**
     .. code-block:: c
@@ -1678,7 +1683,7 @@ Name of file to be read.
 
 * output : sail.BMImage
 
-The decoded image, whose pixel format is in YUV color space.
+The decoded image.
 
 **Sample:**
     .. code-block:: c++
@@ -2030,6 +2035,10 @@ putText
 
 Add text to the image.
 
+Supported pixel format for input BMImage: 
+FORMAT_GRAY, FORMAT_YUV420P, FORMAT_YUV422P, FORMAT_YUV444P, FORMAT_NV12, 
+FORMAT_NV21, FORMAT_NV16, FORMAT_NV61
+
 **Interface:**
     .. code-block:: c
         
@@ -2090,7 +2099,7 @@ The thickness of the font.
 Returns 0 if processing is successful, otherwise returns a non-zero value.
 
 **Sample:**
-    .. code-block:: c
+    .. code-block:: c++
 
         #include <sail/cvwrapper.h>
         using namespace std;
@@ -2099,9 +2108,11 @@ Returns 0 if processing is successful, otherwise returns a non-zero value.
             sail::Handle handle(tpu_id);
             std::string image_name = "your_image_path";
             sail::Decoder decoder(image_name, true, tpu_id);
-            sail::BMImage BMimg = decoder.read(handle); 
+            sail::BMImage bgr_img = decoder.read(handle); 
             sail::Bmcv bmcv(handle);
-            int ret = bmcv.putText(BMimg, "snow person" , 20, 20, std::make_tuple(0, 0, 255), 1.4, 2);
+            sail::BMImage yuv_img = bmcv.convert_format(bgr_img, FORMAT_YUV420P)
+            int ret = bmcv.putText(yuv_img, "some text" , 20, 20, std::make_tuple(0, 0, 255), 1.4, 2);
+            
             return 0;
         }
 
@@ -3460,5 +3471,155 @@ returns 0 if success.
             BMimg2 = bmcv.vpp_convert_format(BMimg,FORMAT_YUV420P);
             int ret = bmcv.drawLines(BMimg2, start_points, end_points, line_num, color, thickness);
             
+            return 0;
+        }
+
+stft
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+Short-Time Fourier Transform(STFT)
+
+**Note:** For details about whether this operator in current SDK supports BM1684X, check the page "BMCV API" in 《Multimedia User Guide》. 
+
+**Interface1:**
+    .. code-block:: c
+
+        std::tuple<Tensor, Tensor> stft(
+            Tensor &input_real,
+            Tensor &input_imag,
+            bool realInput,
+            bool normalize,
+            int n_fft,
+            int hop_len,
+            int pad_mode,
+            int win_mode
+            );
+
+**参数说明:**
+
+* input_real: numpy.ndarray or Tensor
+    The real part of the input signal.
+
+* input_imag: numpy.ndarray or Tensor
+    The imaginary part of the input signal.
+
+* real_input: bool
+    A flag indicating whether to use only real input.
+
+* normalize: bool
+    A flag indicating whether to normalize the output.
+
+* n_fft: int
+    The number of FFT points used in the STFT computation.
+
+* hop_len: int
+    The step size for sliding the window.
+
+* pad_mode: int
+    The padding mode for the input signal.
+
+* win_mode: int
+    The type of window function.
+
+**Returns:**
+
+* result: tuple[Tensor, Tensor]
+    Returns the real part and imaginary part of the output.
+
+**Sample:**
+    .. code-block:: c
+
+        #include <sail/cvwrapper.h>
+        using namespace std;
+        int main()
+        {
+            int tpu_id = 0;
+            sail::Handle handle(tpu_id);
+            sail::Bmcv bmcv(handle);
+            std::vector<int> shape = {2, 4096};
+            sail::Tensor input_real(shape);
+            sail::Tensor input_imag(shape);
+            bool real_input = false;
+            bool normalize = true;
+            int n_fft = 1024;
+            int hop_len = 256;
+            int pad_mode = 0;  // 填充模式示例
+            int win_mode = 1;  // 窗口类型示例
+            std::tuple<sail::Tensor, sail::Tensor> result = bmcv.stft(input_real, input_imag, realInput, normalize, n_fft, hop_len, pad_mode, win_mode);
+            return 0;
+        }
+
+istft
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+Inverse Short-Time Fourier Transform(ISTFT)
+
+**Note:** For details about whether this operator in current SDK supports BM1684X, check the page "BMCV API" in 《Multimedia User Guide》. 
+
+**Interface1:**
+    .. code-block:: C
+
+        std::tuple<Tensor, Tensor> istft(
+            Tensor &input_real,
+            Tensor &input_imag,
+            bool realInput,
+            bool normalize,
+            int L,
+            int hop_len,
+            int pad_mode,
+            int win_mode
+            );   
+
+**Parameters:**
+
+* input_real: numpy.ndarray or Tensor
+    The real part of the input signal.
+
+* input_imag: numpy.ndarray or Tensor
+    The imaginary part of the input signal.
+
+* real_input: bool
+    Indicates whether the output signal is real; false for complex, true for real.
+
+* normalize: bool
+    Whether to normalize the output.
+
+* L: int
+    The length of the original time-domain signal.
+
+* hop_len: int
+    The step size for sliding the window; must match the value used during STFT computation.
+
+* pad_mode: int
+    The padding mode for the input signal; must match the value used during STFT computation.
+
+* win_mode: int
+    The type of window function; must match the value used during STFT computation.
+
+**Returns:**
+
+* result: tuple[Tensor, Tensor]
+    Returns the real part and imaginary part of the output.
+
+**Sample:**
+    .. code-block:: C
+
+        #include <sail/cvwrapper.h>
+        using namespace std;
+        int main()
+        {
+            int tpu_id = 0;
+            sail::Handle handle(tpu_id);
+            sail::Bmcv bmcv(handle);
+            std::vector<int> shape = {2, 513, 17};
+            sail::Tensor input_real(shape);
+            sail::Tensor input_imag(shape);
+            bool real_input = false;
+            bool normalize = true;
+            int L = 4096;
+            int hop_len = 256;
+            int pad_mode = 0;
+            int win_mode = 1;
+            std::tuple<sail::Tensor, sail::Tensor> result = bmcv.istft(input_real, input_imag, realInput, normalize, L, hop_len, pad_mode, win_mode);
             return 0;
         }

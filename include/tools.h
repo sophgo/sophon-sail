@@ -1,3 +1,4 @@
+#pragma once
 #include <string>
 #include <vector>
 void model_dryrun(std::string path);

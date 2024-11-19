@@ -68,6 +68,46 @@ Tensor的数据类型
             input_tensor1 = sail.Tensor(handle,input)
             input_tensor2 = sail.Tensor(handle,[1,2],sail.Dtype.BM_FLOAT32,true,true)
 
+**接口形式3**
+
+该初始化方式在一个已存在的源Tensor的基础上创建新Tensor，并复用源Tensor的一部分设备内存，不发生设备内存的数据拷贝。适合LLM推理等复用内存的场景。
+
+在使用该Tensor的过程中，需要保证源Tensor不被释放。
+
+    .. code-block:: python
+
+        def __init__(self, src: Tensor, shape: list[int], offset: int)
+
+**参数说明3:**
+
+* src: sail.Tensor
+
+创建Tensor所使用的源Tensor
+
+* shape: list[int]
+
+创建Tensor的shape，类型为int的序列。需要保证新shape对应的元素个数不超过src的元素个数
+
+* offset: int
+
+Tensor的设备内存相对于src的设备内存的偏移量，单位为dtype的字节数
+
+**示例代码:**
+    .. code-block:: python
+
+        import sophon.sail as sail
+        import numpy as np
+        if __name__ == '__main__':
+            handle = sail.Handle(0)
+            height = 1080
+            width = 1920
+            data_type = sail.Dtype.BM_INT32
+            src_shape = [1, 3, height, width]
+            src_tensor = sail.Tensor(handle, src_shape, data_type, False, True)
+
+            dst_shape = [1, 1, height, width]
+            offset = height * width
+            dst_tensor = sail.Tensor(src_tensor, dst_shape, offset)
             
 shape
 >>>>>>>>>>>>>>>>>>>>>
@@ -654,3 +694,69 @@ ones
             input_tensor1 = sail.Tensor(handle,(1,3),sail.Dtype.BM_FLOAT32,False,True)
 
             input_tensor1.ones()
+
+
+size
+>>>>>>>>>>>>>>>>>>>>>
+
+返回Tensor包含的元素数量。
+
+**接口形式:**
+    .. code-block:: python
+
+        def size(self)->int
+
+**示例代码:**
+    .. code-block:: python
+
+        import sophon.sail as sail
+        import numpy as np
+        if __name__ == '__main__':
+            handle = sail.Handle(0)
+            input_tensor1 = sail.Tensor(handle,(1,3),sail.Dtype.BM_FLOAT32,False,True)
+
+            print(input_tensor1.size())
+
+
+element_size
+>>>>>>>>>>>>>>>>>>>>>
+
+返回Tensor中单个元素占用的字节数。
+
+**接口形式:**
+    .. code-block:: python
+
+        def element_size(self)->int
+
+**示例代码:**
+    .. code-block:: python
+
+        import sophon.sail as sail
+        import numpy as np
+        if __name__ == '__main__':
+            handle = sail.Handle(0)
+            input_tensor1 = sail.Tensor(handle,(1,3),sail.Dtype.BM_FLOAT32,False,True)
+
+            print(input_tensor1.element_size())
+
+
+nbytes
+>>>>>>>>>>>>>>>>>>>>>
+
+返回Tensor中所有元素占用的总字节数。
+
+**接口形式:**
+    .. code-block:: python
+
+        def nbytes(self)->int
+
+**示例代码:**
+    .. code-block:: python
+
+        import sophon.sail as sail
+        import numpy as np
+        if __name__ == '__main__':
+            handle = sail.Handle(0)
+            input_tensor1 = sail.Tensor(handle,(1,3),sail.Dtype.BM_FLOAT32,False,True)
+
+            print(input_tensor1.nbytes())

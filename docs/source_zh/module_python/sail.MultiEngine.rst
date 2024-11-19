@@ -256,7 +256,7 @@ get_input_shape
             engine = sail.MultiEngine(bmodel_path,dev_id)
             graph_names = engine.get_graph_names()
             input_names = engine.get_input_names(graph_names[0])
-            input_shape = engine.get_input_shape(graph_name,input_names[0])
+            input_shape = engine.get_input_shape(graph_names[0],input_names[0])
 
 get_output_shape
 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>
@@ -295,7 +295,7 @@ get_output_shape
             engine = sail.MultiEngine(bmodel_path,dev_id)
             graph_names = engine.get_graph_names()
             output_names = engine.get_output_names(graph_names[0])
-            output_shape = engine.get_output_shape(graph_name,output_names[0])
+            output_shape = engine.get_output_shape(graph_names[0], output_names[0])
 
 process
 >>>>>>>>>>>>>>>>>>>

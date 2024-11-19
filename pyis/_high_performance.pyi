@@ -8,7 +8,7 @@ class EngineImagePreProcess:
     def __init__(self, bmodel_path: str, tpu_id: int, use_mat_output: bool = False, core_list:list = []): 
         """ EngineImagePreProcess Constructor.
 
-        Parameters:
+        Parameters
         ----------
         bmodel_path: str
         tpu_id: int
@@ -24,7 +24,7 @@ class EngineImagePreProcess:
         queue_in_size: int = 20, queue_out_size: int = 20) -> int:
         """ initialize ImagePreProcess.
 
-        Parameters:
+        Parameters
         ----------
         resize_mode: sail_resize_type
             Resize Methods
@@ -45,7 +45,7 @@ class EngineImagePreProcess:
     def SetPaddingAtrr(self,padding_b:int=114,padding_g:int=114,padding_r:int=114,align:int=0) -> int :
         """ Set the padding attribute object.
 
-        Parameters:
+        Parameters
         ----------
         padding_b: int
             padding value of b channel, dafault 114
@@ -64,7 +64,7 @@ class EngineImagePreProcess:
     def SetConvertAtrr(self,alpha_beta) -> int :
         """ Set the linear transformation attribute 
 
-        Parameters:
+        Parameters
         ----------
         alpha_beta:like (a0, b0), (a1, b1), (a2, b2) factors
 
@@ -76,7 +76,7 @@ class EngineImagePreProcess:
 
     def PushImage(self, channel_idx : int, image_idx : int, image: BMImage) -> int: 
         """ Push Image
-        Parameters:
+        Parameters
         ----------
         channel_idx : int
             Channel index number of the image
@@ -115,7 +115,7 @@ class EngineImagePreProcess:
     def GetBatchData(self, need_d2s: bool = True) -> tuple:
         """ Get the Batch Data object
         
-        Parameters:
+        Parameters
         ------------
         need_d2s : bool
             Need copy data to system memory.
@@ -166,7 +166,7 @@ class EngineImagePreProcess:
     def get_output_shape(self, tensor_name: str) -> list[int]:
         """ Get the shape of an output tensor in frist graph
         
-        Parameters:
+        Parameters
         ----------
         tensor_name : str
              The specified tensor name
@@ -183,7 +183,7 @@ class ImagePreProcess:
         queue_in_size: int=20, queue_out_size: int=20):  
         """ ImagePreProcess Constructor.
 
-        Parameters:
+        Parameters
         ----------
         batch_size: int
             Output batch size.
@@ -203,7 +203,7 @@ class ImagePreProcess:
 
         """ Set the Resize Image attribute 
         
-        Parameters:
+        Parameters
         ----------
         output_width: int
             The width of resized image.
@@ -220,7 +220,7 @@ class ImagePreProcess:
     def SetPaddingAtrr(self,padding_b:int=114,padding_g:int=114,padding_r:int=114,align:int=0) -> None :
         """ Set the padding attribute object.
 
-        Parameters:
+        Parameters
         ----------
         padding_b: int
             padding value of b channel, dafault 114
@@ -238,7 +238,7 @@ class ImagePreProcess:
     def SetConvertAtrr(self,alpha_beta) -> int :
         """ Set the linear transformation attribute 
 
-        Parameters:
+        Parameters
         ----------
         alpha_beta:like (a0, b0), (a1, b1), (a2, b2) factors
 
@@ -251,7 +251,7 @@ class ImagePreProcess:
 
     def PushImage(self, channel_idx : int, image_idx : int, image: BMImage) -> int: 
         """ Push Image
-        Parameters:
+        Parameters
         ----------
         channel_idx : int
             Channel index number of the image
@@ -279,7 +279,7 @@ class ImagePreProcess:
     def set_print_flag(self, flag : bool) -> None:
         """ Set the print flag
         
-        Parameters:
+        Parameters
         ----------
         flag : int
         """
@@ -288,9 +288,10 @@ class ImagePreProcess:
 class algo_yolov5_post_1output:
     
     def __init__(self, shape: list[int], network_w:int = 640, network_h:int = 640, max_queue_size: int=20, input_use_multiclass_nms: bool=True, agnostic: bool=False): 
+        
         """ algo_yolov5_post_1output Constructor.
 
-        Parameters:
+        Parameters
         ----------
         shape: list[int]
         network_w: int, network input width 
@@ -315,7 +316,7 @@ class algo_yolov5_post_1output:
                 padding_height : int) -> int:
         """ algo_yolov5_post_1output push data.
 
-        Parameters:
+        Parameters
         ----------
         
         channel_idx : Channel index number of the image.
@@ -358,7 +359,7 @@ class algo_yolov5_post_1output:
         padding_attr : list[list[int]]) -> int:
         """ algo_yolov5_post_1output push data.
 
-        Parameters:
+        Parameters
         ----------
         
         channel_idx : Channel index number of the images.
@@ -381,7 +382,7 @@ class algo_yolov8_post_1output_async:
     def __init__(self, shape: list[int], network_w:int = 640, network_h:int = 640, max_queue_size: int=20, input_use_multiclass_nms: bool=True, agnostic: bool=False): 
         """ algo_yolov8_post_1output_async Constructor.
 
-        Parameters:
+        Parameters
         ----------
         shape: list[int]
         network_w: int, network input width 
@@ -406,7 +407,7 @@ class algo_yolov8_post_1output_async:
                 padding_height : int) -> int:
         """ algo_yolov8_post_1output_async push data.
 
-        Parameters:
+        Parameters
         ----------
         
         channel_idx : Channel index number of the image.
@@ -449,7 +450,7 @@ class algo_yolov8_post_1output_async:
         padding_attr : list[list[int]]) -> int:
         """ algo_yolov8_post_1output_async push data.
 
-        Parameters:
+        Parameters
         ----------
         
         channel_idx : Channel index number of the images.
@@ -472,7 +473,7 @@ class algo_yolov8_post_cpu_opt_1output_async:
     def __init__(self, shape: list[int], network_w:int = 640, network_h:int = 640, max_queue_size: int=20, input_use_multiclass_nms: bool=True, agnostic: bool=False): 
         """ algo_yolov8_post_cpu_opt_1output_async Constructor.
 
-        Parameters:
+        Parameters
         ----------
         shape: list[int]
         network_w: int, network input width 
@@ -497,7 +498,7 @@ class algo_yolov8_post_cpu_opt_1output_async:
                 padding_height : int) -> int:
         """ algo_yolov8_post_cpu_opt_1output_async push data.
 
-        Parameters:
+        Parameters
         ----------
         
         channel_idx : Channel index number of the image.
@@ -540,7 +541,7 @@ class algo_yolov8_post_cpu_opt_1output_async:
         padding_attr : list[list[int]]) -> int:
         """ algo_yolov8_post_cpu_opt_1output_async push data.
 
-        Parameters:
+        Parameters
         ----------
         
         channel_idx : Channel index number of the images.
@@ -563,7 +564,7 @@ class algo_yolov5_post_3output:
     def __init__(self, shape: list[list[int]], network_w:int = 640, network_h:int = 640, max_queue_size: int=20, input_use_multiclass_nms: bool=True, agnostic: bool=False): 
         """ algo_yolov5_post_1output Constructor.
 
-        Parameters:
+        Parameters
         ----------
         shape: list[list[int]]
         network_w: int, network input width 
@@ -577,7 +578,7 @@ class algo_yolov5_post_3output:
     def reset_anchors(self, anchors_new: list[list[list[int]]]):
         """ Reset Anchors
         
-        Parameters:
+        Parameters
         ----------
         anchors_new: list[list[list[int]]]
         
@@ -609,7 +610,7 @@ class algo_yolov5_post_3output:
         padding_attr : list[list[int]]) -> int:
         """ algo_yolov5_post_1output push data.
 
-        Parameters:
+        Parameters
         ----------
         
         channel_idx : Channel index number of the images.
@@ -632,7 +633,7 @@ class algo_yolov5_post_cpu_opt_async:
     def __init__(self, shape: list[list[int]], network_w:int = 640, network_h:int = 640, max_queue_size: int=20, use_multiclass_nms: bool=True): 
         """ algo_yolov5_post_cpu_opt_async Constructor.
 
-        Parameters:
+        Parameters
         ----------
         shape: list[list[int]]
         network_w: int, network input width 
@@ -645,7 +646,7 @@ class algo_yolov5_post_cpu_opt_async:
     def reset_anchors(self, anchors_new: list[list[list[int]]]):
         """ Reset Anchors
         
-        Parameters:
+        Parameters
         ----------
         anchors_new: list[list[list[int]]]
         
@@ -677,7 +678,7 @@ class algo_yolov5_post_cpu_opt_async:
         padding_attr : list[list[int]]) -> int:
         """ algo_yolov5_post_cpu_opt_async push data.
 
-        Parameters:
+        Parameters
         ----------
         
         channel_idx : Channel index number of the images.
@@ -701,7 +702,7 @@ class algo_yolov5_post_cpu_opt:
 
         """ algo_yolov5_post_cpu_opt Constructor.
 
-        Parameters:
+        Parameters
         ----------
         shapes: list[list[int]],Input Data shape
         network_w: int, Network input width 
@@ -713,7 +714,7 @@ class algo_yolov5_post_cpu_opt:
     def process(self,input_data:list[TensorPTRWithName], ost_w: list[int], ost_h: list[int], dete_threshold: list[float], nms_threshold: list[float], input_keep_aspect_ratio: bool, input_use_multiclass_nms: bool) -> list[list[tuple[int, int, int, int, int, float]]]:
         """ Process
 
-        Parameters:
+        Parameters
         ----------
         input_data: list[TensorPTRWithName], Input Data 
         ost_w: list[int], Original image width
@@ -733,7 +734,7 @@ class algo_yolov5_post_cpu_opt:
     def process(self,input:dict[str, Tensor], ost_w: list[int], ost_h: list[int], dete_threshold: list[float], nms_threshold: list[float], input_keep_aspect_ratio: bool, input_use_multiclass_nms: bool) -> list[list[tuple[int, int, int, int, int, float]]]:
         """ Process
 
-        Parameters:
+        Parameters
         ----------
         input: dict[str, Tensor], Input Data 
         ost_w: list[int], Original image width
@@ -754,7 +755,7 @@ class algo_yolov5_post_cpu_opt:
 
         """ Reset Anchors
         
-        Parameters:
+        Parameters
         ----------
         anchors_new: list[list[list[int]]]
         
@@ -764,12 +765,71 @@ class algo_yolov5_post_cpu_opt:
         """
         pass
 
+class algo_yolov8_seg_post_tpu_opt:
+    
+    def __init__(self, bmodel_file: str, dev_id: int, detection_shape: list[int], segmentation_shape: list[int], network_h: int, network_w: int): 
+
+        """ algo_yolov8_seg_post_tpu_opt Constructor.
+
+        Parameters
+        ----------
+        bmodel_file: str, The TPU getmask bmodel path
+        dev_id: int, device id
+        detection_shape: list[int], The shapes of detection head
+        segmentation_shape: list[int], The shapes of segmentation head, that is Prototype Mask
+        network_h: int, The input height of yolov8 network
+        network_w: int, The input width of yolov8 network
+        """
+        pass
+    
+    def process(self, detection_input: TensorPTRWithName, segmentation_input: TensorPTRWithName, ost_h: int, ost_w: int, dete_threshold: float, nms_threshold: float, input_keep_aspect_ratio: bool, input_use_multiclass_nms: bool) -> list[tuple[int, int, int, int, float, int, list[float], numpy.ndarray]]:
+        """ Process
+
+        Parameters
+        ----------
+        detection_input: TensorPTRWithName, The input data of detection head
+        segmentation_input: TensorPTRWithName, The input data of segmentation head, that is Prototype Mask
+        ost_h: int, Original image height
+        ost_w: int, Original image width
+        dete_threshold: float, Detection threshold
+        nms_threshold: float, NMS threshold
+        input_keep_aspect_ratio: bool, Input keeping aspect ratio  
+        input_use_multiclass_nms: bool, Input with multiclass
+
+        Returns
+        -------
+        list[tuple[left, top, right, bottom, score, class_id, contour, mask]]
+            
+        """
+        pass
+    
+    def process(self, detection_input: dict[str, Tensor], segmentation_input: dict[str, Tensor], ost_h: int, ost_w: int, dete_threshold: float, nms_threshold: float, input_keep_aspect_ratio: bool, input_use_multiclass_nms: bool) -> list[tuple[int, int, int, int, float, int, list[float], numpy.ndarray]]:
+        """ Process
+
+        Parameters
+        ----------
+        detection_input: dict[str, Tensor], The input data of detection head
+        segmentation_input: dict[str, Tensor], The input data of segmentation head, that is Prototype Mask
+        ost_h: int, Original image height
+        ost_w: int, Original image width
+        dete_threshold: float, Detection threshold
+        nms_threshold: float, NMS threshold
+        input_keep_aspect_ratio: bool, Input keeping aspect ratio  
+        input_use_multiclass_nms: bool, Input with multiclass
+
+        Returns
+        -------
+        list[tuple[left, top, right, bottom, score, class_id, contour, mask]]
+            
+        """
+        pass
+
 class deepsort_tracker_controller_async:
     def __init__(self, max_cosine_distance:float, nn_budget:int, k_feature_dim:int, max_iou_distance:float=0.7, max_age:int=30, n_init:int=3, queue_size:int=10):
 
         """asynchronous deepsort Constructor
 
-        Parameters:
+        Parameters
         ----------
         max_cosine_distance:float, 
         nn_budget:int, 
@@ -784,7 +844,7 @@ class deepsort_tracker_controller_async:
         """ Asynchronous processing interface. Use with get_result_npy()!
             Track the objects based on the detected objects and their features
         
-        Parameters:
+        Parameters
         ----------
         detected_objects: list(tuple(left, top, right, bottom, class_id, score))
         feature: sail.Tensor, the features of the detected objects
@@ -798,7 +858,7 @@ class deepsort_tracker_controller_async:
         """ Asynchronous processing interface. Use with get_result_npy()!
             Track the objects based on the detected objects and their features
         
-        Parameters:
+        Parameters
         ----------
         detected_objects: list(tuple(left, top, right, bottom, class_id, score))
         feature: list[numpy.array], the features of the detected objects
@@ -819,7 +879,7 @@ class deepsort_tracker_controller_async:
     def set_processing_timer(flag: bool):
         """ set the flag whether printing time cost of each processing 
 
-        Parameters:
+        Parameters
         ----------
         flag: bool, if True, print the time cost in each processing
                     if False, nothing happens
@@ -831,7 +891,7 @@ class sort_tracker_controller_async:
 
         """asynchronous sort Constructor
 
-        Parameters:
+        Parameters
         ----------
         max_iou_distance:float=0.7, 
         max_age:int=30, 
@@ -844,7 +904,7 @@ class sort_tracker_controller_async:
         """ Asynchronous processing interface. Use with get_result_npy()!
             Track the objects based on the detected objects and their features
         
-        Parameters:
+        Parameters
         ----------
         detected_objects: list(tuple(left, top, right, bottom, class_id, score))
         
@@ -868,20 +928,20 @@ class Perf:
 
         """Perf Constructor
 
-        Parameters:
+        Parameters
         ----------
-        bmodel_path:float, Path to bmodel.
-        tpu_id:list[int], ID of TPUs, there may be more than one TPU for PCIE mode.
-        max_que_size:int, max queue size.
-        mode:IOMode, Specify the input/output tensors are in system memory or device memory, default SYSO.
-        thread_count:int, thread counts with each tpu.
-        free_input:bool,  release memory of input, default false.
+        bmodel_path:float, Path to bmodel.\n
+        tpu_id:list[int], ID of TPUs, there may be more than one TPU for PCIE mode.\n
+        max_que_size:int, max queue size.\n
+        mode:IOMode, Specify the input/output tensors are in system memory or device memory, default SYSO.\n
+        thread_count:int, thread counts with each tpu.\n
+        free_input:bool,  release memory of input, default false.\n
         """
 
     def PushTensor(self, tensor_index:int, input_tensors:list[TensorPTRWithName]) -> int:
         """ Push Tensors 
         
-        Parameters:
+        Parameters
         ----------
         tensor_index: int, index number of the Tensors.
         input_tensors: list[TensorPTRWithName], Input tensors with name
@@ -930,4 +990,67 @@ class Perf:
 
     def get_graph_names(self) -> list[str]:
         """Get all graph names in the loaded bomodels """
+        pass
+
+class DecoderImages:
+    def __init__(self, image_list:list[str], tpu_id:int, queue_size:int):
+        """ DecoderImages Constructor
+
+        Parameters
+        -----------
+        image_list:list[str], image name list\n
+        tpu_id:int,TPU ID. You can use bm-smi to see available IDs.\n
+        queue_size:int, max queue size\n
+        """
+        pass
+
+    def setResizeAttr(self, width:int, height:int, resize_alg:bmcv_resize_algorithm = bmcv_resize_algorithm.BMCV_INTER_LINEAR) -> int:
+        """ Set the Resize Attr object
+        Parameters
+        -----------
+        width:int,output width\n
+        height:int,output height\n
+        resize_alg:bmcv_resize_algorithm, Resize algorithm, defalut BMCV_INTER_LINEAR
+
+        Returns
+        -----------
+        int:Returns 0 on success, other for failed.
+        """
+        pass
+
+    def start(self) -> int:
+        """ Start read images
+
+        Returns
+        -----------
+        int:Returns 0 on success, other for failed.
+        """
+        pass
+
+
+    def read(self, image: BMImage) -> int:
+        """ read
+
+        Parameters
+        -----------
+        image: Output BMImage.
+
+        Returns
+        -------
+        int:Returns 0 on success, 1 for queue empty, -1 for end or thread stoped.
+        """  
+        pass
+
+    def stop(self) -> None:
+        """ stop 
+        """
+        pass
+
+    def get_schedule(self) -> int:
+        """ Get the schedule object
+
+        Returns
+        ---------
+        The number of decoded images.
+        """
         pass

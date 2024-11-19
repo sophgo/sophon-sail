@@ -210,6 +210,41 @@ set_io_mode
             graph_name = engine.get_graph_names()[0]
             engine.set_io_mode(graph_name,sail.IOMode.SYSI)
 
+graph_is_dynamic
+>>>>>>>>>>>>>>>>>>>>>
+
+判断选定计算图是否为动态。
+
+**接口形式:**
+    .. code-block:: python
+
+        def graph_is_dynamic(self, graph_name: str)->bool
+
+**参数说明:**
+
+* graph_name: str
+
+设定需要查询的计算图的name。
+
+**返回值说明:**
+
+* is_dynamic: bool
+
+返回选定计算图是否为动态的判断结果。
+
+**示例代码:**
+    .. code-block:: python
+
+        import sophon.sail as sail
+        
+
+        if __name__ == '__main__':
+            bmodel_path = "your_bmodel.bmodel"
+            engine = sail.Engine(bmodel_path,0,sail.IOMode.SYSI)
+            graph_name = engine.get_graph_names()[0]
+            is_dynamic = engine.graph_is_dynamic(graph_name)
+
+
 get_input_names
 >>>>>>>>>>>>>>>>>>>>>
 

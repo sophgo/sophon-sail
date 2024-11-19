@@ -2,7 +2,7 @@
 ==============
 
 ..
- .. |ver| replace:: 3.8.0
+ .. |ver| replace:: 3.9.0
 
 源码目录结构
 ______________
@@ -32,32 +32,26 @@ ______________
         │   ├── source_en
         │   └── source_zh
         ├── include                 # Includes
+        ├── pyis                    # Stub files
         ├── python                  # Wheel codes
-        │   ├── arm_pcie
-        │   ├── loongarch64
-        │   ├── pcie
-        │   ├── riscv
-        │   ├── soc
-        │   └── ...
         ├── python_wheels           # Python Wheels
         │   ├── arm_pcie
         │   ├── loongarch
         │   ├── soc_BM1684_BM1684X
         │   └── soc_BM1688
         ├── sample                  # Sample files
-        │   ├── cpp
-        │   └── python
         ├── src                     # Source codes
         └── ...
 
 
 
 其中3rdparty主要包含了编译sail需要依赖的第三方的一些头文件; 
-cmake中是编译用到的一些cmake文件;
+cmake中是编译用到的一些cmake文件; 
 include是sail的一些头文件; 
-python文件夹内包含了以下各平台下面python wheel的打包代码及脚本;
-python_wheels文件夹内是一些预编译出来的wheel包,arm_pcie、loongarch、soc三个文件夹分别是对应的平台;
-sample文件夹内是一些示例程序;
+pyis文件夹内包含了对Python接口的描述，可用于类型提示和静态检查; 
+python文件夹内包含了以下各平台下面python wheel的打包代码及脚本; 
+python_wheels文件夹内是一些预编译出来的wheel包,arm_pcie、loongarch、soc三个文件夹分别是对应的平台; 
+sample文件夹内是一些示例程序; 
 src文件夹下面是各接口的实现代码。
 
 

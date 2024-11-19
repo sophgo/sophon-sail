@@ -1,3 +1,4 @@
+#pragma once
 #include <regex>
 #ifdef WIN
 typedef unsigned char u_char;

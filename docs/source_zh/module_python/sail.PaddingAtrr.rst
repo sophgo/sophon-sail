@@ -170,11 +170,17 @@ B通道上的padding值
     .. code-block:: python
 
         import sophon.sail as sail
+        
         if __name__ == '__main__':
-            tpu_id = 0
-            handle = sail.Handle(tpu_id)
+            dev_id = 0
+            handle = sail.Handle(dev_id)
             bmcv = sail.Bmcv(handle)
-            paddingatt = sail.PaddingAtrr()   
+
+            bmimg1 = sail.BMImage(handle, 256, 256, sail.Format.FORMAT_BGR_PLANAR, sail.ImgDtype.DATA_TYPE_EXT_1N_BYTE)
+            resize_w = 512
+            resize_h = 512
+
+            paddingatt = sail.PaddingAtrr()
             paddingatt.set_stx(0)
             paddingatt.set_sty(0)
             paddingatt.set_w(resize_w)
@@ -182,4 +188,4 @@ B通道上的padding值
             paddingatt.set_r(114)
             paddingatt.set_g(114)
             paddingatt.set_b(114)
-            output_temp = bmcv.crop_and_resize_padding(input,0,0,image_w,image_h,resize_w,resize_h,paddingatt)
+            output_temp = bmcv.crop_and_resize_padding(bmimg1,0,0,bmimg1.width(),bmimg1.height(),resize_w,resize_h,paddingatt)

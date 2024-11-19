@@ -36,9 +36,10 @@ ______________________
 
 .. parsed-literal::
 
-   cd docs
-   make pdf
+    export LC_ALL="zh_CN.UTF-8"
+    cd docs
+    make pdf
 
-编译好的用户手册路径为‘docs/build/sophon-sail_zh.pdf’
+编译好的用户手册路径为‘docs/build/SOPHON-SAIL_zh.pdf’
 
 *如果编译仍然报错,可以安装以下 ‘sudo apt-get install texlive-lang-chinese’,然后重新执行上述命令。*

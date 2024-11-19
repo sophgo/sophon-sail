@@ -1,7 +1,7 @@
 Python SAIL的编译与安装
 _______________________
 
-.. |ver| replace:: 3.8.0
+.. |ver| replace:: 3.9.0
 
 编译可被Python3接口调用的Wheel文件
 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
@@ -33,12 +33,12 @@ libsophon,sophon-ffmpeg,sophon-opencv的安装方式可参考算能官方文档
         cmake ..                                   
         make pysail                                                                  
 
-4. 打包生成python wheel,生成的wheel包的路径为‘python/pcie/dist’,文件名为‘sophon-|ver|-py3-none-any.whl’
+4. 打包生成python wheel,生成的wheel包的路径为‘python/dist’,文件名为‘sophon-|ver|-py3-none-any.whl’
 
     .. parsed-literal::
-        cd ../python/pcie 
-        chmod +x sophon_pcie_whl.sh
-        ./sophon_pcie_whl.sh  
+        cd ../python 
+        chmod +x sophon_whl.sh
+        ./sophon_whl.sh  
 
 5. 安装python wheel  
 
@@ -64,12 +64,12 @@ libsophon,sophon-ffmpeg,sophon-opencv的安装方式可参考算能官方文档
         cmake -DONLY_RUNTIME=ON ..                                   
         make pysail                                     
 
-4. 打包生成python wheel,生成的wheel包的路径为‘python/pcie/dist’,文件名为‘sophon-|ver|-py3-none-any.whl’
+4. 打包生成python wheel,生成的wheel包的路径为‘python/dist’,文件名为‘sophon-|ver|-py3-none-any.whl’
 
     .. parsed-literal::
-        cd ../python/pcie
-        chmod +x sophon_pcie_whl.sh
-        ./sophon_pcie_whl.sh  
+        cd ../python
+        chmod +x sophon_whl.sh
+        ./sophon_whl.sh  
 
 5. 安装python wheel  
 
@@ -98,12 +98,12 @@ libsophon,sophon-ffmpeg,sophon-opencv的安装方式可参考算能官方文档
         cmake -DPYTHON_EXECUTABLE=python_3.8.2/bin/python3 -DCUSTOM_PY_LIBDIR=python_3.8.2/lib ..                               
         make pysail                                      
 
-4. 打包生成python wheel,生成的wheel包的路径为‘python/pcie/dist’,文件名为‘sophon-|ver|-py3-none-any.whl’
+4. 打包生成python wheel,生成的wheel包的路径为‘python/dist’,文件名为‘sophon-|ver|-py3-none-any.whl’
 
     .. parsed-literal::
-        cd ../python/pcie 
-        chmod +x sophon_pcie_whl.sh
-        ./sophon_pcie_whl.sh  
+        cd ../python 
+        chmod +x sophon_whl.sh
+        ./sophon_whl.sh  
 
 5. 安装python wheel  
 
@@ -170,12 +170,12 @@ python3的安装方式可通过python官方网站获取,
             -DOPENCV_BASIC_PATH=sophon-mw-soc_0.4.1_aarch64/opt/sophon/sophon-opencv_0.4.1 ..                                   
         make pysail                                     
 
-4. 打包生成python wheel,生成的wheel包的路径为‘python/soc/dist’,文件名为‘sophon_arm-|ver|-py3-none-any.whl’
+4. 打包生成python wheel,生成的wheel包的路径为‘python/dist’,文件名为‘sophon_arm-|ver|-py3-none-any.whl’
 
     .. parsed-literal::
-        cd ../python/soc 
-        chmod +x sophon_soc_whl.sh
-        ./sophon_soc_whl.sh  
+        cd ../python 
+        chmod +x sophon_whl.sh
+        ./sophon_whl.sh  
 
 5. 安装python wheel  
 
@@ -212,12 +212,12 @@ python3的安装方式可通过python官方网站获取,
             -DLIBSOPHON_BASIC_PATH=libsophon_soc_0.4.1_aarch64/opt/sophon/libsophon-0.4.1 ..
         make pysail                                     
 
-4. 打包生成python wheel,生成的wheel包的路径为‘python/soc/dist’,文件名为‘sophon_arm-|ver|-py3-none-any.whl’
+4. 打包生成python wheel,生成的wheel包的路径为‘python/dist’,文件名为‘sophon_arm-|ver|-py3-none-any.whl’
 
     .. parsed-literal::
-        cd ../python/soc 
-        chmod +x sophon_soc_whl.sh
-        ./sophon_soc_whl.sh  
+        cd ../python 
+        chmod +x sophon_whl.sh
+        ./sophon_whl.sh  
 
 5. 安装python wheel  
 
@@ -285,12 +285,12 @@ python3的安装方式可通过python官方网站获取,
             -DOPENCV_BASIC_PATH=sophon-mw_0.4.1_aarch64/opt/sophon/sophon-opencv_0.4.1 ..                                   
         make pysail                                    
 
-4. 打包生成python wheel,生成的wheel包的路径为‘python/arm_pcie/dist’,文件名为‘sophon_arm_pcie-|ver|-py3-none-any.whl’
+4. 打包生成python wheel,生成的wheel包的路径为‘python/dist’,文件名为‘sophon_arm_pcie-|ver|-py3-none-any.whl’
 
     .. parsed-literal::
-        cd ../python/arm_pcie 
-        chmod +x sophon_arm_pcie_whl.sh
-        ./sophon_arm_pcie_whl.sh  
+        cd ../python 
+        chmod +x sophon_whl.sh
+        ./sophon_whl.sh  
 
 5. 安装python wheel  
 
@@ -327,12 +327,12 @@ python3的安装方式可通过python官方网站获取,
             -DLIBSOPHON_BASIC_PATH=libsophon_0.4.1_aarch64/opt/sophon/libsophon-0.4.1 ..
         make                                      
 
-4. 打包生成python wheel,生成的wheel包的路径为‘python/arm_pcie/dist’,文件名为‘sophon_arm_pcie-|ver|-py3-none-any.whl’
+4. 打包生成python wheel,生成的wheel包的路径为‘python/dist’,文件名为‘sophon_arm_pcie-|ver|-py3-none-any.whl’
 
     .. parsed-literal::
-        cd ../python/arm_pcie 
-        chmod +x sophon_arm_pcie_whl.sh
-        ./sophon_arm_pcie_whl.sh  
+        cd ../python 
+        chmod +x sophon_whl.sh
+        ./sophon_whl.sh  
 
 5. 安装python wheel  
 
@@ -404,12 +404,12 @@ python3的安装方式可通过python官方网站获取,
 
 * DLIBSOPHON_BASIC_PATH: SOPHONSDK中libsophon下对应libsophon\_<x.y.z>_loongarch64.tar.gz解压后的目录。
 
-4. 打包生成python wheel,生成的wheel包的路径为‘python/loongarch64/dist’,文件名为‘sophon_loongarch64-|ver|-py3-none-any.whl’
+4. 打包生成python wheel,生成的wheel包的路径为‘python/dist’,文件名为‘sophon_loongarch64-|ver|-py3-none-any.whl’
 
     .. parsed-literal::
-        cd ../python/loongarch64 
-        chmod +x sophon_loongarch64_whl.sh
-        ./sophon_loongarch64_whl.sh  
+        cd ../python 
+        chmod +x sophon_whl.sh
+        ./sophon_whl.sh  
 
 注：此处易出现setuptools版本过高的问题，原则上python3.8最高兼容setuptools版本 < 66.0.0
 
@@ -481,12 +481,12 @@ python3的安装方式可通过python官方网站获取,
             -DOPENCV_BASIC_PATH=sophon-mw_0.6.0_riscv_64/opt/sophon/sophon-opencv_0.6.0 ..                                   
         make pysail                                     
 
-4. 打包生成python wheel,生成的wheel包的路径为‘python/riscv/dist’,文件名为‘sophon_riscv64-|ver|-py3-none-any.whl’
+4. 打包生成python wheel,生成的wheel包的路径为‘python/dist’,文件名为‘sophon_riscv64-|ver|-py3-none-any.whl’
 
     .. parsed-literal::
-        cd ../python/riscv 
-        chmod +x sophon_riscv_whl.sh
-        ./sophon_riscv_whl.sh  
+        cd ../python 
+        chmod +x sophon_whl.sh
+        ./sophon_whl.sh  
 
 5. 安装python wheel  
 
@@ -523,12 +523,12 @@ python3的安装方式可通过python官方网站获取,
             -DLIBSOPHON_BASIC_PATH=libsophon_0.5.0_riscv64/opt/sophon/libsophon-0.5.0 ..
         make pysail                                     
 
-4. 打包生成python wheel,生成的wheel包的路径为‘python/riscv/dist’,文件名为‘sophon_riscv64-|ver|-py3-none-any.whl’
+4. 打包生成python wheel,生成的wheel包的路径为‘python/dist’,文件名为‘sophon_riscv64-|ver|-py3-none-any.whl’
 
     .. parsed-literal::
-        cd ../python/riscv 
-        chmod +x sophon_riscv_whl.sh
-        ./sophon_riscv_whl.sh  
+        cd ../python 
+        chmod +x sophon_whl.sh
+        ./sophon_whl.sh  
 
 5. 安装python wheel  
 
@@ -653,7 +653,7 @@ ARM PCIE MODE
 
     .. parsed-literal::
 
-        cat /opt/sophon/
+        ls /opt/sophon/
 
 2. 查看ARM主机上的Python3版本
 

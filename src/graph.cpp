@@ -198,7 +198,7 @@ Graph::Graph_CC::Graph_CC(
       input_shapes_(nullptr), output_shapes_(nullptr) {
   if (!p_bmrt) {
     spdlog::error("Error while constructing Graph: bmruntime is null");
-    exit(SAIL_ERR_ENGINE_INIT);
+    throw SailEngineError("Graph related error!");
   }
   init_graph_info();
 }
@@ -508,7 +508,7 @@ Tensor* Graph::Graph_CC::get_input_tensor(const std::string& name) {
     return input_tensors_[name];
   } else {
     spdlog::error("Invalid input tensor name: {}", name);
-    exit(SAIL_ERR_ENGINE_INPUT);
+    throw SailEngineError("Graph related error!");
   }
 }
 
@@ -518,7 +518,7 @@ Tensor* Graph::Graph_CC::get_output_tensor(const std::string& name) {
     return output_tensors_[name];
   } else {
     spdlog::error("Invalid output tensor name: {}", name);
-    exit(SAIL_ERR_ENGINE_OUTPUT);
+    throw SailEngineError("Graph related error!");
   }
 }
 

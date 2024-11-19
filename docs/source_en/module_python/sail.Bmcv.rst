@@ -90,7 +90,8 @@ Convert tensor to image.
 
         def tensor_to_bm_image(self, 
                             tensor: sail.Tensor, 
-                            bgr2rgb: bool = False) -> sail.BMImage
+                            bgr2rgb: bool = False,
+                            layout: str = 'nchw') -> sail.BMImage
             
 **Parameters:**
 * tensor : sail.Tensor
@@ -100,6 +101,10 @@ Tensor instance
 * bgr2rgb : bool 
   
 Swap color channel, default: False
+
+* layout : str
+
+Layout of the input tensor
 
 **Returns:**
 Return BMImage instance
@@ -124,8 +129,43 @@ Return BMImage instance
 
         def tensor_to_bm_image(self, 
                             tensor: sail.Tensor, 
+                            format: sail.Format) -> sail.BMImage
+            
+**Parameters:**
+* tensor : sail.Tensor
+
+Tensor instance
+
+* format : sail.Format 
+  
+Format of the BMImage
+
+**Returns:**
+Return BMImage instance
+
+**Sample:**
+    .. code-block:: python
+
+        import sophon.sail as sail
+
+        if __name__ == '__main__':
+            tpu_id = 0
+            handle = sail.Handle(tpu_id)
+            image_name = "your_image_path"
+            decoder = sail.Decoder(image_name,True,tpu_id)
+            BMimg = decoder.read(handle)# here is a sail.BMImage
+            bmcv = sail.Bmcv(handle)
+            tensor = bmcv.bm_image_to_tensor(BMimg)# here is a sail.Tensor
+            BMimg2 = bmcv.tensor_to_bm_image(tensor, sail.Format.FORMAT_BGR_PLANAR)
+
+**Interface:**
+    .. code-block:: python
+
+        def tensor_to_bm_image(self, 
+                            tensor: sail.Tensor, 
                             img: sail.BMImage | sail.BMImageArray, 
-                            bgr2rgb: bool = False)
+                            bgr2rgb: bool = False,
+                            layout: str = 'nchw')
             
 **Parameters:**
 * tensor : sail.Tensor
@@ -155,6 +195,43 @@ Swap color channel, default: False
             tensor = bmcv.bm_image_to_tensor(BMimg)# here is a sail.Tensor
             BMimg2 = sail.BMImage()
             bmcv.tensor_to_bm_image(tensor,BMimg2)
+
+**Interface:**
+    .. code-block:: python
+
+        def tensor_to_bm_image(self, 
+                            tensor: sail.Tensor, 
+                            img: sail.BMImage | sail.BMImageArray, 
+                            format: sail.Format)
+            
+**Parameters:**
+* tensor : sail.Tensor
+
+Tensor instance
+
+* img : sail.BMImage
+
+BMImage instance
+
+* format : sail.Format 
+  
+Format of the BMImage
+
+**Sample:**
+    .. code-block:: python
+
+        import sophon.sail as sail
+
+        if __name__ == '__main__':
+            tpu_id = 0
+            handle = sail.Handle(tpu_id)
+            image_name = "your_image_path"
+            decoder = sail.Decoder(image_name,True,tpu_id)
+            BMimg = decoder.read(handle)# here is a sail.BMImage
+            bmcv = sail.Bmcv(handle)
+            tensor = bmcv.bm_image_to_tensor(BMimg)# here is a sail.Tensor
+            BMimg2 = sail.BMImage()
+            bmcv.tensor_to_bm_image(tensor,BMimg2, sail.Format.FORMAT_BGR_PLANAR)
 
 crop_and_resize
 >>>>>>>>>>>>>>>>>>>>>>
@@ -1200,8 +1277,9 @@ Image to be saved
 imread
 >>>>>>>>>>>>>>>>>
 
-Read and decode one JPEG image file. This method only supports JPEG baseline file. 
-The returned BMImage keeps YUV color space, and the pixel format depends on the sampling information in the file like YUV420. 
+Read and decode one image files and supports hard decoding only for JPEG baseline format. For other formats, such as PNG and BMP, soft decoding is used.
+The returned BMImage for JPEG baseline images keeps YUV color space, and the pixel format depends on the sampling information in the file like YUV420. 
+The returned BMImage for other formats will maintain the corresponding color space of their input.
 
 **Interface:**
     .. code-block:: python
@@ -1218,7 +1296,7 @@ Name of file to be read.
 
 * output : sail.BMImage
 
-The decoded image, whose pixel format is in YUV color space.
+The decoded image.
 
 **Sample:**
     .. code-block:: python
@@ -1501,7 +1579,11 @@ output image
 putText
 >>>>>>>>>>
 
-Draws a text on the image
+Draws a text on the image.
+
+Supported pixel format for input BMImage: 
+FORMAT_GRAY, FORMAT_YUV420P, FORMAT_YUV422P, FORMAT_YUV444P, FORMAT_NV12, 
+FORMAT_NV21, FORMAT_NV16, FORMAT_NV61
 
 **Interface:**
     .. code-block:: python
@@ -1570,9 +1652,11 @@ Thickness of text
             handle = sail.Handle(tpu_id)
             image_name = "your_image_path"
             decoder = sail.Decoder(image_name,True,tpu_id)
-            BMimg = decoder.read(handle)# here is a sail.BMImage
+            bgr_img = decoder.read(handle)
             bmcv = sail.Bmcv(handle)
-            ret = bmcv.putText(BMimg, "snow person" , 20, 20, [0,0,255], 1.4, 2)
+            yuv_img = bmcv.convert_format(bgr_img, sail.FORMAT_YUV420P)
+            ret = bmcv.putText(yuv_img, "some text" , 20, 20, [0,0,255], 1.4, 2)
+            assert ret == 0
 
 
 image_add_weighted
@@ -2721,3 +2805,264 @@ Returns 0 upon success.
             thickness = 2  
             bm = bmcv.vpp_convert_format(BMimg1,sail.FORMAT_YUV444P)
             ret = bmcv.drawLines(bm, start_points, end_points, line_num,color, thickness)
+
+stft
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+Short-Time Fourier Transform(STFT)
+
+**Note:** For details about whether this operator in current SDK supports BM1684X, check the page "BMCV API" in 《Multimedia User Guide》. 
+
+**Interface1:**
+    .. code-block:: python
+
+        stft(self, input_real: numpy.ndarray, input_imag: numpy.ndarray, real_input: bool, normalize: bool, n_fft: int, hop_len: int,
+                pad_mode: int, win_mode: int) -> tuple[numpy.ndarray, numpy.ndarray]
+
+        stft(self, input_real: Tensor, input_imag: Tensor, real_input: bool, normalize: bool, n_fft: int, hop_len: int,
+                pad_mode: int, win_mode: int) -> tuple[Tensor, Tensor]
+
+**Parameters:**
+
+* input_real: numpy.ndarray or Tensor
+    The real part of the input signal.
+
+* input_imag: numpy.ndarray or Tensor
+    The imaginary part of the input signal.
+
+* real_input: bool
+    A flag indicating whether to use only real input.
+
+* normalize: bool
+    A flag indicating whether to normalize the output.
+
+* n_fft: int
+    The number of FFT points used in the STFT computation.
+
+* hop_len: int
+    The step size for sliding the window.
+
+* pad_mode: int
+    The padding mode for the input signal. 0 indicates CONSTANT padding, and 1 indicates REFLECT padding.
+
+* win_mode: int
+    The type of window function. 0 represents the HANN window, and 1 represents the HAMM window.
+
+**Returns:**
+
+* result: tuple[numpy.ndarray, numpy.ndarray]
+    Returns the real part and imaginary part of the output.
+
+**Sample:**
+    .. code-block:: python
+
+        import sophon.sail as sail
+        import numpy as np
+
+        if __name__ == '__main__':
+            tpu_id = 0
+            handle = sail.Handle(tpu_id)
+            random_array1 = np.random.rand(2, 4096).astype('float32')
+            random_array2 = np.random.rand(2, 4096).astype('float32')
+            bmcv = sail.Bmcv(handle)
+            input_real = sail.Tensor(handle, random_array1, True)
+            input_imag = sail.Tensor(handle, random_array2, True)
+            real_input = False
+            normalize = True
+            n_fft = 1024
+            hop_len = 256
+            pad_mode = 0
+            win_mode = 1
+            stft_R, stft_I = bmcv.stft(input_real, input_imag, real_input, normalize, n_fft, hop_len, pad_mode, win_mode)
+
+istft
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+Inverse Short-Time Fourier Transform(ISTFT)
+
+**Note:** For details about whether this operator in current SDK supports BM1684X, check the page "BMCV API" in 《Multimedia User Guide》. 
+
+**Interface1:**
+    .. code-block:: python
+
+        istft(self, input_real: numpy.ndarray, input_imag: numpy.ndarray, real_input: bool, normalize: bool, L: int, hop_len: int,
+            pad_mode: int, win_mode: int) -> tuple[numpy.ndarray, numpy.ndarray]:
+
+        istft(self, input_real: Tensor, input_imag: Tensor, real_input: bool, normalize: bool, L: int, hop_len: int,
+            pad_mode: int, win_mode: int) -> tuple[Tensor, Tensor]:
+
+**Parameters:**
+
+* input_real: numpy.ndarray or Tensor
+    The real part of the input signal.
+
+* input_imag: numpy.ndarray or Tensor
+    The imaginary part of the input signal.
+
+* real_input: bool
+    Indicates whether the output signal is real; false for complex, true for real.
+
+* normalize: bool
+    Whether to normalize the output.
+
+* L: int
+    The length of the original time-domain signal.
+
+* hop_len: int
+    The step size for sliding the window; must match the value used during STFT computation.
+
+* pad_mode: int
+    The padding mode for the input signal; must match the value used during STFT computation.
+
+* win_mode: int
+    The type of window function; must match the value used during STFT computation.
+
+**Returns:**
+
+* result: tuple[numpy.ndarray, numpy.ndarray]
+    Returns the real part and imaginary part of the output.
+
+**Sample:**
+    .. code-block:: python
+
+        import sophon.sail as sail
+        import numpy as np
+
+        if __name__ == '__main__':
+            tpu_id = 0
+            handle = sail.Handle(tpu_id)
+            random_array1 = np.random.rand(2, 513, 17).astype('float32')
+            random_array2 = np.random.rand(2, 513, 17).astype('float32')
+            bmcv = sail.Bmcv(handle)
+            input_real = sail.Tensor(handle, random_array1, True)
+            input_imag = sail.Tensor(handle, random_array2, True)
+            real_input = False
+            normalize = True
+            L = 4096
+            hop_len = 256
+            pad_mode = 0
+            win_mode = 1
+            istft_R, istft_I = bmcv.istft(input_real, input_imag, real_input, normalize, 4096, hop_len, pad_mode, win_mode)
+
+bmcv_overlay
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+Add a watermark with a transparent channel to the image. Only support BM1688, CV186AH。
+
+**Interface:**
+    .. code-block:: python
+
+        def bmcv_overlay(self, image: BMImage, overlay_info: list[list[int]], overlay_image: list[BMImage]) -> int:
+
+        
+**Parameters:**
+
+* image : sail.BMImage
+
+input/output image
+
+* overlay_info: list[list[int]]
+
+The position and size information of a set of watermarks in the format of [x,y,w,h]
+
+* overlay_image: list[BMImage]
+
+A group of watermark, only support sail.Format.FORMAT_ARGB_PACKED
+
+**Returns:**
+
+* ret: int
+
+0 for success
+
+**Note：**
+
+You need to make sure that all rectangles in overlay_info do not overlap
+
+**Sample1:**
+
+Read RGBA images directly as watermarks
+
+    .. code-block:: python
+
+        import sophon.sail as sail
+        import cv2
+
+        if __name__ == '__main__':
+
+            handle = sail.Handle(0)
+
+            decoder = sail.Decoder("pics/1.jpg")
+            image_org = decoder.read(handle)
+
+            bmcv = sail.Bmcv(handle)
+
+            buffer = cv2.imread("pics/icon.png", cv2.IMREAD_UNCHANGED)
+            buffer_x = 100
+            buffer_y = 50
+            buffer_w = 100
+            buffer_h = 30
+
+            buffer_x1 = 500
+            buffer_y1 = 200
+            buffer_w1 = 60
+            buffer_h1 = 70
+
+            buffer = cv2.resize(buffer, (buffer_w, buffer_h))
+            buffer1 = cv2.resize(buffer, (buffer_w1, buffer_h1))
+
+            overlay_images = []
+            overlay_info = []
+            overlay_images.append(sail.BMImage(handle, buffer, buffer_h, buffer_w, sail.Format.FORMAT_ARGB_PACKED, sail.ImgDtype.DATA_TYPE_EXT_1N_BYTE))
+            overlay_info.append([buffer_x,buffer_y,buffer_w, buffer_h])
+            overlay_images.append(sail.BMImage(handle, buffer1, buffer_h1, buffer_w1, sail.Format.FORMAT_ARGB_PACKED, sail.ImgDtype.DATA_TYPE_EXT_1N_BYTE))
+            overlay_info.append([buffer_x1,buffer_y1,buffer_w1, buffer_h1])
+
+            ret = bmcv.bmcv_overlay(image_org, overlay_info, overlay_images)
+
+            ret = bmcv.imwrite("overlayed.jpg", image_org)
+
+
+**Sample2:**
+
+Use other libraries to generate the watermark of Chinese text, and use overlay to draw in the designated position to realize the puttext function indirectly
+
+    .. code-block:: python
+      
+        import sophon.sail as sail
+        from PIL import Image, ImageDraw, ImageFont
+
+        if __name__ == '__main__':
+            # get original image
+            handle = sail.Handle(0)
+            bmcv = sail.Bmcv(handle)
+            decoder = sail.Decoder("pics/1.jpg")
+            org_image = decoder.read(handle)
+
+            # the info of font
+            watermark_w, watermark_h = 60, 30
+            text = ["人", "车", "狗"]
+            text_color = (255, 0, 0, 255) 
+            font = ImageFont.truetype("fonts/simhei.ttf", watermark_h, encoding="utf-8")
+
+            # get watermark of labels
+            overlay_images = []
+            for i in range(len(text)):
+                blank_image = Image.new('RGBA', (watermark_w, watermark_h), (255,255,255,0))
+                draw = ImageDraw.Draw(blank_image)
+                draw.text((0,0), text[i], fill=text_color, font=font)
+                # blank_image.save("watermark.png")
+                buffer = blank_image.tobytes()
+                overlay_images.append(sail.BMImage(handle, buffer, watermark_h, watermark_w, sail.Format.FORMAT_ARGB_PACKED, sail.ImgDtype.DATA_TYPE_EXT_1N_BYTE))
+
+            # after inference and other procedure
+            # the position of the watermark map obtained by simulation
+            overlay_info = []
+            for i in range(len(text)):
+                x = int(i*org_image.width()/len(text))
+                y = int(org_image.height()/2)
+                overlay_info.append([x, y, watermark_w, watermark_h])
+
+            ret = bmcv.bmcv_overlay(org_image, overlay_info, overlay_images)
+            ret = bmcv.imwrite("overlayed.jpg", org_image)
+

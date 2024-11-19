@@ -22,6 +22,7 @@ typedef struct{
 
 void bmBufferDeviceMemFree(void *opaque, uint8_t *data)
 {
+    spdlog::debug("enter {}", __func__);
     if(opaque == NULL){
         spdlog::error("bm_image to avframe, create buffer error, parameter error\n");
     }
@@ -30,7 +31,9 @@ void bmBufferDeviceMemFree(void *opaque, uint8_t *data)
     testTranscoed->buf0 = NULL;
 
     int ret =  0;
+    spdlog::debug("before bm_image_destroy()");
     ret = bm_image_destroy(*(testTranscoed->bmImg));
+    spdlog::debug("after bm_image_destroy()");
     if(testTranscoed->bmImg){
         free(testTranscoed->bmImg);
         testTranscoed->bmImg =NULL;
@@ -747,14 +750,14 @@ void Encoder::Encoder_CC::write_frame()
         frame_process_lock.unlock();
         frame->pts = frame_idx++;
 
-        AVPacket* enc_pkt = av_packet_alloc();
-        av_init_packet(enc_pkt);
-        enc_pkt->data = nullptr;
-        enc_pkt->size = 0;
+        AVPacket enc_pkt;
+        av_init_packet(&enc_pkt);
+        enc_pkt.data = nullptr;
+        enc_pkt.size = 0;
 
         int got_output = 0;
         spdlog::trace("sail.Encoder: write_frame() avcodec_encode_video2() start");
-        int ret = avcodec_encode_video2(enc_ctx_, enc_pkt, frame, &got_output);
+        int ret = avcodec_encode_video2(enc_ctx_, &enc_pkt, frame, &got_output);
         spdlog::trace("sail.Encoder: write_frame() avcodec_encode_video2() finish, ret: {}", ret);
         av_frame_free(&frame);
 
@@ -765,15 +768,13 @@ void Encoder::Encoder_CC::write_frame()
             continue;
         }
         if (got_output == 0) {
-#if !(LIBAVCODEC_VERSION_MAJOR > 58)
-            spdlog::warn("sail.Encoder: encoder no output for one frame in cache queue");
-#endif
+            spdlog::debug("sail.Encoder: encoder no output for one frame in cache queue");
             continue;
         }
 
-        spdlog::debug("sail.Encoder: write_frame() enc_pkt.pts={}, enc_pkt.dts={}", enc_pkt->pts, enc_pkt->dts);
-        av_packet_rescale_ts(enc_pkt, enc_ctx_->time_base,out_stream_->time_base);
-        spdlog::debug("sail.Encoder: write_frame() rescaled enc_pkt.pts={}, enc_pkt.dts={}", enc_pkt->pts, enc_pkt->dts);
+        spdlog::debug("sail.Encoder: write_frame() enc_pkt.pts={}, enc_pkt.dts={}", enc_pkt.pts, enc_pkt.dts);
+        av_packet_rescale_ts(&enc_pkt, enc_ctx_->time_base,out_stream_->time_base);
+        spdlog::debug("sail.Encoder: write_frame() rescaled enc_pkt.pts={}, enc_pkt.dts={}", enc_pkt.pts, enc_pkt.dts);
         
         if(is_rtsp_ || is_rtmp_)
         {
@@ -796,9 +797,8 @@ void Encoder::Encoder_CC::write_frame()
         }
         
         spdlog::trace("sail.Encoder: write_frame() av_interleaved_write_frame() start, frame_idx: {}", frame_idx);
-        ret = av_interleaved_write_frame(enc_format_ctx_, enc_pkt);
+        ret = av_interleaved_write_frame(enc_format_ctx_, &enc_pkt);
         spdlog::trace("sail.Encoder: write_frame() av_interleaved_write_frame() finish, ret: {}", ret);
-        av_packet_free(&enc_pkt);
         if(ret < 0){
             write_frame_ret = ret;
             spdlog::error("sail.Encoder: av_interleaved_write_frame failed for one frame in cache queue: {}", write_frame_ret);
@@ -881,39 +881,45 @@ int Encoder::Encoder_CC::video_write(bm_image &image)
 int Encoder::Encoder_CC::flush_encoder()
 {
     int ret = 0;
-    int got_frame = 0;
     if (!(enc_ctx_->codec->capabilities & AV_CODEC_CAP_DELAY))
         return 0;
     int64_t frame_interval = 1* 1000 * 1000 / params_map_["framerate"];
     
+    SPDLOG_INFO("Encoder flushing cache ...");
     while (1) {
         AVPacket temp_enc_pkt;
-        av_init_packet(&temp_enc_pkt);
         temp_enc_pkt.data = nullptr;
         temp_enc_pkt.size = 0;
-        ret = avcodec_encode_video2(this->enc_ctx_, &temp_enc_pkt, NULL, &got_frame);
-        if (ret < 0)
-            return ret;
+        av_init_packet(&temp_enc_pkt);
 
-        if (!got_frame)
-            break;
+        spdlog::debug("{} before avcodec_send_frame", __func__);
+        ret = avcodec_send_frame(enc_ctx_, nullptr);
+        spdlog::debug("{} avcodec_send_frame ret: {}", __func__, ret);
+        while(1) {
+            ret = avcodec_receive_packet(enc_ctx_, &temp_enc_pkt);
+            spdlog::debug("Encoder flush avcodec_receive_packet ret: {}", ret);
+            if (ret == AVERROR(EAGAIN)) {
+                av_packet_unref(&temp_enc_pkt);
+                break;
+            } else if (ret == 0) {
+                break;
+            } else if (ret == AVERROR_EOF) {
+                av_packet_unref(&temp_enc_pkt);
+                SPDLOG_INFO("Encoder flush end");
+                return ret;
+            } else {
+                SPDLOG_ERROR("Encoder avcodec_send_frame error, ret: {}", ret);
+                return ret;
+            }
+        }
+
+        if (ret != 0) {
+            continue;
+        }
 
         spdlog::debug("temp_enc_pkt.pts={}, temp_enc_pkt.dts={}", temp_enc_pkt.pts, temp_enc_pkt.dts);
         av_packet_rescale_ts(&temp_enc_pkt, this->enc_ctx_->time_base,this->out_stream_->time_base);
         spdlog::debug("rescaled temp_enc_pkt.pts={}, temp_enc_pkt.dts={}", temp_enc_pkt.pts, temp_enc_pkt.dts);
-
-        if(is_rtsp_ || is_rtmp_)
-        {
-            int64_t this_frame_pts_time = first_frame_time + frame_idx * frame_interval;
-            int64_t this_frame_time = av_gettime_relative();
-            spdlog::debug("elapsed_time : {}", this_frame_time - first_frame_time);
-            int64_t wait_time = this_frame_pts_time - this_frame_time;
-            spdlog::debug("wait_time : {}", wait_time);
-            if(wait_time > 0)
-            {
-                av_usleep(wait_time);
-            }
-        }
         ret = av_interleaved_write_frame(this->enc_format_ctx_, &temp_enc_pkt);
         if (ret < 0)
             break;
@@ -945,6 +951,7 @@ void Encoder::Encoder_CC::release()
     frame_process_lock.lock();
     while(frame_process_q.size()>0)
     {
+        spdlog::debug("{}, frame_process_q.size: {}", __func__, frame_process_q.size());
         AVFrame* frame = frame_process_q.front();
         frame_process_q.pop();
         av_frame_free(&frame);

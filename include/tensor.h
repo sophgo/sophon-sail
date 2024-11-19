@@ -292,12 +292,14 @@ void check_return_status(int ret);
  *
  * @param ret value returned from other function, like bmlib, bmcv.
  */
-#define SAIL_CHECK_RET(ret)                                                         \
-if (ret)                                                                            \
-{                                                                                   \
-  spdlog::error("{} {}: {}: {}", ret_to_string(ret), BASENAME(__FILE__), __func__, __LINE__); \
-  check_return_status(ret);                                                         \
-}
+#define SAIL_CHECK_RET(ret)                                        \
+    do {                                                           \
+        if (ret) {                                                 \
+            spdlog::error("{} {}: {}: {}", ret_to_string(ret),     \
+                          BASENAME(__FILE__), __func__, __LINE__); \
+            check_return_status(ret);                              \
+        }                                                          \
+    } while (0)
 
 enum class LogLevel: int
 {
@@ -578,6 +580,17 @@ class DECL_EXPORT Tensor {
   Tensor(const Tensor& tensor, const std::vector<std::pair<int, int>> &ranges, bool d2d_flag=true);
 
   /**
+   * @brief Constructor to create a new tensor from another existing tensor.
+   *
+   * @param src A Tensor instance
+   * @param shape The shape of new tensor, which can not exceed src's shape.
+   * @param offset element(not byte) index offset to the start of src's device memory
+   * @param no_copy If no_copy flag is set to true, the created tensor will share 
+                    the src's memory, instead of allocating new memory.
+   */
+  Tensor(const Tensor &src, const std::vector<int> &shape, unsigned int offset, bool no_copy = true);
+
+  /**
    * @brief Assignment function.
    *
    * @param tensor A Tensor instance
@@ -668,13 +681,13 @@ class DECL_EXPORT Tensor {
    * @brief Check whether device data is valid.
    * @param return true if device data is valid, otherwise false.
    */
-  inline bool is_dev_data_valid() const;
+  bool is_dev_data_valid() const;
 
   /**
    * @brief Check whether system data is valid.
    * @param return true if system data is valid, otherwise false.
    */
-  inline bool is_sys_data_valid() const;
+  bool is_sys_data_valid() const;
 
     /**
    * @breaf Dump Tensor data to file
@@ -936,7 +949,27 @@ class DECL_EXPORT Tensor {
    */
   void free();
 
-  int size();
+  /**
+   * @brief Returns the number of elements in this tensor.
+   * 
+   * @return The number of elements in this tensor.
+   */
+  int size() const;
+
+  /**
+   * @brief Returns the size in bytes of an individual element.
+   * 
+   * @return The byte size of a single tensor element.
+   */
+  int element_size() const;
+
+  /**
+   * @brief Return the total number of bytes occupied by all elements of Tensor.
+   * 
+   * @return The total number of bytes occupied by all elements in Tensor.
+   */
+  int nbytes() const;
+
 
   // /**
   //  * @brief Get the value of index.
