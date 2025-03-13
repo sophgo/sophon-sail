@@ -1,7 +1,7 @@
 Compilation and Installation Guide
 ======================================
 
-.. |ver| replace:: 3.9.0
+.. |ver| replace:: 3.9.3
 
 The Directory Structure of the Source Code
 ____________________________________________________
@@ -32,16 +32,20 @@ The directory structure of the source code is as follows:
         │   └── source_zh
         ├── include                 # Includes
         ├── pyis                    # Stub files
+        ├── pysail-dev              # Files for secondary dev
+        │   └── ...
         ├── python                  # Wheel codes
         ├── python_wheels           # Python Wheels
         │   ├── arm_pcie
         │   ├── loongarch
         │   ├── soc_BM1684_BM1684X
         │   └── soc_BM1688
+        │   └── ...
         ├── sample                  # Sample files
+        │   └── ...
         ├── src                     # Source codes
+        │   └── ...
         └── ...
-
 
 
 
@@ -49,6 +53,7 @@ Among them, 3rdparty mainly contains some header files of the third party on whi
 cmake contains some cmake files used for compilation; 
 include contains some header files of sail; 
 pyis contains some stub files for Python interfaces; 
+pysail-dev contains headers and libs for secondary developing other Python module;
 python folder contains the packaging code and scripts of python whl for each platform; 
 python_wheels contains come pre-compiled sail wheels; 
 sample contains some code samples for developers; 

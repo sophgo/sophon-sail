@@ -563,6 +563,18 @@ class DECL_EXPORT Tensor {
       bm_data_type_t          dtype=BM_FLOAT32);
 
   /**
+   * @brief Constructor of device data.
+   *
+   * @param shape A vector of shape
+   * @param t A part of device memory
+   */
+  explicit Tensor(
+      const Handle&           handle,
+      const std::vector<int>& shape,
+      bm_data_type_t          dtype,
+      bm_device_mem_t         t);
+
+  /**
    * @brief Copy constructor.
    *
    * @param tensor A Tensor instance

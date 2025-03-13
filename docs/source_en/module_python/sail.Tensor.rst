@@ -259,11 +259,11 @@ Note: If the data is of the numpy.float16 type, you should use numpy.view(numpy.
             dev_id = 0
             handle = sail.Handle(dev_id)
             
-            tensor_fp32 = sail.Tensor(handle, (1,3,640,640), sail.BM_FLOAT32)
+            tensor_fp32 = sail.Tensor(handle, [1,3,640,640], sail.BM_FLOAT32, True, True)
             np_fp32 = np.ones(tensor_fp32.shape(),dtype=np.float32)
             tensor_fp32.update_data(np_fp32)
 
-            tensor_fp16 = sail.Tensor(handle, (1,3,640,640), sail.BM_FLOAT16)
+            tensor_fp16 = sail.Tensor(handle, [1,3,640,640], sail.BM_FLOAT16, True, True)
             np_fp16 = np.ones(tensor_fp16.shape(),dtype=np.float16)
             tensor_fp16.update_data(np_fp16.view(np.uint16))
 
@@ -298,7 +298,7 @@ Scale value.
             input = np.array([1, 2, 3]) 
             
             input_tensor1 = sail.Tensor(handle,input)
-            input_tensor1_ = input_tensor1.scale_from(input,0.1)
+            input_tensor1.scale_from(input,0.1)
 
 scale_to
 >>>>>>>>>>>>>>>>>>>>>
@@ -353,11 +353,11 @@ Data.
         import numpy as np
         if __name__ == '__main__':
             handle = sail.Handle(0)
-            input = np.array([1, 2, 3]) 
-            
+            input = np.array([1, 2, 3])
+
             input_tensor1 = sail.Tensor(handle,input)
-            input_tensor1_ = input_tensor1.scale_to(input,0.1)
-            input_tensor1__ = input_tensor1.scale_to(input,0.1,(3,1))
+            input_tensor1_ = input_tensor1.scale_to(0.1)
+            input_tensor1__ = input_tensor1.scale_to(0.1,(3,1))
 
 reshape
 >>>>>>>>>>>>>>>>>>>>>
@@ -506,7 +506,7 @@ Specifies the length of the copy, i.e., the number of elements to copy.
             input = np.array([1, 2, 3]) 
             
             input_tensor1 = sail.Tensor(handle,input)
-            input_tensor2 = sail.Tensor(handle,[1,2],sail.Dtype.BM_FLOAT32,true,true)
+            input_tensor2 = sail.Tensor(handle,[1,2], sail.Dtype.BM_FLOAT32, True, True)
             input_tensor2.sync_s2d()
             input_tensor2.sync_s2d(1)
             input_tensor2.sync_s2d(input_tensor1,0,0,2)
@@ -679,12 +679,12 @@ binary format, default False.
         if __name__ == '__main__':
             dev_id = 0
             handle = sail.Handle(dev_id)
-            data = np.ones([1,20],dtype=int)
-            ts = sail.Tensor(handle,data)
-            ts.scale_from(data,[0.01,0.1])
+            data = np.ones([1,20], dtype=int)
+            ts = sail.Tensor(handle, data)
+            ts.scale_from(data, 0.1)
             ts.dump_data("./temp.txt")
             ret_data = np.loadtxt("./temp.txt")
-            print(ts.asnumpy(),ret_data)
+            print(ts.asnumpy(), ret_data)
 
 
 memory_set

@@ -17,6 +17,11 @@ namespace sail {
 
 
 #ifdef BUILD_ENGINELLM
+
+#if SAIL_WITH_BMRT_FLAG
+using BmrtFlag = bm_runtime_flag_t;
+#endif  // SAIL_WITH_BMRT_FLAG
+
 /**
  * @brief The main class of running deep learning inference on TPU.
  *
@@ -35,6 +40,22 @@ class DECL_EXPORT EngineLLM {
   EngineLLM(
       const std::string& bmodel_path,
       std::vector<int>   tpu_ids);
+
+#if SAIL_WITH_BMRT_FLAG
+  /**
+   * @brief Constructor loads bmodel from file.
+   *
+   * @param bmodel_path Path to bmodel
+   * @param flags       flags for bmruntime. 
+   *                    Value should be set by enum BmrtFlag, like BM_RUNTIME_SHARE_MEM.
+   *                    Refer to Bmruntime doc for more details
+   * @param tpu_ids     TPU ID list. You can use bm-smi to see available IDs
+   */
+  EngineLLM(
+      const std::string& bmodel_path,
+      uint32_t           flags,
+      std::vector<int>   tpu_ids);
+#endif  // SAIL_WITH_BMRT_FLAG
 
   /**
    * @brief Constructor loads bmodel from system memory.

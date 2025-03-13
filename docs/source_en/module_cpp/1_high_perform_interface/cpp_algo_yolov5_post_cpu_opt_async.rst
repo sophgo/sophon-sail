@@ -44,7 +44,7 @@ push_data
 
 Support input with arbitrary batchsize.
 
-**Interface:**
+**Interface1:**
     .. code-block:: c
 
         int push_data(
@@ -57,7 +57,7 @@ Support input with arbitrary batchsize.
             std::vector<int> ost_h,
             std::vector<std::vector<int>> padding_attr);
 
-**Parameters:**
+**Parameters1:**
 
 * channel_idx: std::vector<int>
 
@@ -92,7 +92,59 @@ The height of original image.
 The attribute list of the fill image, starting point coordinate x, starting point coordinate y, \
 width after scaling, height after scaling.
 
-**Returns:**
+**Returns1:**
+
+Return 0 if successful, otherwise failed.
+
+**Interface2:**
+    .. code-block:: c
+
+        int push_data(
+            std::vector<int> channel_idx, 
+            std::vector<int> image_idx, 
+            std::vector<TensorPTRWithName> input_data, 
+            std::vector<std::vector<float>> dete_threshold,
+            std::vector<float> nms_threshold,
+            std::vector<int> ost_w,
+            std::vector<int> ost_h,
+            std::vector<std::vector<int>> padding_attr);
+
+**Parameters2:**
+
+* channel_idx: std::vector<int>
+
+The channel number of the input image.
+
+* image_idx: std::vector<int>
+
+The sequence number of the input image.
+
+* input_data: std::vector<TensorPTRWithName>
+
+The input data, including three outputs.
+
+* dete_threshold: std::vector<std::vector<float>>
+
+Detection threshold sequence.
+
+* nms_threshold: std::vector<float>
+
+nms threshold.
+
+* ost_w: std::vector<int>
+
+The width of original image.
+
+* ost_h: std::vector<int>
+
+The height of original image.
+
+* padding_attrs: std::vector<std::vector<int>>
+
+The attribute list of the fill image, starting point coordinate x, starting point coordinate y, \
+width after scaling, height after scaling.
+
+**Returns2:**
 
 Return 0 if successful, otherwise failed.
 

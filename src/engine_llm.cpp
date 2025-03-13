@@ -24,6 +24,7 @@ You may obtain a copy of the License at
 #include <fstream>
 #include <chrono>
 #include <algorithm>
+#include <limits>
 #ifdef PYTHON
 #include <pybind11/detail/common.h>
 #include <pybind11/pybind11.h>
@@ -701,6 +702,7 @@ public:
      **/
     EngineLLM_CC(
         const std::string& bmodel_path,
+        uint32_t           flags,
         std::vector<int>   tpu_ids);
 
     /**
@@ -800,30 +802,30 @@ private:
   friend class EngineLLM;
 
   /// Pointer to bmruntime instance.
-  void* p_bmrt_;
+  void* p_bmrt_ = nullptr;
 
   /// Handle instance.
-  std::vector<bm_handle_t> handles_;
+  std::vector<bm_handle_t> handles_ = {};
 
-  std::vector<int> device_ids_;
+  std::vector<int> device_ids_ = {};
+  uint32_t bmrt_flags_ = BM_RUNTIME_AUTO;
 
   // graph info
-  int graph_num_;
-  std::vector<std::string> graph_names_;
+  int graph_num_ = 0;
+  std::vector<std::string> graph_names_ = {};
 
   int create_handles();
   int init_graph_names();
 };
 
-EngineLLM::EngineLLM_CC::EngineLLM_CC(const std::string& bmodel_path, std::vector<int> tpu_ids)
-    :p_bmrt_(nullptr),device_ids_(tpu_ids),handles_({}),graph_num_(NULL),graph_names_({})
+EngineLLM::EngineLLM_CC::EngineLLM_CC(const std::string& bmodel_path, uint32_t flags, std::vector<int> tpu_ids)
+    :p_bmrt_(nullptr),handles_({}),device_ids_(tpu_ids),bmrt_flags_(flags),graph_num_(NULL),graph_names_({})
 {
     // bm_dev_getcount
     if(device_ids_.size() <= 0){ // or tpu_id > tpu_num
         SPDLOG_ERROR("Input tpus is empty!");
         throw SailEngineError("EngineLLM device_ids error!");
     }
-    // TODO sort device_ids_
 
     struct stat buffer;
     if (stat(bmodel_path.c_str(), &buffer) != 0) {
@@ -833,6 +835,15 @@ EngineLLM::EngineLLM_CC::EngineLLM_CC(const std::string& bmodel_path, std::vecto
     int ret = 0;
     ret = create_handles();
     SAIL_CHECK_RET( ret );
+
+#if SAIL_WITH_BMRT_FLAG
+    if (bmrt_flags_ == std::numeric_limits<uint32_t>::max()) {
+        bmrt_flags_ = bmrt_get_flags(p_bmrt_);
+    } else {
+        bmrt_set_flags(p_bmrt_, bmrt_flags_);
+        SPDLOG_INFO("EngineLLM using bmrt flags: {}", bmrt_flags_);
+    }
+#endif  // SAIL_WITH_BMRT_FLAG
 
     if(bmrt_load_bmodel(p_bmrt_, bmodel_path.c_str()) == false){
         SPDLOG_ERROR("Load bmodel {} failed", bmodel_path);
@@ -848,7 +859,6 @@ EngineLLM::EngineLLM_CC::EngineLLM_CC(const std::string& bmodel_path, std::vecto
         graphs_[graph_name] = graph;
     }
 }
-
 
 EngineLLM::EngineLLM_CC::EngineLLM_CC(
         const void*       bmodel_ptr,
@@ -1169,8 +1179,16 @@ std::map<int, sail::Tensor*> EngineLLM::EngineLLM_CC::create_max_output_tensors(
 EngineLLM::EngineLLM(
     const std::string& bmodel_path,
     std::vector<int>   tpu_ids)
-    :_impl(new EngineLLM_CC(bmodel_path, tpu_ids)){
+    : _impl(new EngineLLM_CC(bmodel_path, std::numeric_limits<uint32_t>::max(), tpu_ids)) {
 }
+
+#if SAIL_WITH_BMRT_FLAG
+EngineLLM::EngineLLM(
+    const std::string& bmodel_path,
+    uint32_t           flags,
+    std::vector<int>   tpu_ids)
+    :_impl(new EngineLLM_CC(bmodel_path, flags, tpu_ids)){}
+#endif  // SAIL_WITH_BMRT_FLAG
 
 EngineLLM::EngineLLM(
     const void*       bmodel_ptr,

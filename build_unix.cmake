@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.10)
-project(sail VERSION 3.9.1)
+project(sail VERSION 3.9.3)
 
 option(ONLY_RUNTIME "OFF for USE OpenCV,BM-FFMPEG,BMCV"  OFF)
 option(BUILD_PYSAIL "ON for Build sail with python"      ON)
@@ -128,8 +128,8 @@ if (NOT CROSS_COMPILE)
     set(common_inc_dirs ${CMAKE_CURRENT_SOURCE_DIR}/3rdparty ${CMAKE_CURRENT_SOURCE_DIR}/include)
     set(basic_include_path ${LIBSOPHON_INCLUDE_DIRS})
     set(basic_lib_path ${LIBSOPHON_LIB_DIRS})
-    set(basic_link_libs ${the_libbmlib.so} ${the_libbmrt.so})
-    
+    set(basic_link_libs bmlib bmrt)
+
     if (WITH_FFMPEG)
         add_definitions(-DUSE_FFMPEG=1)
         if (DEFINED FFMPEG_BASIC_PATH)
@@ -273,13 +273,21 @@ endif()
 message(STATUS "CMAKE_INSTALL_PREFIX: ${CMAKE_INSTALL_PREFIX}")
 
 # read bmcv_api_ext.h content
-file(READ ${LIBSOPHON_INCLUDE_DIRS}/bmdef.h ADDR_MODE)
+file(READ ${LIBSOPHON_INCLUDE_DIRS}/bmdef.h BMRT_DEFINE)
 # add BMCV_VERSION_MAJOR definitions
-if(ADDR_MODE MATCHES "int32_t addr_mode;")
+if(BMRT_DEFINE MATCHES "int32_t addr_mode;")
     add_definitions(-DBUILD_ENGINELLM=1)
     message(STATUS "build with engine_llm")
 else()
     message(STATUS "build without engine_llm")
+endif()
+
+if(BMRT_DEFINE MATCHES "bm_runtime_flag_t")
+    add_definitions(-DSAIL_WITH_BMRT_FLAG=1)
+    set(sail_def_bmrt_flag "add_definitions(-DSAIL_WITH_BMRT_FLAG=1)")
+    message(STATUS "build sail with bmrt flag")
+else()
+    message(STATUS "build sail without bmrt flag")
 endif()
 
 include_directories(${common_inc_dirs} ${basic_include_path})

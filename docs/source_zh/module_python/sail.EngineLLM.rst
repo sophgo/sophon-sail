@@ -68,10 +68,37 @@ bmodel在内存中的字节数
 
 EngineLLM实例使用的智能视觉深度学习处理器的id列表
 
+**接口形式3:**
+
+创建EngineLLM实例，从bmodel文件中加载模型，加载时使用指定的bmruntime flag。
+典型使用场景是，在BM1688设备上执行LLM模型的推理时，可以设置flag为 ``BM_RUNTIME_SHARE_MEM`` ，以节省设备内存。
+
+    .. code-block:: python
+
+        def __init__(self, bmodel_path: str, flags: int, dev_ids: list[int])
+
+**参数说明1:**
+
+* bmodel_path: str
+
+bmodel文件的路径
+
+* flags: int
+
+加载bmodel使用的bmruntime flag。
+推荐通过 ``BmrtFlag`` 枚举设置，例如 ``sail.BmrtFlag.BM_RUNTIME_SHARE_MEM`` 。
+更多信息请参考《BMRuntime 开发参考手册》。
+
+* dev_ids: list[int]
+
+EngineLLM实例使用的智能视觉深度学习处理器的id列表
+
 **示例代码:**
     .. code-block:: python
 
         import sophon.sail as sail
+        import os
+
         if __name__ == '__main__':
             bmodel_path = "example_8dev.bmodel"
             dev_ids = [i for i in range(8)]
@@ -83,6 +110,9 @@ EngineLLM实例使用的智能视觉深度学习处理器的id列表
             file_size = os.path.getsize(bmodel_path)
             engine2 = sail.EngineLLM(datas, file_size, dev_ids)
 
+            llm_bmodel_path = "llama.bmodel"
+            flag = sail.BmrtFlag.BM_RUNTIME_SHARE_MEM
+            engine3 = sail.EngineLLM(llm_bmodel_path, flag, dev_ids)
 
 推理接口 process
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -373,10 +403,10 @@ get_output_scale
         import sophon.sail as sail
         if __name__ == '__main__':
             bmodel_path = "example_8dev.bmodel"
-            devids: list[int] = [i for i in range(8)]
+            dev_ids: list[int] = [i for i in range(8)]
             engine1 = sail.EngineLLM(bmodel_path, dev_ids)
             dev_ids = engine1.get_device_ids()
-            graph_names: list[str] = engine1.get_graph_names()
+            graph_names = engine1.get_graph_names()
             graph_name_0 = graph_names[0]
 
             query_index = 0
@@ -387,11 +417,11 @@ get_output_scale
             is_dynamic = engine1.get_is_dynamic(graph_name_0)
             input_name = engine1.get_input_name(graph_name_0, query_index)
             input_tensor_devid = engine1.get_input_tensor_devid(
-                                     graph_name_0, query_index)
-            input_shape: list[int] = engine1.get_input_shape(
-                                         graph_name_0, query_index, query_stage)
+                                        graph_name_0, query_index)
+            input_shape = engine1.get_input_shape(
+                                            graph_name_0, query_index, query_stage)
             input_max_shape = engine1.get_input_max_shape(
-                                  graph_name_0, query_index)
+                                    graph_name_0, query_index)
             input_dtype = engine1.get_input_dtype(graph_name_0, query_index)
             input_scale = engine1.get_input_scale(graph_name_0, query_index)
             # usage about output is omitted, which is the same as input

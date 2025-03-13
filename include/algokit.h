@@ -160,7 +160,15 @@ class DECL_EXPORT algo_yolov5_post_1output {
         std::vector<int> ost_w,
         std::vector<int> ost_h,
         std::vector<std::vector<int>> padding_attr);
-        
+    int push_data(
+        std::vector<int> channel_idx, 
+        std::vector<int> image_idx, 
+        TensorPTRWithName input_data, 
+        std::vector<std::vector<float>> dete_threshold,
+        std::vector<float> nms_threshold,
+        std::vector<int> ost_w,
+        std::vector<int> ost_h,
+        std::vector<std::vector<int>> padding_attr);    
     /**
      * @brief Get Result
      * 
@@ -453,7 +461,16 @@ class DECL_EXPORT algo_yolov5_post_3output {
         std::vector<int> ost_w,
         std::vector<int> ost_h,
         std::vector<std::vector<int>> padding_attr);
-        
+    int push_data(
+        std::vector<int> channel_idx, 
+        std::vector<int> image_idx, 
+        std::vector<TensorPTRWithName> input_data, 
+        std::vector<std::vector<float>> dete_threshold,
+        std::vector<float> nms_threshold,
+        std::vector<int> ost_w,
+        std::vector<int> ost_h,
+        std::vector<std::vector<int>> padding_attr);
+            
     /**
      * @brief Get Result
      * 
@@ -538,7 +555,15 @@ class DECL_EXPORT algo_yolov5_post_cpu_opt_async {
         std::vector<int> ost_w,
         std::vector<int> ost_h,
         std::vector<std::vector<int>> padding_attr);
-        
+    int push_data(
+        std::vector<int> channel_idx, 
+        std::vector<int> image_idx, 
+        std::vector<TensorPTRWithName> input_data, 
+        std::vector<std::vector<float>> dete_threshold,
+        std::vector<float> nms_threshold,
+        std::vector<int> ost_w,
+        std::vector<int> ost_h,
+        std::vector<std::vector<int>> padding_attr);    
     /**
      * @brief Get Result
      * 
@@ -731,7 +756,15 @@ class DECL_EXPORT algo_yolov5_post_cpu_opt {
         std::vector<float> &nms_threshold,
         bool input_keep_aspect_ratio,
         bool input_use_multiclass_nms);
-        
+    int process(
+        std::vector<TensorPTRWithName> &input_data, 
+        std::vector<int> &ost_w,
+        std::vector<int> &ost_h,
+        std::vector<std::vector<DeteObjRect>> &out_doxs,
+        std::vector<std::vector<float>> &dete_threshold,
+        std::vector<float> &nms_threshold,
+        bool input_keep_aspect_ratio,
+        bool input_use_multiclass_nms);    
     /**
      * @brief Porcess
      * 
@@ -752,12 +785,27 @@ class DECL_EXPORT algo_yolov5_post_cpu_opt {
                 std::vector<float> &nms_threshold,
                 bool input_keep_aspect_ratio,
                 bool input_use_multiclass_nms);
-
+    std::vector<std::vector<std::tuple<int, int, int, int ,int, float>>>
+         process(std::vector<TensorPTRWithName> &input_data, 
+                std::vector<int> &ost_w,
+                std::vector<int> &ost_h,
+                std::vector<std::vector<float>> &dete_threshold,
+                std::vector<float> &nms_threshold,
+                bool input_keep_aspect_ratio,
+                bool input_use_multiclass_nms);
     std::vector<std::vector<std::tuple<int, int, int, int ,int, float>>>
          process(std::map<std::string, Tensor&>& input_data,
                 std::vector<int> &ost_w,
                 std::vector<int> &ost_h,
                 std::vector<float> &dete_threshold,
+                std::vector<float> &nms_threshold,
+                bool input_keep_aspect_ratio,
+                bool input_use_multiclass_nms);
+    std::vector<std::vector<std::tuple<int, int, int, int ,int, float>>>
+         process(std::map<std::string, Tensor&>& input_data,
+                std::vector<int> &ost_w,
+                std::vector<int> &ost_h,
+                std::vector<std::vector<float>> &dete_threshold,
                 std::vector<float> &nms_threshold,
                 bool input_keep_aspect_ratio,
                 bool input_use_multiclass_nms);

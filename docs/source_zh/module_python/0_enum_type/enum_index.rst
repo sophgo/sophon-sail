@@ -11,4 +11,5 @@ SAIL 枚举类型
    sail.bmcv_resize_algorithm
    sail.sail_resize_type
    sail.DecoderStatus
+   sail.BmrtFlag
    

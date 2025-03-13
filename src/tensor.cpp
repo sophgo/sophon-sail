@@ -286,11 +286,13 @@ namespace sail {
     }
 
     std::shared_ptr<bm_handle_t> make_shaptr_bm_handle_t(int dev_id){
-        std::shared_ptr<bm_handle_t> ptr_temp = std::shared_ptr<bm_handle_t>(new bm_handle_t[1],delete_shaptr_bm_handle_t_allocated);
         if (bm_dev_query(dev_id)) {
-            SPDLOG_ERROR("Error: Invalid tpu id: {}!", dev_id);
-            throw SailDeviceError("invalid device id");
+            SPDLOG_ERROR("bm_dev_query failed. "
+                         "Maybe the limit for open files (ulimit) has been reached, or "
+                         "the given TPU id '{}' is invalid!", dev_id);
+            throw SailDeviceError("init device failure");
         }
+        std::shared_ptr<bm_handle_t> ptr_temp = std::shared_ptr<bm_handle_t>(new bm_handle_t[1],delete_shaptr_bm_handle_t_allocated);
         bm_dev_request(&ptr_temp.get()[0], dev_id);
         return std::move(ptr_temp);
     }
@@ -749,9 +751,13 @@ namespace sail {
     }
 
     void Tensor::Tensor_CC::free() {
+        int ret = 0;
         if (own_sys_data_ && sys_data_) {
             if (own_sys_data_is_mmap_) {
-                bm_mem_unmap_device_mem(handle_.data(), sys_data_, data_size_);
+                ret = bm_mem_unmap_device_mem(handle_.data(), sys_data_, data_size_);
+                if (BM_SUCCESS != ret) {
+                    SPDLOG_ERROR("bm_mem_unmap_device_mem() err={}", ret);
+                }
             } else {
                 std::free(sys_data_);
             }
@@ -764,7 +770,10 @@ namespace sail {
         } else {
             if (sys_data_ != nullptr && dev_data_.size > 0) {
                 if (own_sys_data_is_mmap_) {
-                    bm_mem_unmap_device_mem(handle_.data(), sys_data_, dev_data_.size);
+                    ret = bm_mem_unmap_device_mem(handle_.data(), sys_data_, dev_data_.size);
+                    if (BM_SUCCESS != ret) {
+                        SPDLOG_ERROR("bm_mem_unmap_device_mem() err={}", ret);
+                    }
                     sys_data_ = nullptr;
                 }
             }
@@ -802,14 +811,30 @@ namespace sail {
                 sys_data_ = malloc(data_size);
 #else
                 if (own_dev_data_) {
-                  bm_mem_unmap_device_mem(handle_.data(), sys_data_, data_size_);
-                  bm_mem_mmap_device_mem(handle_.data(), &dev_data_,
-                                         (unsigned long long*)&sys_data_);
-                  bm_mem_invalidate_device_mem(handle_.data(), &dev_data_);
-                  own_sys_data_is_mmap_ = true;
+                    ret = bm_mem_unmap_device_mem(handle_.data(), sys_data_,
+                                                  data_size_);
+                    if (BM_SUCCESS != ret) {
+                        SPDLOG_ERROR("bm_mem_unmap_device_mem() err={}", ret);
+                        throw SailRuntimeError("bmlib api fail");
+                    }
+                    ret = bm_mem_mmap_device_mem(
+                        handle_.data(), &dev_data_,
+                        (unsigned long long *)&sys_data_);
+                    if (BM_SUCCESS != ret) {
+                        SPDLOG_ERROR("bm_mem_mmap_device_mem() err={}", ret);
+                        throw SailRuntimeError("bmlib api fail");
+                    }
+                    ret = bm_mem_invalidate_device_mem(handle_.data(),
+                                                       &dev_data_);
+                    if (BM_SUCCESS != ret) {
+                        SPDLOG_ERROR("bm_mem_invalidate_device_mem() err={}",
+                                     ret);
+                        throw SailRuntimeError("bmlib api fail");
+                    }
+                    own_sys_data_is_mmap_ = true;
                 } else {
-                  std::free(sys_data_);
-                  sys_data_ = malloc(data_size);
+                    std::free(sys_data_);
+                    sys_data_ = malloc(data_size);
                 }
 #endif
             }
@@ -843,9 +868,14 @@ namespace sail {
     }
 
     void Tensor::Tensor_CC::reset_dev_data(bm_device_mem_t data)  {
+        int ret = 0;
         if (own_dev_data_) {
             if (is_sys_data_valid() && is_dev_data_valid() && own_sys_data_is_mmap_) {
-                bm_mem_unmap_device_mem(handle_.data(), sys_data_, dev_data_.size);
+                ret = bm_mem_unmap_device_mem(handle_.data(), sys_data_, dev_data_.size);
+                if (BM_SUCCESS != ret) {
+                    SPDLOG_ERROR("bm_mem_unmap_device_mem() err={}", ret);
+                    throw SailRuntimeError("bmlib api fail");
+                }
                 printf("%s:%d\n", __FILE__, __LINE__);
                 sys_data_ = nullptr;
             }
@@ -855,26 +885,42 @@ namespace sail {
             own_dev_data_ = false;
             // device memory changed, mmap will change too
 #ifdef IS_SOC_MODE
-            bm_mem_mmap_device_mem(handle_.data(), &dev_data_, (unsigned long long*)&sys_data_);
+            ret = bm_mem_mmap_device_mem(handle_.data(), &dev_data_, (unsigned long long*)&sys_data_);
+            if (BM_SUCCESS != ret) {
+                SPDLOG_ERROR("bm_mem_mmap_device_mem() err={}", ret);
+                throw SailRuntimeError("bmlib api fail");
+            }
             own_sys_data_is_mmap_ = true;
 #endif
         } else {
             if (is_sys_data_valid()) {
                 if (own_sys_data_is_mmap_) {
 #ifdef IS_SOC_MODE
-                    bm_mem_unmap_device_mem(handle_.data(), sys_data_, dev_data_.size);
+                    ret = bm_mem_unmap_device_mem(handle_.data(), sys_data_, dev_data_.size);
+                    if (BM_SUCCESS != ret) {
+                        SPDLOG_ERROR("bm_mem_unmap_device_mem() err={}", ret);
+                        throw SailRuntimeError("bmlib api fail");
+                    }
                     sys_data_ = nullptr;
 #endif
                 }
                 dev_data_ = data;
 #ifdef IS_SOC_MODE
-                bm_mem_mmap_device_mem(handle_.data(), &dev_data_, (unsigned long long*)&sys_data_);
+                ret = bm_mem_mmap_device_mem(handle_.data(), &dev_data_, (unsigned long long*)&sys_data_);
+                if (BM_SUCCESS != ret) {
+                    SPDLOG_ERROR("bm_mem_mmap_device_mem() err={}", ret);
+                    throw SailRuntimeError("bmlib api fail");
+                }
                 own_sys_data_is_mmap_ = true;
 #endif
             } else {
                 dev_data_ = data;
 #ifdef IS_SOC_MODE
-                bm_mem_mmap_device_mem(handle_.data(), &dev_data_, (unsigned long long*)&sys_data_);
+                ret = bm_mem_mmap_device_mem(handle_.data(), &dev_data_, (unsigned long long*)&sys_data_);
+                if (BM_SUCCESS != ret) {
+                    SPDLOG_ERROR("bm_mem_mmap_device_mem() err={}", ret);
+                    throw SailRuntimeError("bmlib api fail");
+                }
                 own_sys_data_is_mmap_ = true;
 #endif
             }
@@ -984,7 +1030,7 @@ namespace sail {
         int type_size = get_type_size(dtype_);
 
         // Check the stride_dst value
-        if (!(stride_dst = 1 || (stride_dst == 4 && stride_src == 1 && type_size == 1 ))){
+        if (!(stride_dst == 1 || (stride_dst == 4 && stride_src == 1 && type_size == 1 ))){
             spdlog::error("sync_d2d_stride: stride_dst must be 1, EXCEPT: stride_dst == 4 && stride_src == 1 && Tensor_type_size == 1");
             throw SailTensorError("Wrong stride config!");
         }
@@ -1496,7 +1542,11 @@ namespace sail {
 #ifndef IS_SOC_MODE
             sys_data_ = new uint8_t[data_size];
 #else
-            bm_mem_mmap_device_mem(handle_.data(), &dev_data_, (unsigned long long*)&sys_data_);
+            int ret = bm_mem_mmap_device_mem(handle_.data(), &dev_data_, (unsigned long long*)&sys_data_);
+            if (BM_SUCCESS != ret) {
+                SPDLOG_ERROR("bm_mem_mmap_device_mem() err={}", ret);
+                throw SailRuntimeError("bmlib api fail");
+            }
             own_sys_data_is_mmap_ = true;
 #endif
             memcpy(sys_data_, numpy_ptr, data_size); 
@@ -1572,6 +1622,15 @@ namespace sail {
         }
 
         void* numpy_ptr = buf.ptr;
+        bool is_contiguous = true;
+        size_t expected_stride = buf.itemsize;
+        for (ssize_t i = buf.ndim - 1; i >= 0; --i) {
+            if (buf.strides[i] != expected_stride) {
+                is_contiguous = false;
+                break;
+            }
+            expected_stride *= buf.shape[i];
+        }
 
         pybind11::array_t<float> arr_float;
         pybind11::array_t<int8_t> arr_int8_t;
@@ -1580,47 +1639,48 @@ namespace sail {
         pybind11::array_t<uint32_t> arr_uint32_t;
         pybind11::array_t<uint16_t> arr_uint16_t;
         pybind11::array_t<int16_t> arr_int16_t;
-        pybind11::module np = pybind11::module::import("numpy");  // like 'import numpy as np'
-        if(BM_FLOAT32 == dtype_){
-            pybind11::array_t<float> buf_temp(buf);
-            arr_float = np.attr("ascontiguousarray")(buf_temp);
-            numpy_ptr = arr_float.request().ptr;
-        }else if(BM_INT8 == dtype_){
-            pybind11::array_t<int8_t> buf_temp(buf);
-            arr_int8_t = np.attr("ascontiguousarray")(buf_temp);
-            numpy_ptr = arr_int8_t.request().ptr;
-        }else if(BM_UINT8 == dtype_){
-            pybind11::array_t<uint8_t> buf_temp(buf);
-            arr_uint8_t = np.attr("ascontiguousarray")(buf_temp);
-            numpy_ptr = arr_uint8_t.request().ptr;
-        }else if(BM_INT32 == dtype_){
-            pybind11::array_t<int32_t> buf_temp(buf);
-            arr_int32_t = np.attr("ascontiguousarray")(buf_temp);
-            numpy_ptr = arr_int32_t.request().ptr;
-        }else if(BM_FLOAT16 == dtype_){
-            pybind11::array_t<uint16_t> buf_temp(buf);
-            arr_uint16_t = np.attr("ascontiguousarray")(buf_temp);
-            numpy_ptr = arr_uint16_t.request().ptr;
-        }else if(BM_BFLOAT16 == dtype_){
-            pybind11::array_t<uint16_t> buf_temp(buf);
-            arr_uint16_t = np.attr("ascontiguousarray")(buf_temp);
-            numpy_ptr = arr_uint16_t.request().ptr;
-        }else if(BM_UINT32 == dtype_){
-            pybind11::array_t<uint32_t> buf_temp(buf);
-            arr_uint32_t = np.attr("ascontiguousarray")(buf_temp);
-            numpy_ptr = arr_uint32_t.request().ptr;
-        }else if(BM_UINT16 == dtype_){
-            pybind11::array_t<uint16_t> buf_temp(buf);
-            arr_uint16_t = np.attr("ascontiguousarray")(buf_temp);
-            numpy_ptr = arr_uint16_t.request().ptr;
-        }else if(BM_INT16 == dtype_){
-            pybind11::array_t<uint16_t> buf_temp(buf);
-            arr_int16_t = np.attr("ascontiguousarray")(buf_temp);
-            numpy_ptr = arr_int16_t.request().ptr;
+        if (!is_contiguous) {
+            pybind11::module np = pybind11::module::import("numpy");  // like 'import numpy as np'
+            if(BM_FLOAT32 == dtype_){
+                pybind11::array_t<float> buf_temp(buf);
+                arr_float = np.attr("ascontiguousarray")(buf_temp);
+                numpy_ptr = arr_float.request().ptr;
+            }else if(BM_INT8 == dtype_){
+                pybind11::array_t<int8_t> buf_temp(buf);
+                arr_int8_t = np.attr("ascontiguousarray")(buf_temp);
+                numpy_ptr = arr_int8_t.request().ptr;
+            }else if(BM_UINT8 == dtype_){
+                pybind11::array_t<uint8_t> buf_temp(buf);
+                arr_uint8_t = np.attr("ascontiguousarray")(buf_temp);
+                numpy_ptr = arr_uint8_t.request().ptr;
+            }else if(BM_INT32 == dtype_){
+                pybind11::array_t<int32_t> buf_temp(buf);
+                arr_int32_t = np.attr("ascontiguousarray")(buf_temp);
+                numpy_ptr = arr_int32_t.request().ptr;
+            }else if(BM_FLOAT16 == dtype_){
+                pybind11::array_t<uint16_t> buf_temp(buf);
+                arr_uint16_t = np.attr("ascontiguousarray")(buf_temp);
+                numpy_ptr = arr_uint16_t.request().ptr;
+            }else if(BM_BFLOAT16 == dtype_){
+                pybind11::array_t<uint16_t> buf_temp(buf);
+                arr_uint16_t = np.attr("ascontiguousarray")(buf_temp);
+                numpy_ptr = arr_uint16_t.request().ptr;
+            }else if(BM_UINT32 == dtype_){
+                pybind11::array_t<uint32_t> buf_temp(buf);
+                arr_uint32_t = np.attr("ascontiguousarray")(buf_temp);
+                numpy_ptr = arr_uint32_t.request().ptr;
+            }else if(BM_UINT16 == dtype_){
+                pybind11::array_t<uint16_t> buf_temp(buf);
+                arr_uint16_t = np.attr("ascontiguousarray")(buf_temp);
+                numpy_ptr = arr_uint16_t.request().ptr;
+            }else if(BM_INT16 == dtype_){
+                pybind11::array_t<int16_t> buf_temp(buf);
+                arr_int16_t = np.attr("ascontiguousarray")(buf_temp);
+                numpy_ptr = arr_int16_t.request().ptr;
+            }
         }
 
         if (is_sys_data_valid()){
-
 #ifndef IS_SOC_MODE
     //    if (own_sys_data_) {
     //      std::free(sys_data_);
@@ -1628,7 +1688,6 @@ namespace sail {
     //    }
     //    sys_data_ = buf.ptr;
             memcpy(sys_data_, numpy_ptr, new_size);
-
 #else
             memcpy(sys_data_, numpy_ptr, new_size);
 #endif
@@ -1715,8 +1774,12 @@ namespace sail {
 #else
         if (_impl->own_sys_data_) {
           if (_impl->own_dev_data_) {
-            bm_mem_mmap_device_mem(_impl->handle_.data(), &_impl->dev_data_,
+            int ret = bm_mem_mmap_device_mem(_impl->handle_.data(), &_impl->dev_data_,
                                    (unsigned long long*)&_impl->sys_data_);
+            if (BM_SUCCESS != ret) {
+                SPDLOG_ERROR("bm_mem_mmap_device_mem() err={}", ret);
+                throw SailRuntimeError("bmlib api fail");
+            }
             _impl->own_sys_data_is_mmap_ = true;
           } else {
             _impl->sys_data_ = malloc(_impl->data_size_);
@@ -1806,14 +1869,20 @@ namespace sail {
             }
 #else
             if (_impl->own_sys_data_) {
-              if (_impl->own_dev_data_) {
-                bm_mem_mmap_device_mem(_impl->handle_.data(), &_impl->dev_data_,
-                                       (unsigned long long*)&_impl->sys_data_);
-                _impl->own_sys_data_is_mmap_ = true;
-              } else {
-                _impl->sys_data_ = malloc(_impl->data_size_);
-              }
-              memcpy(_impl->sys_data_, other._impl->sys_data_, _impl->data_size_);
+                if (_impl->own_dev_data_) {
+                    int ret = bm_mem_mmap_device_mem(
+                        _impl->handle_.data(), &_impl->dev_data_,
+                        (unsigned long long *)&_impl->sys_data_);
+                    if (BM_SUCCESS != ret) {
+                        SPDLOG_ERROR("bm_mem_mmap_device_mem() err={}", ret);
+                        throw SailRuntimeError("bmlib api fail");
+                    }
+                    _impl->own_sys_data_is_mmap_ = true;
+                } else {
+                    _impl->sys_data_ = malloc(_impl->data_size_);
+                }
+                memcpy(_impl->sys_data_, other._impl->sys_data_,
+                       _impl->data_size_);
             } else {
                 void* tmp = malloc(_impl->data_size_);
                 double process_start_time_d2s = get_current_time_us();

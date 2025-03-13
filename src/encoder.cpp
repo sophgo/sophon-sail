@@ -436,8 +436,12 @@ Encoder::Encoder_CC::Encoder_CC(const std::string &output_path, int device_id, c
             throw std::runtime_error("avio_open2 failed.");
         }
     }
-
-    ret = avformat_write_header(enc_format_ctx_, NULL);
+    AVDictionary *header_options = NULL;
+    if (output_type == RTSP_STREAM) {
+        av_dict_set(&header_options, "rtsp_flags", "prefer_tcp", 0);
+    }
+    ret = avformat_write_header(enc_format_ctx_, &header_options);
+    av_dict_free(&header_options);
         if (ret < 0) {
             spdlog::error("sail.Encoder: avformat_write_header failed, return: {} \n.", ret);
             throw std::runtime_error("avformat_write_header failed.");

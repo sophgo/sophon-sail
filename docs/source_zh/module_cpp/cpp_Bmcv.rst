@@ -3614,3 +3614,503 @@ istft
             std::tuple<sail::Tensor, sail::Tensor> result = bmcv.istft(input_real, input_imag, realInput, normalize, L, hop_len, pad_mode, win_mode);
             return 0;
         }
+
+faiss_indexflatL2
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+计算查询向量与数据库向量 L2 距离的平方, 输出前 topK 个最匹配的 L2 距离的平方值及其对应的索引。
+
+**接口形式:**
+    .. code-block:: C
+
+        std::tuple<Tensor, Tensor> faiss_indexflatL2(
+            Tensor &query_vecs,
+            Tensor &query_vecs_L2norm,
+            Tensor &database_vecs,
+            Tensor& database_vecs_L2norm,
+            int vec_dims,
+            int query_vecs_nums,
+            int database_vecs_nums,
+            int topK
+            );
+
+**参数说明:**
+
+* query_vecs: Tensor
+    查询向量, 数据类型仅支持sail.Dtype.BM_FLOAT32。
+
+* query_vecs_L2norm: Tensor
+    计算查询向量每行各元素平方值的和, 数据类型为sail.Dtype.BM_FLOAT32。
+
+* database_vecs: Tensor
+    数据库向量, 数据类型仅支持sail.Dtype.BM_FLOAT32。
+
+* database_vecs_L2norm: Tensor
+    计算数据库向量每行各元素平方值的和, 数据类型为sail.Dtype.BM_FLOAT32。
+
+* vec_dims: int
+    查询向量和数据库向量的维度。
+
+* query_vecs_nums: int
+    查询向量的个数。
+
+* database_vecs_nums: int
+    数据库向量的个数。
+
+* topK: int
+    输出前 topK 个最匹配的 L2 距离的平方值及其对应的索引。
+
+**返回值说明:**
+
+* result: tuple[Tensor, Tensor]
+    返回前 topK 个最匹配的 L2 距离的平方值及其对应的索引。
+
+**示例代码:**
+    .. code-block:: C
+
+        #include <iostream>
+        #include <vector>
+        #include <sail/cvwrapper.h>
+
+        int main(){
+            // 1. database_vecs
+            std::vector<std::vector<float>> db_vecs = {
+                {-2.0f, 0.0f, 4.0f},
+                {-5.0f, 3.0f, -1.0f},
+                {1.0f, 2.0f, 4.0f},
+                {0.0f, 5.0f, -3.0f},
+                {2.0f, 1.0f, -4.0f}
+            };
+
+            // 2. query_vecs
+            std::vector<std::vector<float>> query_vecs = {
+                {1.0f, 2.0f, 3.0f}
+            };
+
+            // 3. test bmcv.faiss_indexflatL2
+            int tpu_id = 0;
+            sail::Handle handle(tpu_id);
+            sail::Bmcv bmcv(handle);
+
+            std::vector<float> db_vecs_l2norm;
+            for (const auto& vec : db_vecs) {
+                float sum = 0.0f;
+                for (const auto& val : vec) {
+                    sum += val * val;
+                }
+                db_vecs_l2norm.push_back(sum);
+            }
+
+            std::vector<float> query_vecs_l2norm;
+            for (const auto& vec : query_vecs) {
+                float sum = 0.0f;
+                for (const auto& val : vec) {
+                    sum += val * val;
+                }
+                query_vecs_l2norm.push_back(sum);
+            }
+
+            sail::Tensor database_vecs_tensor = Tensor(handle, {db_vecs.size(), db_vecs[0].size()}, BM_FLOAT32, true, true);
+            database_vecs_tensor.reset_sys_data(db_vecs.data(), {db_vecs.size(), db_vecs[0].size()});
+            database_vecs_tensor.sync_s2d();
+
+            sail::Tensor database_vecs_L2norm_tensor = Tensor(handle, {1, db_vecs.size()}, BM_FLOAT32, true, true);
+            database_vecs_L2norm_tensor.reset_sys_data(db_vecs_l2norm, {1, db_vecs.size()});
+            database_vecs_L2norm_tensor.sync_s2d();
+
+            sail::Tensor query_vecs_tensor = Tensor(handle, {query_vecs.size(), query_vecs[0].size()}, BM_FLOAT32, true, true);
+            query_vecs_tensor.reset_sys_data(query_vecs.data(), {query_vecs.size(), query_vecs[0].size()});
+            query_vecs_tensor.sync_s2d();
+
+            sail::Tensor query_vecs_L2norm_tensor = Tensor(handle, {1, query_vecs.size()}, BM_FLOAT32, true, true);
+            query_vecs_L2norm_tensor.reset_sys_data(query_vecs_l2norm.data(), {1, query_vecs.size()});
+            query_vecs_L2norm_tensor.sync_s2d();
+
+            std::tuple<sail::Tensor, sail::Tensor> result = bmcv.faiss_indexflatL2(query_vecs_tensor, query_vecs_L2norm_tensor, database_vecs_tensor, database_vecs_L2norm_tensor, 3, 1, 5, 3);
+
+            return 0;
+        }
+
+faiss_indexflatIP
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+计算查询向量与数据库向量的内积距离, 输出前 topK 个最匹配的内积距离值及其对应的索引。
+
+**接口形式:**
+    .. code-block:: C
+
+        std::tuple<Tensor, Tensor> faiss_indexflatIP(
+            Tensor &query_vecs,
+            Tensor &database_vecs,
+            int vec_dims,
+            int query_vecs_nums,
+            int database_vecs_nums,
+            int topK
+            );
+
+**参数说明:**
+
+* query_vecs: Tensor
+    查询向量, 数据类型仅支持sail.Dtype.BM_FLOAT32。
+
+* database_vecs: Tensor
+    数据库向量, 数据类型仅支持sail.Dtype.BM_FLOAT32。
+
+* vec_dims: int
+    查询向量和数据库向量的维度。
+
+* query_vecs_nums: int
+    查询向量的个数。
+
+* database_vecs_nums: int
+    数据库向量的个数。
+
+* topK: int
+    输出前 topK 个最匹配的内积距离值及其对应的索引。
+
+**返回值说明:**
+
+* result: tuple[Tensor, Tensor]
+    输出前 topK 个最匹配的内积距离值及其对应的索引。
+
+**示例代码:**
+    .. code-block:: C
+
+        #include <iostream>
+        #include <vector>
+        #include <sail/cvwrapper.h>
+
+        int main(){
+            // 1. database_vecs
+            std::vector<std::vector<float>> db_vecs = {
+                {-2.0f, 0.0f, 4.0f},
+                {-5.0f, 3.0f, -1.0f},
+                {1.0f, 2.0f, 4.0f},
+                {0.0f, 5.0f, -3.0f},
+                {2.0f, 1.0f, -4.0f}
+            };
+
+            // 2. query_vecs
+            std::vector<std::vector<float>> query_vecs = {
+                {1.0f, 2.0f, 3.0f}
+            };
+
+            // 3. test bmcv.faiss_indexflatL2
+            int tpu_id = 0;
+            sail::Handle handle(tpu_id);
+            sail::Bmcv bmcv(handle);
+
+            sail::Tensor database_vecs_tensor = Tensor(handle, {db_vecs.size(), db_vecs[0].size()}, BM_FLOAT32, true, true);
+            database_vecs_tensor.reset_sys_data(db_vecs.data(), {db_vecs.size(), db_vecs[0].size()});
+            database_vecs_tensor.sync_s2d();
+
+            sail::Tensor query_vecs_tensor = Tensor(handle, {query_vecs.size(), query_vecs[0].size()}, BM_FLOAT32, true, true);
+            query_vecs_tensor.reset_sys_data(query_vecs.data(), {query_vecs.size(), query_vecs[0].size()});
+            query_vecs_tensor.sync_s2d();
+
+            std::tuple<sail::Tensor, sail::Tensor> result = bmcv.faiss_indexflatIP(query_vecs_tensor, database_vecs_tensor, 3, 1, 5, 3);
+
+            return 0;
+        }
+
+faiss_indexPQ_encode
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+对输入向量进行PQ量化编码, 输出编码之后的向量。
+
+**接口形式:**
+    .. code-block:: C
+
+        int faiss_indexPQ_encode(
+            Tensor &input_vecs,
+            Tensor &centroids_vecs,
+            Tensor &encoded_vecs,
+            int encode_vecs_num,
+            int vec_dims,
+            int slice_num,
+            int centroids_num,
+            int IP_metric
+        );
+
+**参数说明:**
+
+* input_vecs: Tensor
+    输入的待编码向量, 数据类型仅支持sail.Dtype.BM_FLOAT32, 大小应为encode_vecs_num * vec_dims。
+
+* centroids_vecs: Tensor
+    聚类中心 (质心) 向量, 数据类型仅支持sail.Dtype.BM_FLOAT32, 大小应为slice_num * centroids_num * (vec_dims / slice_num)。
+
+* encoded_vecs: Tensor
+    输出参数, 输出编码之后的向量, 数据类型为BM_UINT8, 大小为encode_vecs_num * slice_num。
+
+* encode_vecs_num: int
+    待编码向量的个数。
+
+* vec_dims: int
+    待编码向量的维度。
+
+* slice_num: int
+    原始向量维度的切分数量, 例如原始向量维度为512, slice_num = 8, 每个子向量维度为64。
+
+* centroids_num: int
+    聚类中心的数量。
+
+* IP_metric: int
+    0 表示使用L2计算距离, 1 表示使用IP计算距离。
+
+**返回值说明:**
+
+* result: int 
+    成功返回0。
+
+**示例代码:**
+    .. code-block:: C
+
+        #include <iostream>
+        #include <vector>
+        #include <sail/cvwrapper.h>
+
+        int main()
+        {   
+            int encode_vecs_num = 3;
+            int vec_dims = 64;
+            int db_vecs_num = 10000;
+            int slice_num = 8;
+            int centroids_num = 256;
+            int subvec_dims = vec_dims / slice_num;
+
+            int tpu_id = 0;
+            sail::Handle handle(tpu_id);
+            sail::Bmcv bmcv(handle);
+
+            // centroids Tensor
+            std::vector<int> centroids_shape = {slice_num, centroids_num, subvec_dim};
+            sail::Tensor centroids_tensor(handle, centroids_shape, BM_FLOAT32, false, true);
+
+            // input Tensor
+            std::vector<int> input_shape = {encode_vecs_num, vec_dims};
+            sail::Tensor input_tensor(handle, input_shape, BM_FLOAT32, false, true);
+
+            // encoded Tensor
+            std::vector<int> encoded_shape = {encode_vecs_num, slice_num};
+            sail::Tensor encoded_tensor(handle, encoded_shape, BM_UINT8, true, true);
+
+            int ret = 0;
+            ret = bmcv.faiss_indexPQ_encode(input_tensor,
+                                            centroids_tensor,
+                                            encoded_tensor,
+                                            encode_vecs_num,
+                                            vec_dims,
+                                            slice_num,
+                                            centroids_num,
+                                            0);
+            
+            return ret;
+        }
+
+faiss_indexPQ_ADC
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+通过查询向量和聚类中心 (质心) 向量计算出距离表, 编码的数据库向量查表计算距离并排序, 输出前 topK 个最匹配的距离值及其对应的索引。
+
+**接口形式:**
+    .. code-block:: C
+
+        std::tuple<Tensor, Tensor> faiss_indexPQ_ADC (
+            Tensor &nxquery_vecs,
+            Tensor &centroids_vecs,
+            Tensor &nycodes_vecs,
+            int vec_dims,   
+            int slice_num,  
+            int centroids_num,
+            int database_vecs_num,
+            int query_vecs_num,
+            int topK,
+            int IP_metric
+        );
+
+**参数说明:**
+
+* nxquery_vecs: Tensor
+    查询向量, 数据类型仅支持sail.Dtype.BM_FLOAT32, 大小为query_vecs_nums * vec_dims。
+
+* centroids_vecs: Tensor
+    聚类中心 (质心) 向量, 数据类型仅支持sail.Dtype.BM_FLOAT32, 大小为slice_num * centroids_num * (vec_dims / slice_num)。
+
+* nycodes_vecs: Tensor
+    编码的数据库向量, 数据类型仅支持sail.Dtype.BM_UINT8, 大小为database_vecs_nums * slice_num。
+
+* vec_dims: int
+    查询向量的维度。
+
+* slice_num: int
+    原始向量维度的切分数量, 例如原始向量维度为512, slice_num = 8, 每个子向量维度为64。   
+   
+* centroids_num: int
+    聚类中心 (质心) 向量的个数。
+
+* database_vecs_nums: int
+    数据库向量的个数。
+
+* query_vecs_nums: int
+    查询向量的个数。
+
+* topK: int
+    输出前 topK 个最匹配的距离值及其对应的索引。
+
+* IP_metric: int
+    0 表示使用L2计算距离, 1 表示使用IP计算距离。
+
+**返回值说明:**
+
+* result: tuple[Tensor, Tensor]
+    输出前 topK 个最匹配的距离值及其对应的索引。
+
+**示例代码:**
+    .. code-block:: C
+
+        #include <iostream>
+        #include <vector>
+        #include <sail/cvwrapper.h>
+
+        int main()
+        {   
+            int vec_dims = 512;
+            int slice_num = 8;
+            int centroids_num = 256;
+            int database_vecs_num = 10000;
+            int query_vecs_num = 1;
+            int subvec_dims = vec_dims / slice_num;
+            int topK = 5;
+
+            int tpu_id = 0;
+            sail::Handle handle(tpu_id);
+            sail::Bmcv bmcv(handle);
+
+            // nxquery Tensor
+            std::vector<int> nxquery_shape = {query_vecs_num, vec_dims};
+            sail::Tensor nxquery_tensor(handle, nxquery_shape, BM_FLOAT32, false, true);
+
+            // centroids Tensor
+            std::vector<int> centroids_shape = {slice_num, centroids_num, subvec_dim};
+            sail::Tensor centroids_tensor(handle, centroids_shape, BM_FLOAT32, false, true);
+
+            // nycodes Tensor
+            std::vector<int> nycodes_shape = {database_vecs_nums, slice_num};
+            sail::Tensor nycodes_tensor(handle, nycodes_shape, BM_UINT8, true, true);
+
+            std::tuple<sail::Tensor, sail::Tensor> results = bmcv.faiss_indexPQ_ADC(nxquery_tensor,
+                                        centroids_tensor,
+                                        nycodes_tensor,
+                                        vec_dims,
+                                        slice_num,
+                                        centroids_num,
+                                        database_vecs_num,
+                                        query_vecs_num,
+                                        topK,
+                                        0);
+
+            return results;
+        }
+
+faiss_indexPQ_SDC
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+使用SDC (Symmetric Distance Computation, 对称距离计算)查找表加速 PQ 编码之间的距离计算, 输出与查询向量前 topK 个最匹配的距离值及其对应的索引。
+
+**接口形式:**
+    .. code-block:: C
+
+        std::tuple<Tensor, Tensor> faiss_indexPQ_SDC (
+            Tensor &nxcodes_vecs,
+            Tensor &nycodes_vecs,
+            Tensor &sdc_table, 
+            int slice_num,  
+            int centroids_num,
+            int database_vecs_num,
+            int query_vecs_num,
+            int topK,
+            int IP_metric
+        );
+
+**参数说明:**
+
+* nxcodes_vecs: Tensor
+    编码的查询向量, 数据类型仅支持sail.Dtype.BM_UINT8, 大小为query_vecs_nums * slice_num。
+
+* nycodes_vecs: Tensor
+    编码的数据库向量, 数据类型仅支持sail.Dtype.BM_UINT8, 大小为database_vecs_nums * slice_num。
+
+ * sdc_table: Tensor
+    sdc对称距离表, 数据类型仅支持sail.Dtype.BM_FLOAT32, 大小为slice_num * centroids_num * centroids_num。
+
+* slice_num: int
+    原始向量维度的切分数量, 例如原始向量维度为512, slice_num = 8, 每个子向量维度为64。   
+   
+* centroids_num: int
+    聚类中心 (质心) 向量的个数。
+
+* database_vecs_nums: int
+    数据库向量的个数。
+
+* query_vecs_nums: int
+    查询向量的个数。
+
+* topK: int
+    输出前 topK 个最匹配的距离值及其对应的索引。
+
+* IP_metric: int
+    0 表示使用L2计算距离, 1 表示使用IP计算距离。
+
+**返回值说明:**
+
+* result: tuple[Tensor, Tensor]
+    输出前 topK 个最匹配的距离值及其对应的索引。
+
+**示例代码:**
+    .. code-block:: C
+
+        #include <iostream>
+        #include <vector>
+        #include <sail/cvwrapper.h>
+
+        int main()
+        {   
+            int vec_dims = 512;
+            int slice_num = 8;
+            int centroids_num = 256;
+            int database_vecs_num = 10000;
+            int query_vecs_num = 1;
+            int subvec_dims = vec_dims / slice_num;
+            int topK = 5;
+
+            int tpu_id = 0;
+            sail::Handle handle(tpu_id);
+            sail::Bmcv bmcv(handle);
+
+            // nxcodes Tensor
+            std::vector<int> nxcodes_shape = {query_vecs_num, slice_num};
+            sail::Tensor nxcodes_tensor(handle, nxcodes_shape, BM_UINT8, false, true);
+
+            // nycodes Tensor
+            std::vector<int> nycodes_shape = {database_vecs_nums, slice_num};
+            sail::Tensor nycodes_tensor(handle, nycodes_shape, BM_UINT8, false, true);
+
+            // sdc_table Tensor
+            std::vector<int> sdc_shape = {slice_num, centroids_num, centroids_num};
+            sail::Tensor sdc_tensor(handle, sdc_shape, BM_FLOAT32, false, true);
+
+
+            std::tuple<sail::Tensor, sail::Tensor> results = bmcv.faiss_indexPQ_SDC(nxcodes_tensor,
+                                                                                    nycodes_tensor,
+                                                                                    sdc_tensor,
+                                                                                    slice_num,
+                                                                                    centroids_num,
+                                                                                    database_vecs_num,
+                                                                                    query_vecs_num,
+                                                                                    topK,
+                                                                                    0);
+
+            return results;
+        }
+

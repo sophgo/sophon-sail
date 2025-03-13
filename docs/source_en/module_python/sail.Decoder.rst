@@ -321,6 +321,8 @@ At the time of calling this function, dump the input video for several seconds b
     .. code-block:: python
 
         import sophon.sail as sail
+        import time
+        
         if __name__ == '__main__':
             dev_id = 0
             input_file_path = "your_rtsp_url"
@@ -361,7 +363,7 @@ At the time of calling this function, dump the input video for several seconds b
 get_pts_dts
 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
-Get pts or dts.
+Get pts and dts.
 
 **Interface:**
     .. code-block:: python

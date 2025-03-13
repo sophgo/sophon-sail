@@ -361,7 +361,7 @@ return if BMImage memory contiguous,1 contiguous,0 uncontiguous
         import sophon.sail as sail
 
         if __name__ == '__main__':
-            file_path = '/data/jinyu.lu/jpu_test/1920x1080_yuvj420.jpg' # 请替换为您的文件路径
+            file_path = "your_image.jpg" # 请替换为您的文件路径
             dev_id = 0
             handle = sail.Handle(dev_id)
             decoder = sail.Decoder(file_path, False, dev_id)
@@ -379,7 +379,7 @@ return if BMImage memory contiguous,1 contiguous,0 uncontiguous
             
             # align BMimg
             ret = BMimg.align()
-            if ret:
+            if ret == 0:
                 print("align success")
             else:
                 print("align failed")
@@ -388,7 +388,7 @@ return if BMImage memory contiguous,1 contiguous,0 uncontiguous
 
             # unalign BMimg
             ret = BMimg.unalign()
-            if ret:
+            if ret == 0:
                 print("unalign success")
             else:
                 print("unalign failed")
@@ -399,3 +399,39 @@ return if BMImage memory contiguous,1 contiguous,0 uncontiguous
             # create BMImage with data from buffer
             buf = bytes([i % 256 for i in range(int(200*100*3))])
             img_fromRawdata = sail.BMImage(handle, buf, 200, 100, sail.Format.FORMAT_BGR_PACKED)
+
+get_pts_dts
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+Get pts and dts.
+
+**Interface:**
+    .. code-block:: python
+
+        def get_pts_dts() -> list
+
+
+**Returns**
+
+* result : list
+
+the value of pts and dts.
+
+**Sample:**
+    .. code-block:: python
+
+        import sophon.sail as sail
+        if __name__ == '__main__':
+            input_file_path = 'your_rtsp_url'  
+            dev_id = 0
+            handle = sail.Handle(dev_id)
+            decoder = sail.Decoder(input_file_path, True, dev_id)
+            image = sail.BMImage()
+            ret = decoder.read(handle, image)
+            if ret == 0:
+                print("Frame read successfully into bm_image")
+                pts,dts=image.get_pts_dts()
+                print("pts:",pts)
+                print("dts:",dts)
+            else:
+                print("Failed to read frame into bm_image")

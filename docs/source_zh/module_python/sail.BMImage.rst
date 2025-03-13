@@ -311,7 +311,7 @@ align
 
 * ret : int  
 
-返回BMImage是否对齐成功,-1代表失败,0代表成功
+返回BMImage是否对齐成功, -1代表BMImage未创建, 0代表成功, 其他代表失败
 
 
 check_align
@@ -328,7 +328,7 @@ check_align
 
 * ret : bool  
 
-1代表已对齐,0代表未对齐
+1代表已对齐, 0代表未对齐, -1代表BMImage未创建
 
 
 unalign
@@ -345,7 +345,7 @@ unalign
 
 * ret : int  
 
-返回BMImage是否不对齐成功,-1代表失败,0代表成功
+返回BMImage是否不对齐成功, -1代表BMImage未创建, 0代表成功, 其他代表失败
 
 
 check_contiguous_memory
@@ -408,3 +408,40 @@ check_contiguous_memory
             # create BMImage with data from buffer
             buf = bytes([i % 256 for i in range(int(200*100*3))])
             img_fromRawdata = sail.BMImage(handle, buf, 200, 100, sail.Format.FORMAT_BGR_PACKED)
+
+get_pts_dts
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+获取pts和dts
+
+**接口形式:**
+    .. code-block:: python
+
+        def get_pts_dts() -> list
+    
+**返回值说明:**
+
+* result: list
+
+输出结果。输出具体的pts和dts值。
+
+
+**示例代码:**
+    .. code-block:: python
+
+        import sophon.sail as sail
+        if __name__ == '__main__':
+            input_file_path = 'your_rtsp_url'  
+            dev_id = 0
+            handle = sail.Handle(dev_id)
+            decoder = sail.Decoder(input_file_path, True, dev_id)
+            image = sail.BMImage()
+            ret = decoder.read(handle, image)
+            if ret == 0:
+                print("Frame read successfully into bm_image")
+                pts,dts=image.get_pts_dts()
+                print("pts:",pts)
+                print("dts:",dts)
+            else:
+                print("Failed to read frame into bm_image")
+            

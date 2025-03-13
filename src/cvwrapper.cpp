@@ -52,7 +52,6 @@ static int IMAGE_W = 1920;
 #define USEING_MEM_HEAP1 2
 
 
-
 #define AUTO_PTR(name, type, size) std::unique_ptr<type[]> up##name(new type[size]);\
                                    type *name=up##name.get();
 namespace sail {
@@ -532,8 +531,11 @@ namespace sail {
             // set tcp
             av_dict_set(&opts, "rtsp_transport", rtsp_transport_value.c_str(), 0);
             // set timeout (same as opencv),ost is 10000000
-            av_dict_set(&opts, "stimeout", stimeout_value.c_str(), 0);
+#if LIBAVCODEC_VERSION_MAJOR > 58
             av_dict_set(&opts, "timeout", stimeout_value.c_str(), 0);
+#else
+            av_dict_set(&opts, "stimeout", stimeout_value.c_str(), 0);
+#endif
 
             // add same as opencv
             av_dict_set(&opts, "rtsp_flags", rtsp_flags_value.c_str(), 0);
@@ -582,7 +584,8 @@ namespace sail {
         int ret = avformat_open_input(&fmt_ctx_, file_path_.c_str(),
                                       input_fmt, &opts);
         if (ret < 0) {
-            SPDLOG_ERROR("Failed to open input file: {}", file_path_);
+            SPDLOG_ERROR("Failed to open input file: {}, ret: {}", 
+                         file_path_, ret);
             throw std::runtime_error("Failed to open input file");
         }
         // retrieve stream information
@@ -945,6 +948,9 @@ namespace sail {
 
             // decode video frame
             ret = avcodec_decode_video2(video_dec_ctx_, p_frame, &got_frame_, &pkt_);
+            if (ret == AVERROR_EXTERNAL) {
+                throw std::runtime_error("VPU is hung. VPU requires a reset!");
+            }
             if (got_frame_) {
                 valid = true;
             }
@@ -1328,8 +1334,11 @@ namespace sail {
             av_dict_set(&opts, "rtsp_transport", rtsp_transport_value.c_str(),
                         0);
             // set timeout (same as opencv),ost is 10000000
-            av_dict_set(&opts, "stimeout", stimeout_value.c_str(), 0);
+#if LIBAVCODEC_VERSION_MAJOR > 58
             av_dict_set(&opts, "timeout", stimeout_value.c_str(), 0);
+#else
+            av_dict_set(&opts, "stimeout", stimeout_value.c_str(), 0);
+#endif
 
             // add same as opencv
             av_dict_set(&opts, "rtsp_flags", rtsp_flags_value.c_str(), 0);
@@ -1532,12 +1541,18 @@ namespace sail {
             image.cache_ost_mat(cached_mat);
         }
 #endif
+        image.set_pts_dts(_impl->pts_, _impl->dts_);
         return ret;
     }
 
     BMImage Decoder::read(Handle &handle) {
         BMImage image;
-        read(handle, image);
+        int ret = read(handle, image);
+        if (ret == AVERROR_EXTERNAL) {
+            throw SailDecoderError("VPU is hung. VPU requires a reset!");
+        } else if (ret != 0) {
+            throw SailDecoderError("Failed to get one decoded image");
+        }
         return std::move(image);
     }
 
@@ -1881,7 +1896,10 @@ namespace sail {
         if (av_read_frame(pFormatCtx, pkt) >= 0) {
             while (true)
             {
-                avcodec_decode_video2(dec_ctx, pFrame, &got_picture, pkt);
+                ret = avcodec_decode_video2(dec_ctx, pFrame, &got_picture, pkt);
+                if (ret == AVERROR_EXTERNAL) {
+                    throw std::runtime_error("VPU is hung. VPU requires a reset!");
+                }
                 if(got_picture==0){
                     continue;   
                 }else if(got_picture==1){
@@ -2032,6 +2050,11 @@ namespace sail {
         void set_ipc_flag(bool f);
         bool need_to_free_;
 
+        void set_pts_dts(double pts, double dts);
+        vector<double> get_pts_dts();
+
+        double pts_=0.0;
+        double dts_=0.0;
         std::shared_ptr<cv::Mat> mat_buffer = nullptr;
         bool ipc_recv_flag = false;
         friend class BMImage;
@@ -2371,9 +2394,9 @@ namespace sail {
 
     int BMImage::BMImage_CC::align() {
         int ret = check_align();
-            if (ret) {
-            return ret;
-        }
+        if (ret == -1) return -1;
+        else if (ret == 1) return 0;
+        
         // if (!need_to_free_) {
             //     SPDLOG_ERROR("bm_image is not attach memory,can't align!");
             //     exit(1);
@@ -2835,25 +2858,34 @@ namespace sail {
             dst_offset += bytesizes[i];
         }
         // ajust shape
-        std::vector<int> strides(plane_num);
-        ret = bm_image_get_stride(img_, strides.data());
         std::vector<int> out_shape;
+        int out_chn = 3;
+        int out_h = img_.height;
+        int out_w = static_cast<int>(out_numel) / out_h / out_chn;
         switch (img_.image_format) {
             case FORMAT_BGR_PACKED:
             case FORMAT_RGB_PACKED:
-                out_shape = {img_.height, int(strides[0] / 3), 3};
+                // RGB/BGR is 3 channel
+                out_shape = {out_h, out_w, out_chn};
                 break;
             case FORMAT_ARGB_PACKED:
             case FORMAT_ABGR_PACKED:
-                out_shape = {img_.height, int(strides[0] / 4), 4};
+                // ARGB/ABGR is 4 channel
+                out_chn = 4;
+                out_w = static_cast<int>(out_numel) / out_h / out_chn;
+                out_shape = {out_h, out_w, out_chn};
                 break;
             case FORMAT_BGR_PLANAR:
             case FORMAT_RGB_PLANAR:
             case FORMAT_YUV444P:
-                out_shape = {3, img_.height, strides[0]};
+                out_shape = {out_chn, out_h, out_w};
                 break;
             case FORMAT_GRAY:
-                out_shape = {1, img_.height, strides[0]};
+                out_chn = 1;
+                out_w = static_cast<int>(out_numel) / out_h / out_chn;
+                out_shape = {out_chn, out_h, out_w};
+                break;
+            default:
                 break;
         }
         pybind11::gil_scoped_acquire gil;
@@ -2866,6 +2898,15 @@ namespace sail {
     
     void BMImage::BMImage_CC::set_ipc_flag(bool f) {
         ipc_recv_flag = f;
+    }
+
+    void BMImage::BMImage_CC::set_pts_dts(double pts, double dts) {
+        pts_ = pts;
+        dts_ = dts;
+    }
+
+    vector<double> BMImage::BMImage_CC::get_pts_dts() {
+        return {pts_, dts_};
     }
 
     BMImage::BMImage() : _impl(new BMImage_CC()){}
@@ -2942,6 +2983,8 @@ namespace sail {
             other._impl->mat_buffer = NULL;
             _impl->ipc_recv_flag = other._impl->ipc_recv_flag;
             other._impl->ipc_recv_flag = false;
+            _impl->pts_ = other._impl->pts_;
+            _impl->dts_ = other._impl->dts_;
         }
         return *this;
     }
@@ -3087,6 +3130,13 @@ namespace sail {
         return _impl->detach();
     }
 
+    void BMImage::set_pts_dts(double pts, double dts){
+        return _impl->set_pts_dts(pts, dts);
+    }
+
+    vector<double> BMImage::get_pts_dts(){
+        return _impl->get_pts_dts();
+    }
 #if defined(USE_BMCV) && defined(USE_OPENCV) && defined(PYTHON)
     pybind11::array_t<uint8_t> BMImage::asmat(){
         return _impl->asmat();
@@ -6073,7 +6123,7 @@ namespace sail {
         SAIL_CHECK_RET(ret);
         return std::move(dst);
     }
-#if BMCV_VERSION_MAJOR > 1
+
 extern "C" {
     bm_status_t bmcv_stft(bm_handle_t handle, float* XRHost, float* XIHost, float* YRHost,
                     float* YIHost, int batch, int L, bool realInput,
@@ -6096,8 +6146,8 @@ extern "C" {
     )
     {
         if (!bmcv_stft) {
-            SPDLOG_ERROR("stft is not available in this version, please upgrade sdk to v1.8 or later.");
-            throw std::runtime_error("stft is not available in this version, please upgrade sdk to v1.8 or later.");
+            SPDLOG_ERROR("stft is not available in this version, please update to the latest sdk.");
+            throw std::runtime_error("stft is not available in this version, please update to the latest sdk.");
         }
         if (n_fft <= 0) {
             SPDLOG_ERROR("n_fft must be a positive integer.");
@@ -6163,8 +6213,8 @@ extern "C" {
         int win_mode
     ) {
         if (!bmcv_stft) {
-            SPDLOG_ERROR("stft is not available in this version, please upgrade sdk to v1.8 or later.");
-            throw std::runtime_error("stft is not available in this version, please upgrade sdk to v1.8 or later.");
+            SPDLOG_ERROR("stft is not available in this version, please update to the latest sdk.");
+            throw std::runtime_error("stft is not available in this version, please update to the latest sdk.");
         }
 
         auto input_real_shape = input_real.shape();
@@ -6231,8 +6281,8 @@ extern "C" {
     )
     {
         if (!bmcv_istft) {
-            SPDLOG_ERROR("istft is not available in this version, please upgrade sdk to v1.8 or later.");
-            throw std::runtime_error("istft is not available in this version, please upgrade sdk to v1.8 or later.");
+            SPDLOG_ERROR("istft is not available in this version, please update to the latest sdk.");
+            throw std::runtime_error("istft is not available in this version, please update to the latest sdk.");
         }
         if (input_real.shape(0) != input_imag.shape(0) || 
             input_real.shape(1) != input_imag.shape(1) || 
@@ -6290,8 +6340,8 @@ extern "C" {
         int win_mode) 
     {
         if (!bmcv_istft) {
-            SPDLOG_ERROR("istft is not available in this version, please upgrade sdk to v1.8 or later.");
-            throw std::runtime_error("istft is not available in this version, please upgrade sdk to v1.8 or later.");
+            SPDLOG_ERROR("istft is not available in this version, please update to the latest sdk.");
+            throw std::runtime_error("istft is not available in this version, please update to the latest sdk.");
         }
         auto input_real_shape = input_real.shape();
         auto input_imag_shape = input_imag.shape();
@@ -6342,7 +6392,6 @@ extern "C" {
 
         return std::make_tuple(output_real_tensor, output_imag_tensor);
     }
-#endif
 
     std::vector<Tensor> Bmcv::fft(bool forward, Tensor &input_real)
     {
@@ -6984,8 +7033,1586 @@ bm_status_t open_water(
         } 
         return std::move(output);
     }
-    
 
+extern "C" {
+    bm_status_t bmcv_faiss_indexflatL2(
+        bm_handle_t     handle,
+        bm_device_mem_t input_data_global_addr,
+        bm_device_mem_t db_data_global_addr,
+        bm_device_mem_t query_L2norm_global_addr,
+        bm_device_mem_t db_L2norm_global_addr,
+        bm_device_mem_t buffer_global_addr,
+        bm_device_mem_t output_sorted_similarity_global_addr,
+        bm_device_mem_t output_sorted_index_global_addr,
+        int             vec_dims,
+        int             query_vecs_num,
+        int             database_vecs_num,
+        int             sort_cnt,
+        int             is_transpose,
+        int             input_dtype,
+        int             output_dtype) __attribute__((weak));
+
+    bm_status_t bmcv_faiss_indexflatIP(
+        bm_handle_t     handle,
+        bm_device_mem_t input_data_global_addr,
+        bm_device_mem_t db_data_global_addr,
+        bm_device_mem_t buffer_global_addr,
+        bm_device_mem_t output_sorted_similarity_global_addr,
+        bm_device_mem_t output_sorted_index_global_addr,
+        int             vec_dims,
+        int             query_vecs_num,
+        int             database_vecs_num,
+        int             sort_cnt,
+        int             is_transpose,
+        int             input_dtype,
+        int             output_dtype) __attribute__((weak));
+
+    bm_status_t bmcv_faiss_indexPQ_encode(
+        bm_handle_t     handle,
+        bm_device_mem_t vector_input_dev,
+        bm_device_mem_t centroids_input_dev,
+        bm_device_mem_t buffer_table_dev,
+        bm_device_mem_t codes_output_dev,
+        int             encode_vec_num,
+        int             vec_dims,
+        int             slice_num,
+        int             centroids_num,
+        int             IP_metric) __attribute__((weak));
+
+    bm_status_t bmcv_faiss_indexPQ_ADC(
+        bm_handle_t     handle,
+        bm_device_mem_t centroids_input_dev,
+        bm_device_mem_t nxquery_input_dev,
+        bm_device_mem_t nycodes_input_dev,
+        bm_device_mem_t distance_output_dev,
+        bm_device_mem_t index_output_dev,
+        int             vec_dims,
+        int             slice_num,
+        int             centroids_num,
+        int             database_num,
+        int             query_num,
+        int             sort_cnt,
+        int             IP_metric) __attribute__((weak));
+
+    bm_status_t bmcv_faiss_indexPQ_SDC(
+        bm_handle_t     handle,
+        bm_device_mem_t sdc_table_input_dev,
+        bm_device_mem_t nxcodes_input_dev,
+        bm_device_mem_t nycodes_input_dev,
+        bm_device_mem_t distance_output_dev,
+        bm_device_mem_t index_output_dev,
+        int             slice_num,
+        int             centroids_num,
+        int             database_num,
+        int             query_num,
+        int             sort_cnt,
+        int             IP_metric) __attribute__((weak));
+}
+
+// faiss series
+#ifdef PYTHON
+    // faiss_indexflatL2 python interface1
+    std::tuple<pybind11::array_t<float>, pybind11::array_t<int>> Bmcv::faiss_indexflatL2(
+        pybind11::array_t<float> query_vecs,
+        pybind11::array_t<float> query_vecs_L2norm,
+        pybind11::array_t<float> database_vecs,
+        pybind11::array_t<float> database_vecs_L2norm,
+        int vec_dims,
+        int query_vecs_nums,
+        int database_vecs_nums,
+        int topK
+   )
+   {
+        if (!bmcv_faiss_indexflatL2) {
+            SPDLOG_ERROR("bmcv_faiss_indexflatL2 is not available in this version, please upgrade sdk.");
+            throw std::runtime_error("bmcv_faiss_indexflatL2 is not available in this version, please upgrade sdk.");
+        }
+        
+        // 1. check if input is a C-contiguous array for database_vecs and database_vecs_L2norm
+        if (!pybind11::detail::check_flags(database_vecs.ptr(), pybind11::detail::npy_api::NPY_ARRAY_C_CONTIGUOUS_)) {
+            pybind11::module np = pybind11::module::import("numpy");
+            database_vecs = np.attr("ascontiguousarray")(database_vecs, "dtype"_a="float32");
+        }
+        if (!pybind11::detail::check_flags(database_vecs_L2norm.ptr(), pybind11::detail::npy_api::NPY_ARRAY_C_CONTIGUOUS_)) {
+            pybind11::module np = pybind11::module::import("numpy");
+            database_vecs_L2norm = np.attr("ascontiguousarray")(database_vecs_L2norm, "dtype"_a="float32");
+        }
+
+        // 2. get database input
+        float *db_data = static_cast<float*>(database_vecs.request().ptr);
+        float *db_L2norm = static_cast<float*>(database_vecs_L2norm.request().ptr);
+        
+        pybind11::gil_scoped_release release;
+
+        bm_device_mem_t db_data_dev_mem;
+        bm_status_t status;
+        status = bm_malloc_device_byte(handle_.data(), &db_data_dev_mem, database_vecs_nums * vec_dims * sizeof(float));
+        if (BM_SUCCESS != status) {
+            SPDLOG_ERROR("faiss_indexflatL2(): db_data_dev_mem bm_malloc_device_byte failed");
+            throw SailRuntimeError("faiss_indexflatL2(): db_data_dev_mem bm_malloc_device_byte failed");
+        }
+        status = bm_memcpy_s2d(handle_.data(), db_data_dev_mem, (void *)db_data);
+        if (BM_SUCCESS != status) {
+            SPDLOG_ERROR("faiss_indexflatL2(): bm_memcpy_s2d");
+            throw SailRuntimeError("faiss_indexflatL2(): bm_memcpy_s2d");
+        }
+
+        bm_device_mem_t db_L2norm_dev_mem;
+        status = bm_malloc_device_byte(handle_.data(), &db_L2norm_dev_mem, 1 * database_vecs_nums * sizeof(float));
+        if (BM_SUCCESS != status) {
+            SPDLOG_ERROR("faiss_indexflatL2(): db_L2norm_dev_mem bm_malloc_device_byte failed");
+            throw SailRuntimeError("faiss_indexflatL2(): db_L2norm_dev_mem bm_malloc_device_byte failed");
+        }
+        status = bm_memcpy_s2d(handle_.data(), db_L2norm_dev_mem, (void *)db_L2norm);
+        if (BM_SUCCESS != status) {
+            SPDLOG_ERROR("faiss_indexflatL2(): bm_memcpy_s2d");
+            throw SailRuntimeError("faiss_indexflatL2(): bm_memcpy_s2d");
+        }
+
+        // 3. convert the database_vecs(database_vecs_L2norm) to database_vecs_tensor(database_vecs_L2norm_tensor)
+        Tensor database_vecs_tensor = Tensor(handle_, {database_vecs_nums, vec_dims}, BM_FLOAT32, false, true);
+        database_vecs_tensor.reset_dev_data(db_data_dev_mem);
+
+        Tensor database_vecs_L2norm_tensor = Tensor(handle_, {1, database_vecs_nums}, BM_FLOAT32, false, true);
+        database_vecs_L2norm_tensor.reset_dev_data(db_L2norm_dev_mem);
+
+        // 4. interface2 of faiss_indexflatL2
+        pybind11::gil_scoped_acquire gil;
+        std::tuple<pybind11::array_t<float>, pybind11::array_t<int>> results = Bmcv::faiss_indexflatL2(query_vecs,
+                                                                                                       query_vecs_L2norm,
+                                                                                                       database_vecs_tensor,
+                                                                                                       database_vecs_L2norm_tensor,
+                                                                                                       vec_dims,
+                                                                                                       query_vecs_nums,
+                                                                                                       database_vecs_nums,
+                                                                                                       topK);
+        return std::move(results);
+   }
+
+    // faiss_indexflatL2 python interface2
+    std::tuple<pybind11::array_t<float>, pybind11::array_t<int>> Bmcv::faiss_indexflatL2(
+        pybind11::array_t<float> query_vecs,
+        pybind11::array_t<float> query_vecs_L2norm,
+        sail::Tensor& database_vecs,
+        sail::Tensor& database_vecs_L2norm,
+        int vec_dims,
+        int query_vecs_nums,
+        int database_vecs_nums,
+        int topK
+  )
+  {
+        if (!bmcv_faiss_indexflatL2) {
+            SPDLOG_ERROR("bmcv_faiss_indexflatL2 is not available in this version, please upgrade sdk.");
+            throw std::runtime_error("bmcv_faiss_indexflatL2 is not available in this version, please upgrade sdk.");
+        }
+        
+        // 1. check if input is a C-contiguous array for query_vecs and query_vecs_L2norm
+        if (!pybind11::detail::check_flags(query_vecs.ptr(), pybind11::detail::npy_api::NPY_ARRAY_C_CONTIGUOUS_)) {
+            pybind11::module np = pybind11::module::import("numpy");
+            query_vecs = np.attr("ascontiguousarray")(query_vecs, "dtype"_a="float32");
+        }
+        if (!pybind11::detail::check_flags(query_vecs_L2norm.ptr(), pybind11::detail::npy_api::NPY_ARRAY_C_CONTIGUOUS_)) {
+            pybind11::module np = pybind11::module::import("numpy");
+            query_vecs_L2norm = np.attr("ascontiguousarray")(query_vecs_L2norm, "dtype"_a="float32");
+        }
+
+        // 2.1 get the query
+        float *query_data = static_cast<float*>(query_vecs.request().ptr);
+        float *query_L2norm = static_cast<float*>(query_vecs_L2norm.request().ptr);
+
+        pybind11::gil_scoped_release release;
+
+        bm_device_mem_t query_data_dev_mem, query_L2norm_dev_mem;
+        bm_status_t status;
+        status = bm_malloc_device_byte(handle_.data(), &query_data_dev_mem, query_vecs_nums * vec_dims * sizeof(float));
+        if (BM_SUCCESS != status) {
+            SPDLOG_ERROR("faiss_indexflatL2(): query_data_dev_mem bm_malloc_device_byte failed");
+            throw SailRuntimeError("faiss_indexflatL2(): query_data_dev_mem bm_malloc_device_byte failed");
+        }
+        status = bm_malloc_device_byte(handle_.data(), &query_L2norm_dev_mem, 1 * query_vecs_nums * sizeof(float));
+        if (BM_SUCCESS != status) {
+            SPDLOG_ERROR("faiss_indexflatL2(): query_L2norm_dev_mem bm_malloc_device_byte failed");
+            throw SailRuntimeError("faiss_indexflatL2(): query_L2norm_dev_mem bm_malloc_device_byte failed");
+        }
+        status = bm_memcpy_s2d(handle_.data(), query_data_dev_mem, (void *)query_data);
+        if (BM_SUCCESS != status) {
+            SPDLOG_ERROR("faiss_indexflatL2(): bm_memcpy_s2d");
+            throw SailRuntimeError("faiss_indexflatL2(): bm_memcpy_s2d");
+        }
+        status = bm_memcpy_s2d(handle_.data(), query_L2norm_dev_mem, (void *)query_L2norm);
+        if (BM_SUCCESS != status) {
+            SPDLOG_ERROR("faiss_indexflatL2(): bm_memcpy_s2d");
+            throw SailRuntimeError("faiss_indexflatL2(): bm_memcpy_s2d");
+        }
+
+        // 2.2 get the db
+        if (!database_vecs.is_dev_data_valid()) {
+            spdlog::error("faiss_indexflatIP(): database_vecs tensor should own dev memory.");
+            throw SailBMImageError("invalid argument");
+        }
+        bm_device_mem_t db_data_dev_mem;
+        db_data_dev_mem = database_vecs.dev_data();
+
+        if (!database_vecs_L2norm.is_dev_data_valid()) {
+            spdlog::error("faiss_indexflatIP(): database_vecs tensor should own dev memory.");
+            throw SailBMImageError("invalid argument");
+        }
+        bm_device_mem_t db_L2norm_dev_mem;
+        db_L2norm_dev_mem = database_vecs_L2norm.dev_data();
+        
+        // 2.3 buffer
+        bm_device_mem_t buffer_dev_mem;
+        status = bm_malloc_device_byte(handle_.data(), &buffer_dev_mem, query_vecs_nums * database_vecs_nums * sizeof(float));
+        if (BM_SUCCESS != status) {
+            SPDLOG_ERROR("faiss_indexflatL2(): buffer_dev_mem bm_malloc_device_byte failed");
+            throw SailRuntimeError("faiss_indexflatL2(): buffer_dev_mem bm_malloc_device_byte failed");
+        }
+
+        // 3.1 similarity
+        bm_device_mem_t sorted_similarity_dev_mem;
+        status = bm_malloc_device_byte(handle_.data(), &sorted_similarity_dev_mem, query_vecs_nums * topK * sizeof(float));
+        if (BM_SUCCESS != status) {
+            SPDLOG_ERROR("faiss_indexflatL2(): sorted_similarity_dev_mem bm_malloc_device_byte failed");
+            throw SailRuntimeError("faiss_indexflatL2(): sorted_similarity_dev_mem bm_malloc_device_byte failed");
+        }
+        std::unique_ptr<float[]> output_dis = std::make_unique<float[]>(query_vecs_nums * topK);
+
+        // 3.2 index
+        bm_device_mem_t sorted_index_dev_mem;
+        status = bm_malloc_device_byte(handle_.data(), &sorted_index_dev_mem, query_vecs_nums * topK * sizeof(int));
+        if (BM_SUCCESS != status) {
+            SPDLOG_ERROR("faiss_indexflatL2(): sorted_index_dev_mem bm_malloc_device_byte failed");
+            throw SailRuntimeError("faiss_indexflatL2(): sorted_index_dev_mem bm_malloc_device_byte failed");
+        }
+        std::unique_ptr<int[]> output_inx = std::make_unique<int[]>(query_vecs_nums * topK);
+        
+        // 4. bmcv_faiss_indexflatL2
+        status = bmcv_faiss_indexflatL2(handle_.data(),
+                                query_data_dev_mem,
+                                db_data_dev_mem,
+                                query_L2norm_dev_mem,
+                                db_L2norm_dev_mem,
+                                buffer_dev_mem,
+                                sorted_similarity_dev_mem,
+                                sorted_index_dev_mem,
+                                vec_dims,
+                                query_vecs_nums,
+                                database_vecs_nums,
+                                topK,
+                                1,
+                                5,
+                                5);
+        if (BM_SUCCESS != status) {
+            SPDLOG_ERROR("faiss_indexflatL2(): bmcv_faiss_indexflatL2 error");
+            throw SailRuntimeError("faiss_indexflatL2(): bmcv_faiss_indexflatL2 error");
+        }
+        
+        // 5. d2s
+        status = bm_memcpy_d2s(handle_.data(), output_dis.get(), sorted_similarity_dev_mem);
+        if (BM_SUCCESS != status) {
+            SPDLOG_ERROR("faiss_indexflatL2(): bm_memcpy_d2s");
+            throw SailRuntimeError("faiss_indexflatL2(): bm_memcpy_d2s");
+        }
+        status = bm_memcpy_d2s(handle_.data(), output_inx.get(), sorted_index_dev_mem);
+        if (BM_SUCCESS != status) {
+            SPDLOG_ERROR("faiss_indexflatL2(): bm_memcpy_d2s");
+            throw SailRuntimeError("faiss_indexflatL2(): bm_memcpy_d2s");
+        }
+
+        // 6. save in numpy
+        pybind11::gil_scoped_acquire gil;
+        pybind11::module np = pybind11::module::import("numpy");  // like 'import numpy as np'
+        pybind11::list similarity_shape = pybind11::cast(std::vector<int>{query_vecs_nums, topK});
+        pybind11::array_t<float> similarity = np.attr("zeros")(similarity_shape, "dtype"_a="float32");
+        memcpy((void *)similarity.request().ptr, (void *)output_dis.get(), query_vecs_nums * topK * sizeof(float));
+        pybind11::list index_shape = pybind11::cast(std::vector<int>{query_vecs_nums, topK});
+        pybind11::array_t<int> index = np.attr("zeros")(index_shape,  "dtype"_a="int");
+        memcpy((void *)index.request().ptr, (void *)output_inx.get(), query_vecs_nums * topK * sizeof(int));
+        
+        // 7. free
+        bm_free_device(handle_.data(), query_data_dev_mem);
+        bm_free_device(handle_.data(), query_L2norm_dev_mem);
+        bm_free_device(handle_.data(), buffer_dev_mem);
+        bm_free_device(handle_.data(), sorted_similarity_dev_mem);
+        bm_free_device(handle_.data(), sorted_index_dev_mem);
+
+        return std::move(std::make_tuple(similarity, index));
+    }
+#endif  // end PYTHON of faiss_indexflatL2
+
+    // C++ Interface 
+    std::tuple<Tensor, Tensor> Bmcv::faiss_indexflatL2(
+        Tensor &query_vecs,
+        Tensor &query_vecs_L2norm,
+        Tensor &database_vecs,
+        Tensor &database_vecs_L2norm,
+        int vec_dims,
+        int query_vecs_nums,
+        int database_vecs_nums,
+        int topK
+    )
+    {   
+        if (!bmcv_faiss_indexflatL2) {
+            SPDLOG_ERROR("bmcv_faiss_indexflatL2 is not available in this version, please upgrade sdk.");
+            throw std::runtime_error("bmcv_faiss_indexflatL2 is not available in this version, please upgrade sdk.");
+        }
+        // 0. check dtype
+        bm_data_type_t query_dtype = query_vecs.dtype();
+        bm_data_type_t database_dtype = database_vecs.dtype();
+        if (query_dtype != BM_FLOAT32 || database_dtype != BM_FLOAT32) {
+            SPDLOG_ERROR("faiss_indexflatL2(): The supported data type is only sail.Dtype.BM_FLOAT32");
+            throw SailRuntimeError("invalid argument");
+
+        }
+
+        // 1. get the query and queryL2norm
+        if (!query_vecs.is_dev_data_valid() || !query_vecs_L2norm.is_dev_data_valid()) {
+            spdlog::error("faiss_indexflatL2(): query_vecs and query_vecs_L2norm tensor should own dev memory");
+            throw SailBMImageError("invalid argument");
+        }
+        bm_device_mem_t query_data_dev_mem;
+        query_data_dev_mem = query_vecs.dev_data();
+        bm_device_mem_t query_L2norm_dev_mem;
+        query_L2norm_dev_mem = query_vecs_L2norm.dev_data();
+
+        // 2.1 get the database and databaseL2norm
+        if (!database_vecs.is_dev_data_valid() || !database_vecs_L2norm.is_dev_data_valid()) {
+            spdlog::error("faiss_indexflatIP(): database_vecs and database_vecs_L2norm tensor should own dev memory");
+            throw SailBMImageError("invalid argument");
+        }
+        bm_device_mem_t db_data_dev_mem;
+        db_data_dev_mem = database_vecs.dev_data();
+        bm_device_mem_t db_L2norm_dev_mem;
+        db_L2norm_dev_mem = database_vecs_L2norm.dev_data();
+        
+        // 2.2 buffer
+        bm_device_mem_t buffer_dev_mem;
+        bm_status_t status;
+        status = bm_malloc_device_byte(handle_.data(), &buffer_dev_mem, query_vecs_nums * database_vecs_nums * sizeof(float));
+        if (BM_SUCCESS != status) {
+            SPDLOG_ERROR("faiss_indexflatL2(): buffer_dev_mem bm_malloc_device_byte failed");
+            throw SailRuntimeError("faiss_indexflatL2(): buffer_dev_mem bm_malloc_device_byte failed");
+        }
+
+        // 3.1 similarity
+        bm_device_mem_t sorted_similarity_dev_mem;
+        status = bm_malloc_device_byte(handle_.data(), &sorted_similarity_dev_mem, query_vecs_nums * topK * sizeof(float));
+        if (BM_SUCCESS != status) {
+            SPDLOG_ERROR("faiss_indexflatL2(): sorted_similarity_dev_mem bm_malloc_device_byte failed");
+            throw SailRuntimeError("faiss_indexflatL2(): sorted_similarity_dev_mem bm_malloc_device_byte failed");
+        }
+        std::unique_ptr<float[]> output_dis = std::make_unique<float[]>(query_vecs_nums * topK); 
+
+        // 3.2 index
+        bm_device_mem_t sorted_index_dev_mem;
+        status = bm_malloc_device_byte(handle_.data(), &sorted_index_dev_mem, query_vecs_nums * topK * sizeof(int));
+        if (BM_SUCCESS != status) {
+            SPDLOG_ERROR("faiss_indexflatL2(): sorted_index_dev_mem bm_malloc_device_byte failed");
+            throw SailRuntimeError("faiss_indexflatL2(): sorted_index_dev_mem bm_malloc_device_byte failed");
+        }
+        std::unique_ptr<int[]> output_inx = std::make_unique<int[]>(query_vecs_nums * topK);
+
+        // 4. bmcv_faiss_indexflatL2
+        bmcv_faiss_indexflatL2(handle_.data(),
+                                query_data_dev_mem,
+                                db_data_dev_mem,
+                                query_L2norm_dev_mem,
+                                db_L2norm_dev_mem,
+                                buffer_dev_mem,
+                                sorted_similarity_dev_mem,
+                                sorted_index_dev_mem,
+                                vec_dims,
+                                query_vecs_nums,
+                                database_vecs_nums,
+                                topK,
+                                1,
+                                5,
+                                5);
+        if (BM_SUCCESS != status) {
+            SPDLOG_ERROR("faiss_indexflatL2(): bmcv_faiss_indexflatL2 error");
+            throw SailRuntimeError("faiss_indexflatL2(): bmcv_faiss_indexflatL2 error");
+        }
+
+        // 5. d2s
+        status = bm_memcpy_d2s(handle_.data(), output_dis.get(), sorted_similarity_dev_mem);
+        if (BM_SUCCESS != status) {
+            SPDLOG_ERROR("faiss_indexflatL2(): bm_memcpy_d2s");
+            throw SailRuntimeError("faiss_indexflatL2(): bm_memcpy_d2s");
+        }
+        status = bm_memcpy_d2s(handle_.data(), output_inx.get(), sorted_index_dev_mem);
+        if (BM_SUCCESS != status) {
+            SPDLOG_ERROR("faiss_indexflatL2(): bm_memcpy_d2s");
+            throw SailRuntimeError("faiss_indexflatL2(): bm_memcpy_d2s");
+        }
+
+        // 6. save in tensor
+        std::vector<int> shape = {query_vecs_nums, topK};
+        Tensor similarity = Tensor(handle_, {query_vecs_nums, topK}, BM_FLOAT32, true, false);
+        similarity.reset_sys_data((void *)output_dis.get(), shape);
+        Tensor index = Tensor(handle_, {query_vecs_nums, topK}, BM_INT32, true, false);
+        index.reset_sys_data((void *)output_inx.get(), shape);
+
+        // 7. free
+        bm_free_device(handle_.data(), buffer_dev_mem);
+        bm_free_device(handle_.data(), sorted_similarity_dev_mem);
+        bm_free_device(handle_.data(), sorted_index_dev_mem);
+        
+        return std::make_tuple(similarity, index);
+    }
+
+
+#ifdef PYTHON
+    // faiss_indexflatIP python interface1
+    std::tuple<pybind11::array_t<float>, pybind11::array_t<int>> Bmcv::faiss_indexflatIP(
+        pybind11::array_t<float> query_vecs,
+        pybind11::array_t<float> database_vecs,
+        int vec_dims,
+        int query_vecs_nums,
+        int database_vecs_nums,
+        int topK
+    )
+    {
+        if (!bmcv_faiss_indexflatIP) {
+            SPDLOG_ERROR("bmcv_faiss_indexflatIP is not available in this version, please upgrade sdk.");
+            throw std::runtime_error("bmcv_faiss_indexflatIP is not available in this version, please upgrade sdk.");
+        }
+       
+        // 1. check if input is a C-contiguous array
+        if (!pybind11::detail::check_flags(database_vecs.ptr(), pybind11::detail::npy_api::NPY_ARRAY_C_CONTIGUOUS_)) {
+            pybind11::module np = pybind11::module::import("numpy");
+            database_vecs = np.attr("ascontiguousarray")(database_vecs, "dtype"_a="float32");
+        }
+        
+        // 2. get database input
+        float *db_data = static_cast<float*>(database_vecs.request().ptr);
+         
+        pybind11::gil_scoped_release release;
+
+        bm_device_mem_t db_data_dev_mem;
+        bm_status_t status;
+        status = bm_malloc_device_byte(handle_.data(), &db_data_dev_mem, database_vecs_nums * vec_dims * sizeof(float));
+        if (BM_SUCCESS != status) {
+            SPDLOG_ERROR("faiss_indexflatIP(): db_data_dev_mem bm_malloc_device_byte failed");
+            throw SailRuntimeError("faiss_indexflatIP(): db_data_dev_mem bm_malloc_device_byte failed");
+        }
+        status = bm_memcpy_s2d(handle_.data(), db_data_dev_mem, (void *)db_data);
+        if (BM_SUCCESS != status) {
+            SPDLOG_ERROR("faiss_indexflatIP(): bm_memcpy_s2d failed");
+            throw SailRuntimeError("faiss_indexflatIP(): bm_memcpy_s2d failed");
+        }
+        
+        // 3. convert the database_vecs to database_vecs_tensor
+        Tensor database_vecs_tensor = Tensor(handle_, {database_vecs_nums, vec_dims}, BM_FLOAT32, false, true);
+        database_vecs_tensor.reset_dev_data(db_data_dev_mem);
+        
+        // 4. faiss_indexflatIP interface2
+        pybind11::gil_scoped_acquire gil;
+        std::tuple<pybind11::array_t<float>, pybind11::array_t<int>> results = Bmcv::faiss_indexflatIP(query_vecs, database_vecs_tensor, vec_dims, query_vecs_nums, database_vecs_nums, topK);
+        return std::move(results);
+    }
+
+    // faiss_indexflatIP python interface2
+    std::tuple<pybind11::array_t<float>, pybind11::array_t<int>> Bmcv::faiss_indexflatIP(
+        pybind11::array_t<float> query_vecs,
+        sail::Tensor &database_vecs,
+        int vec_dims,
+        int query_vecs_nums,
+        int database_vecs_nums,
+        int topK
+    )
+    {
+        if (!bmcv_faiss_indexflatIP) {
+            SPDLOG_ERROR("bmcv_faiss_indexflatIP is not available in this version, please upgrade sdk.");
+            throw std::runtime_error("bmcv_faiss_indexflatIP is not available in this version, please upgrade sdk.");
+        }
+
+        // 1. Check if input is a C-contiguous array
+        if (!pybind11::detail::check_flags(query_vecs.ptr(), pybind11::detail::npy_api::NPY_ARRAY_C_CONTIGUOUS_)) {
+            pybind11::module np = pybind11::module::import("numpy");
+            query_vecs = np.attr("ascontiguousarray")(query_vecs, "dtype"_a="float32");
+        }
+        
+        // 2.1 get query input
+        float *query_data = static_cast<float*>(query_vecs.request().ptr);
+        
+        pybind11::gil_scoped_release release;
+
+        bm_device_mem_t query_data_dev_mem;
+        bm_status_t status;
+        status = bm_malloc_device_byte(handle_.data(), &query_data_dev_mem, query_vecs_nums * vec_dims * sizeof(float));
+        if (BM_SUCCESS != status) {
+            SPDLOG_ERROR("faiss_indexflatIP(): query_data_dev_mem bm_malloc_device_byte failed");
+            throw SailRuntimeError("faiss_indexflatIP(): query_data_dev_mem bm_malloc_device_byte failed");
+        }
+        status = bm_memcpy_s2d(handle_.data(), query_data_dev_mem, (void *)query_data);
+        if (BM_SUCCESS != status) {
+            SPDLOG_ERROR("faiss_indexflatIP(): bm_memcpy_s2d failed");
+            throw SailRuntimeError("faiss_indexflatIP(): bm_memcpy_s2d failed");
+        }
+        // 2.2 get database input
+        if (!database_vecs.is_dev_data_valid()) {
+            spdlog::error("faiss_indexflatIP(): database_vecs tensor should own dev memory");
+            throw SailBMImageError("invalid argument");
+        }
+        bm_device_mem_t db_data_dev_mem;
+        db_data_dev_mem = database_vecs.dev_data();
+        // 2.3 buffer input
+        bm_device_mem_t buffer_global_addr_device;
+        status = bm_malloc_device_byte(handle_.data(), &buffer_global_addr_device, query_vecs_nums * database_vecs_nums * sizeof(float));
+        if (BM_SUCCESS != status) {
+            SPDLOG_ERROR("faiss_indexflatIP(): buffer_global_addr_device bm_malloc_device_byte failed");
+            throw SailRuntimeError("faiss_indexflatIP(): buffer_global_addr_device bm_malloc_device_byte failed");
+        }
+
+        // 3.1 similarity output
+        bm_device_mem_t sorted_similarity_dev_mem;
+        status = bm_malloc_device_byte(handle_.data(), &sorted_similarity_dev_mem, query_vecs_nums * topK * sizeof(float));
+        if (BM_SUCCESS != status) {
+            SPDLOG_ERROR("faiss_indexflatIP(): sorted_similarity_dev_mem bm_malloc_device_byte failed");
+            throw SailRuntimeError("faiss_indexflatIP(): sorted_similarity_dev_mem bm_malloc_device_byte failed");
+        }
+        std::unique_ptr<float[]> output_dis = std::make_unique<float[]>(query_vecs_nums * topK);
+
+        // 3.2 index output
+        bm_device_mem_t sorted_index_dev_mem;
+        status = bm_malloc_device_byte(handle_.data(), &sorted_index_dev_mem, query_vecs_nums * topK * sizeof(int));
+        if (BM_SUCCESS != status) {
+            SPDLOG_ERROR("faiss_indexflatIP(): sorted_index_dev_mem bm_malloc_device_byte failed");
+            throw SailRuntimeError("faiss_indexflatIP(): sorted_index_dev_mem bm_malloc_device_byte failed");
+        }
+        std::unique_ptr<int[]> output_inx = std::make_unique<int[]>(query_vecs_nums * topK);
+        
+        // 4. bmcv_faiss_indexflatIP
+        status = bmcv_faiss_indexflatIP(handle_.data(),
+                               query_data_dev_mem,
+                               db_data_dev_mem,
+                               buffer_global_addr_device,
+                               sorted_similarity_dev_mem,
+                               sorted_index_dev_mem,
+                               vec_dims,
+                               query_vecs_nums,
+                               database_vecs_nums,
+                               topK,
+                               1,
+                               5,
+                               5);
+        if (BM_SUCCESS != status) {
+            SPDLOG_ERROR("faiss_indexflatIP(): bmcv_faiss_indexflatIP error");
+            throw SailRuntimeError("faiss_indexflatIP(): bmcv_faiss_indexflatIP error");
+        }
+
+        // 5. d2s
+        status = bm_memcpy_d2s(handle_.data(), output_dis.get(), sorted_similarity_dev_mem);
+        if (BM_SUCCESS != status) {
+            SPDLOG_ERROR("faiss_indexflatIP(): bm_memcpy_d2s");
+            throw SailRuntimeError("faiss_indexflatIP(): bm_memcpy_d2s");
+        }
+        status = bm_memcpy_d2s(handle_.data(), output_inx.get(), sorted_index_dev_mem);
+        if (BM_SUCCESS != status) {
+            SPDLOG_ERROR("faiss_indexflatIP(): bm_memcpy_d2s");
+            throw SailRuntimeError("faiss_indexflatIP(): bm_memcpy_d2s");
+        }
+
+        // 6. save in numpy
+        pybind11::gil_scoped_acquire gil;
+        pybind11::module np = pybind11::module::import("numpy");  // like 'import numpy as np'
+        pybind11::list similarity_shape = pybind11::cast(std::vector<int>{query_vecs_nums, topK});
+        pybind11::array_t<float> similarity = np.attr("zeros")(similarity_shape, "dtype"_a="float32");
+        memcpy((void *)similarity.request().ptr, (void *)output_dis.get(), query_vecs_nums * topK * sizeof(float));
+        pybind11::list index_shape = pybind11::cast(std::vector<int>{query_vecs_nums, topK});
+        pybind11::array_t<int> index = np.attr("zeros")(index_shape,  "dtype"_a="int");
+        memcpy((void *)index.request().ptr, (void *)output_inx.get(), query_vecs_nums * topK * sizeof(int));
+
+        // 7. free
+        bm_free_device(handle_.data(), query_data_dev_mem);
+        bm_free_device(handle_.data(), buffer_global_addr_device);
+        bm_free_device(handle_.data(), sorted_similarity_dev_mem);
+        bm_free_device(handle_.data(), sorted_index_dev_mem);
+        
+        return std::move(std::make_tuple(similarity, index));
+    }
+#endif // end PYTHON of faiss_indexflatIP
+
+    // C++ Interface of faiss_indexflatIP
+    std::tuple<Tensor, Tensor> Bmcv::faiss_indexflatIP(
+        Tensor &query_vecs,
+        Tensor &database_vecs,
+        int vec_dims,
+        int query_vecs_nums,
+        int database_vecs_nums,
+        int topK
+    )
+    {
+        if (!bmcv_faiss_indexflatIP) {
+            SPDLOG_ERROR("bmcv_faiss_indexflatIP is not available in this version, please upgrade sdk.");
+            throw std::runtime_error("bmcv_faiss_indexflatIP is not available in this version, please upgrade sdk.");
+        }
+        // 0. check dtype
+        bm_data_type_t query_dtype = query_vecs.dtype();
+        bm_data_type_t database_dtype = database_vecs.dtype();
+        if (query_dtype != BM_FLOAT32 || database_dtype != BM_FLOAT32) {
+            SPDLOG_ERROR("faiss_indexflatIP(): The supported data type is only sail.Dtype.BM_FLOAT32");
+            throw SailRuntimeError("invalid argument");
+
+        }
+
+        // 1.1 get the database input (database_vecs should own dev memory)
+        if (!database_vecs.is_dev_data_valid()) {
+            spdlog::error("faiss_indexflatIP(): database_vecs tensor should own dev memory");
+            throw SailBMImageError("invalid argument");
+        }
+        bm_device_mem_t db_data_dev_mem;
+        db_data_dev_mem = database_vecs.dev_data();
+
+        // 1.2 get the query input (query_vecs should own dev memory)
+        if (!query_vecs.is_dev_data_valid()) {
+            spdlog::error("faiss_indexflatIP(): query_vecs tensor should own dev memory");
+            throw SailBMImageError("invalid argument");
+        }
+        bm_device_mem_t query_data_dev_mem;
+        query_data_dev_mem = query_vecs.dev_data();
+
+        // 2. buffer
+        bm_device_mem_t buffer_global_addr_device;
+        bm_status_t status;
+        status = bm_malloc_device_byte(handle_.data(), &buffer_global_addr_device, query_vecs_nums * database_vecs_nums * sizeof(float));
+        if (BM_SUCCESS != status) {
+            SPDLOG_ERROR("faiss_indexflatIP(): buffer_global_addr_device bm_malloc_device_byte failed");
+            throw SailRuntimeError("faiss_indexflatIP(): buffer_global_addr_device bm_malloc_device_byte failed");
+        }
+
+        // 3.1 similarity output
+        bm_device_mem_t sorted_similarity_dev_mem;
+        status = bm_malloc_device_byte(handle_.data(), &sorted_similarity_dev_mem, query_vecs_nums * topK * sizeof(float));
+        if (BM_SUCCESS != status) {
+            SPDLOG_ERROR("faiss_indexflatIP(): sorted_similarity_dev_mem bm_malloc_device_byte failed");
+            throw SailRuntimeError("faiss_indexflatIP(): sorted_similarity_dev_mem bm_malloc_device_byte failed");
+        }
+        std::unique_ptr<float[]> output_dis = std::make_unique<float[]>(query_vecs_nums * topK);
+        
+        // 3.2 index output
+        bm_device_mem_t sorted_index_dev_mem;
+        status = bm_malloc_device_byte(handle_.data(), &sorted_index_dev_mem, query_vecs_nums * topK * sizeof(int));
+        if (BM_SUCCESS != status) {
+            SPDLOG_ERROR("faiss_indexflatIP(): sorted_index_dev_mem bm_malloc_device_byte failed");
+            throw SailRuntimeError("faiss_indexflatIP(): sorted_index_dev_mem bm_malloc_device_byte failed");
+        }
+        std::unique_ptr<int[]> output_inx = std::make_unique<int[]>(query_vecs_nums * topK);
+
+        // 4. bmcv_faiss_indexflatIP
+        status = bmcv_faiss_indexflatIP(handle_.data(),
+                               query_data_dev_mem,
+                               db_data_dev_mem,
+                               buffer_global_addr_device,
+                               sorted_similarity_dev_mem,
+                               sorted_index_dev_mem,
+                               vec_dims,
+                               query_vecs_nums,
+                               database_vecs_nums,
+                               topK,
+                               1,
+                               5,
+                               5);
+        if (BM_SUCCESS != status) {
+            SPDLOG_ERROR("faiss_indexflatIP(): bmcv_faiss_indexflatIP error");
+            throw SailRuntimeError("faiss_indexflatIP(): bmcv_faiss_indexflatIP error");
+        }
+
+        // 5. d2s
+        status = bm_memcpy_d2s(handle_.data(), output_dis.get(), sorted_similarity_dev_mem);
+        if (BM_SUCCESS != status) {
+            SPDLOG_ERROR("faiss_indexflatIP(): bm_memcpy_d2s");
+            throw SailRuntimeError("faiss_indexflatIP(): bm_memcpy_d2s");
+        }
+        status = bm_memcpy_d2s(handle_.data(), output_inx.get(), sorted_index_dev_mem);
+        if (BM_SUCCESS != status) {
+            SPDLOG_ERROR("faiss_indexflatIP(): bm_memcpy_d2s");
+            throw SailRuntimeError("faiss_indexflatIP(): bm_memcpy_d2s");
+        }
+
+        // 6. save in tensor
+        std::vector<int> shape = {query_vecs_nums, topK};
+        Tensor similarity = Tensor(handle_, {query_vecs_nums, topK}, BM_FLOAT32, true, false);
+        similarity.reset_sys_data((void *)output_dis.get(), shape);
+        Tensor index = Tensor(handle_, {query_vecs_nums, topK}, BM_INT32, true, false);
+        index.reset_sys_data((void *)output_inx.get(), shape);
+
+        // 7. free
+        bm_free_device(handle_.data(), buffer_global_addr_device);
+        bm_free_device(handle_.data(), sorted_similarity_dev_mem);
+        bm_free_device(handle_.data(), sorted_index_dev_mem);
+        
+        return std::make_tuple(similarity, index);
+    }
+
+// faiss_indexPQ_encode
+#ifdef PYTHON
+    // Python interface1 of faiss_indexPQ_encode
+    Tensor Bmcv::faiss_indexPQ_encode(
+        pybind11::array_t<float> input_vecs,
+        Tensor &centroids_vecs,
+        int encode_vecs_num,
+        int vec_dims,
+        int slice_num,
+        int centroids_num,
+        int IP_metric
+    )
+    {
+        if (!bmcv_faiss_indexPQ_encode) {
+            SPDLOG_ERROR("bmcv_faiss_indexPQ_encode is not available in this version, please upgrade sdk.");
+            throw std::runtime_error("bmcv_faiss_indexPQ_encode is not available in this version, please upgrade sdk.");
+        }
+
+        // 1. check if input is a C-contiguous array for input_vecs
+        if (!pybind11::detail::check_flags(input_vecs.ptr(), pybind11::detail::npy_api::NPY_ARRAY_C_CONTIGUOUS_)) {
+            pybind11::module np = pybind11::module::import("numpy");
+            input_vecs = np.attr("ascontiguousarray")(input_vecs, "dtype"_a="float32");
+        }
+
+        // 2. get the input_vecs
+        float *input_data = static_cast<float*>(input_vecs.request().ptr);
+        pybind11::gil_scoped_release release;
+        bm_device_mem_t vector_input_dev;
+        bm_status_t status;
+        status = bm_malloc_device_byte(handle_.data(), &vector_input_dev, encode_vecs_num * vec_dims * sizeof(float));
+        if (BM_SUCCESS != status) {
+            SPDLOG_ERROR("faiss_indexPQ_encode(): vector_input_dev bm_malloc_device_byte failed");
+            throw SailRuntimeError("faiss_indexPQ_encode(): vector_input_dev bm_malloc_device_byte failed");
+        }
+        status = bm_memcpy_s2d(handle_.data(), vector_input_dev, (void *)input_data);
+        if (BM_SUCCESS != status) {
+            SPDLOG_ERROR("faiss_indexPQ_encode(): bm_memcpy_s2d failed");
+            throw SailRuntimeError("faiss_indexPQ_encode(): bm_memcpy_s2d failed");
+        }
+        Tensor input_vecs_ = Tensor(handle_, {encode_vecs_num, vec_dims}, BM_FLOAT32, false, true);
+        input_vecs_.reset_dev_data(vector_input_dev);
+
+        // 3. create an output Tensor, and then call the C++ interface.
+        Tensor encoded_vecs = Tensor(handle_, {encode_vecs_num, slice_num}, BM_UINT8, true, true);
+        int ret = 0;
+        ret = Bmcv::faiss_indexPQ_encode(input_vecs_,
+                                         centroids_vecs,
+                                         encoded_vecs,
+                                         encode_vecs_num,
+                                         vec_dims,
+                                         slice_num,
+                                         centroids_num,
+                                         IP_metric);
+        if (BM_SUCCESS != ret)
+        {
+            SPDLOG_ERROR("faiss_indexPQ_encode(): Bmcv::faiss_indexPQ_encode error");
+            throw SailRuntimeError("faiss_indexPQ_encode(): Bmcv::faiss_indexPQ_encode error");
+        }
+        return std::move(encoded_vecs);  
+    }
+
+    // Python interface2 of faiss_indexPQ_encode
+    pybind11::array_t<uint8_t> Bmcv::faiss_indexPQ_encode(
+        pybind11::array_t<float> input_vecs,
+        pybind11::array_t<float> centroids_vecs,
+        int encode_vecs_num,
+        int vec_dims,
+        int slice_num,
+        int centroids_num,
+        int IP_metric
+    )
+    {
+        if (!bmcv_faiss_indexPQ_encode) {
+            SPDLOG_ERROR("bmcv_faiss_indexPQ_encode is not available in this version, please upgrade sdk.");
+            throw std::runtime_error("bmcv_faiss_indexPQ_encode is not available in this version, please upgrade sdk.");
+        }
+
+        // 1. check if input is a C-contiguous array for centroids_vecs
+        if (!pybind11::detail::check_flags(centroids_vecs.ptr(), pybind11::detail::npy_api::NPY_ARRAY_C_CONTIGUOUS_)) {
+            pybind11::module np = pybind11::module::import("numpy");
+            centroids_vecs = np.attr("ascontiguousarray")(centroids_vecs, "dtype"_a="float32");
+        }
+
+        // 2. get the centroids_vecs
+        float *centroids_data = static_cast<float*>(centroids_vecs.request().ptr);
+        pybind11::gil_scoped_release release;
+        bm_device_mem_t centroids_input_dev;
+        bm_status_t status;
+        status = bm_malloc_device_byte(handle_.data(), &centroids_input_dev, centroids_num * vec_dims * sizeof(float));
+        if (BM_SUCCESS != status) {
+            SPDLOG_ERROR("faiss_indexPQ_encode(): centroids_input_dev bm_malloc_device_byte failed");
+            throw SailRuntimeError("faiss_indexPQ_encode(): centroids_input_dev bm_malloc_device_byte failed");
+        }
+        status = bm_memcpy_s2d(handle_.data(), centroids_input_dev, (void *)centroids_data);
+        if (BM_SUCCESS != status) {
+            SPDLOG_ERROR("faiss_indexPQ_encode(): bm_memcpy_s2d failed");
+            throw SailRuntimeError("faiss_indexPQ_encode(): bm_memcpy_s2d failed");
+        }
+        Tensor centroids_vecs_ = Tensor(handle_, {centroids_num, vec_dims}, BM_FLOAT32, false, true);
+        centroids_vecs_.reset_dev_data(centroids_input_dev);
+
+        // 3. faiss_indexPQ_encode python interface1
+        pybind11::gil_scoped_acquire gil;
+        Tensor encoded_vecs_ = Tensor(handle_, {encode_vecs_num, slice_num}, BM_UINT8, true, true);
+        encoded_vecs_ = Bmcv::faiss_indexPQ_encode(input_vecs, centroids_vecs_, encode_vecs_num, vec_dims, slice_num, centroids_num, IP_metric);
+        
+        // 4. save in numpy
+        encoded_vecs_.sync_d2s();
+        pybind11::module np = pybind11::module::import("numpy");  // like 'import numpy as np'
+        pybind11::list encoded_vecs_shape = pybind11::cast(std::vector<int>{encode_vecs_num, slice_num});
+        pybind11::array_t<uint8_t> encoded = np.attr("zeros")(encoded_vecs_shape, "dtype"_a="uint8");
+        memcpy((void *)encoded.request().ptr, (void *)encoded_vecs_.sys_data(), encode_vecs_num * slice_num * sizeof(uint8_t));
+
+        return std::move(encoded);   
+    }
+
+    // Python Interface3 of faiss_indexPQ_encode
+    int Bmcv::faiss_indexPQ_encode(
+        pybind11::array_t<float> input_vecs,
+        Tensor &centroids_vecs,
+        Tensor &encoded_vecs,
+        int encode_vecs_num,
+        int vec_dims,
+        int slice_num,
+        int centroids_num,
+        int IP_metric
+    )
+    {
+        if (!bmcv_faiss_indexPQ_encode) {
+            SPDLOG_ERROR("bmcv_faiss_indexPQ_encode is not available in this version, please upgrade sdk.");
+            throw std::runtime_error("bmcv_faiss_indexPQ_encode is not available in this version, please upgrade sdk.");
+        }
+        // 0. check dtype
+        bm_data_type_t centroids_dtype = centroids_vecs.dtype();
+        if (centroids_dtype != BM_FLOAT32) {
+            SPDLOG_ERROR("faiss_indexPQ_encode(): The supported data type is only sail.Dtype.BM_FLOAT32");
+            throw SailRuntimeError("invalid argument");
+
+        }
+
+        // 1. check if input is a C-contiguous array for input_vecs
+        if (!pybind11::detail::check_flags(input_vecs.ptr(), pybind11::detail::npy_api::NPY_ARRAY_C_CONTIGUOUS_)) {
+            pybind11::module np = pybind11::module::import("numpy");
+            input_vecs = np.attr("ascontiguousarray")(input_vecs, "dtype"_a="float32");
+        }
+
+        // 2. get the input_vecs 
+        float *input_data = static_cast<float*>(input_vecs.request().ptr);
+        pybind11::gil_scoped_release release;
+        bm_device_mem_t vector_input_dev;
+        bm_status_t status;
+        status = bm_malloc_device_byte(handle_.data(), &vector_input_dev, encode_vecs_num * vec_dims * sizeof(float));
+        if (BM_SUCCESS != status) {
+            SPDLOG_ERROR("faiss_indexPQ_encode(): vector_input_dev bm_malloc_device_byte failed");
+            throw SailRuntimeError("faiss_indexPQ_encode(): vector_input_dev bm_malloc_device_byte failed");
+        }
+        status = bm_memcpy_s2d(handle_.data(), vector_input_dev, (void *)input_data);
+        if (BM_SUCCESS != status) {
+            SPDLOG_ERROR("faiss_indexPQ_encode(): bm_memcpy_s2d failed");
+            throw SailRuntimeError("faiss_indexPQ_encode(): bm_memcpy_s2d failed");
+        }
+        Tensor input_vecs_ = Tensor(handle_, {encode_vecs_num, vec_dims}, BM_FLOAT32, false, true);
+        input_vecs_.reset_dev_data(vector_input_dev);
+
+        // 3. call the C++ interface.
+        int ret = 0;
+        ret = Bmcv::faiss_indexPQ_encode(input_vecs_,
+                                         centroids_vecs,
+                                         encoded_vecs,
+                                         encode_vecs_num,
+                                         vec_dims,
+                                         slice_num,
+                                         centroids_num,
+                                         IP_metric);
+        if (BM_SUCCESS != ret)
+        {
+            SPDLOG_ERROR("faiss_indexPQ_encode(): Bmcv::faiss_indexPQ_encode error");
+            throw SailRuntimeError("faiss_indexPQ_encode(): Bmcv::faiss_indexPQ_encode error");
+        }
+
+        return ret;
+    }
+
+#endif
+
+    // C++ Interface of faiss_indexPQ_encode
+    int Bmcv::faiss_indexPQ_encode(
+        Tensor &input_vecs,
+        Tensor &centroids_vecs,
+        Tensor &encoded_vecs,
+        int encode_vecs_num,
+        int vec_dims,
+        int slice_num,
+        int centroids_num,
+        int IP_metric
+    )
+    {
+        if (!bmcv_faiss_indexPQ_encode) {
+            SPDLOG_ERROR("bmcv_faiss_indexPQ_encode is not available in this version, please upgrade sdk.");
+            throw std::runtime_error("bmcv_faiss_indexPQ_encode is not available in this version, please upgrade sdk.");
+        }
+
+        // 0. check dtype
+        bm_data_type_t input_dtype = input_vecs.dtype();
+        bm_data_type_t centroids_dtype = centroids_vecs.dtype();
+        if (input_dtype != BM_FLOAT32 || centroids_dtype != BM_FLOAT32) {
+            SPDLOG_ERROR("faiss_indexPQ_encode(): The supported data type is only sail.Dtype.BM_FLOAT32");
+            throw SailRuntimeError("invalid argument");
+
+        }
+
+        // 1. get the input_vecs (input_vecs should own dev memory)
+        if (!input_vecs.is_dev_data_valid()) {
+            spdlog::error("faiss_indexPQ_encode(): input_vecs tensor should own dev memory");
+            throw SailBMImageError("invalid argument");
+        }
+        bm_device_mem_t vector_input_dev;
+        vector_input_dev = input_vecs.dev_data();
+
+        // 2. get the centroids_vecs (centroids_vecs should own dev memory)
+        if (!centroids_vecs.is_dev_data_valid()) {
+            spdlog::error("faiss_indexPQ_encode(): centroids_vecs tensor should own dev memory");
+            throw SailBMImageError("invalid argument");
+        }
+        bm_device_mem_t centroids_input_dev;
+        centroids_input_dev = centroids_vecs.dev_data();
+
+        // 3. buffer
+        bm_device_mem_t buffer_table_dev;
+        bm_status_t status;
+        status = bm_malloc_device_byte(handle_.data(), &buffer_table_dev, slice_num * centroids_num * sizeof(float));
+        if (BM_SUCCESS != status) {
+            SPDLOG_ERROR("faiss_indexPQ_encode(): buffer_table_dev bm_malloc_device_byte failed");
+            throw SailRuntimeError("faiss_indexPQ_encode(): buffer_table_dev bm_malloc_device_byte failed");
+        }
+
+        // 4. codes outputs
+        bm_device_mem_t codes_output_dev;
+        if (!encoded_vecs.own_dev_data()){
+            spdlog::error("faiss_indexPQ_encode(): encoded_vecs tensor should own dev memory");
+            throw SailBMImageError("invalid argument");
+        }
+        codes_output_dev = encoded_vecs.dev_data();
+        
+        // 5. bmcv_faiss_indexPQ_encode
+        status = bmcv_faiss_indexPQ_encode(handle_.data(),
+                                           vector_input_dev,
+                                           centroids_input_dev,
+                                           buffer_table_dev,
+                                           codes_output_dev,
+                                           encode_vecs_num,
+                                           vec_dims,
+                                           slice_num,
+                                           centroids_num,
+                                           IP_metric);
+        if (status) {
+            SPDLOG_ERROR("faiss_indexPQ_encode(): bmcv_faiss_indexPQ_encode() ret {}", status);
+            return SAIL_ERR_BMI_BMCV;
+        }
+
+        // 6. output
+        encoded_vecs.reset({encode_vecs_num, slice_num}, BM_UINT8);
+        encoded_vecs.reset_dev_data(codes_output_dev);
+
+        bm_free_device(handle_.data(), buffer_table_dev);
+
+        return status;
+    }
+
+
+// faiss_indexPQ_ADC
+#ifdef PYTHON
+    //  Python Interface1 of faiss_indexPQ_ADC 
+    std::tuple<pybind11::array_t<float>, pybind11::array_t<int>> Bmcv::faiss_indexPQ_ADC (
+        pybind11::array_t<float> nxquery_vecs,
+        pybind11::array_t<float> centroids_vecs,
+        pybind11::array_t<uint8_t> nycodes_vecs,
+        int vec_dims,   
+        int slice_num,  
+        int centroids_num,
+        int database_vecs_num,
+        int query_vecs_num,
+        int topK,
+        int IP_metric
+    )
+    {
+        if (!bmcv_faiss_indexPQ_ADC) {
+            SPDLOG_ERROR("bmcv_faiss_indexPQ_ADC is not available in this version, please upgrade sdk.");
+            throw std::runtime_error("bmcv_faiss_indexPQ_ADC is not available in this version, please upgrade sdk.");
+        }
+
+        // 1. check if input is a C-contiguous array for centroids_vecs and nycodes_vecs
+        if (!pybind11::detail::check_flags(centroids_vecs.ptr(), pybind11::detail::npy_api::NPY_ARRAY_C_CONTIGUOUS_)) {
+            pybind11::module np = pybind11::module::import("numpy");
+            centroids_vecs = np.attr("ascontiguousarray")(centroids_vecs, "dtype"_a="float32");
+        }
+        if (!pybind11::detail::check_flags(nycodes_vecs.ptr(), pybind11::detail::npy_api::NPY_ARRAY_C_CONTIGUOUS_)) {
+            pybind11::module np = pybind11::module::import("numpy");
+            nycodes_vecs = np.attr("ascontiguousarray")(nycodes_vecs, "dtype"_a="float32");
+        }
+
+        // 2.1 get the centroids_vecs and nycodes_vecs
+        float *centroids_data = static_cast<float*>(centroids_vecs.request().ptr);
+        uint8_t *nycodes_data = static_cast<uint8_t*>(nycodes_vecs.request().ptr);
+        
+        pybind11::gil_scoped_release release;
+
+        bm_device_mem_t centroids_input_dev;
+        bm_status_t status;
+        status = bm_malloc_device_byte(handle_.data(), &centroids_input_dev, centroids_num * vec_dims * sizeof(float));
+        if (BM_SUCCESS != status) {
+            SPDLOG_ERROR("faiss_indexPQ_ADC(): centroids_input_dev bm_malloc_device_byte failed");
+            throw SailRuntimeError("faiss_indexPQ_ADC(): centroids_input_dev bm_malloc_device_byte failed");
+        }
+        status = bm_memcpy_s2d(handle_.data(), centroids_input_dev, (void *)centroids_data);
+        if (BM_SUCCESS != status) {
+            SPDLOG_ERROR("faiss_indexPQ_ADC(): bm_memcpy_s2d failed");
+            throw SailRuntimeError("faiss_indexPQ_ADC(): bm_memcpy_s2d failed");
+        }
+        Tensor centroids_vecs_ = Tensor(handle_, {centroids_num, vec_dims}, BM_FLOAT32, false, true);
+        centroids_vecs_.reset_dev_data(centroids_input_dev);
+
+        bm_device_mem_t nycodes_input_dev;
+        status = bm_malloc_device_byte(handle_.data(), &nycodes_input_dev, database_vecs_num * slice_num * sizeof(uint8_t));
+        if (BM_SUCCESS != status) {
+            SPDLOG_ERROR("faiss_indexPQ_ADC(): nycodes_input_dev bm_malloc_device_byte failed");
+            throw SailRuntimeError("faiss_indexPQ_ADC(): nycodes_input_dev bm_malloc_device_byte failed");
+        }
+        status = bm_memcpy_s2d(handle_.data(), nycodes_input_dev, (void *)nycodes_data);
+        if (BM_SUCCESS != status) {
+            SPDLOG_ERROR("faiss_indexPQ_ADC(): bm_memcpy_s2d failed");
+            throw SailRuntimeError("faiss_indexPQ_ADC(): bm_memcpy_s2d failed");
+        }
+        Tensor nycodes_vecs_ = Tensor(handle_, {database_vecs_num, slice_num}, BM_UINT8, false, true);
+        nycodes_vecs_.reset_dev_data(nycodes_input_dev);
+
+        // 3. Python Interface 2
+        pybind11::gil_scoped_acquire gil;
+        std::tuple<pybind11::array_t<float>, pybind11::array_t<int>> results = Bmcv::faiss_indexPQ_ADC(nxquery_vecs,
+                                                                                            centroids_vecs_,
+                                                                                            nycodes_vecs_,
+                                                                                            vec_dims,
+                                                                                            slice_num,
+                                                                                            centroids_num,
+                                                                                            database_vecs_num,
+                                                                                            query_vecs_num,
+                                                                                            topK,
+                                                                                            IP_metric);
+
+        return std::move(results);
+    }
+
+    // Python Interface2 of faiss_indexPQ_ADC  
+    std::tuple<pybind11::array_t<float>, pybind11::array_t<int>> Bmcv::faiss_indexPQ_ADC (
+        pybind11::array_t<float> nxquery_vecs,
+        Tensor &centroids_vecs,
+        Tensor &nycodes_vecs,
+        int vec_dims,   
+        int slice_num,  
+        int centroids_num,
+        int database_vecs_num,
+        int query_vecs_num,
+        int topK,
+        int IP_metric
+    )
+    {
+        if (!bmcv_faiss_indexPQ_ADC) {
+            SPDLOG_ERROR("bmcv_faiss_indexPQ_ADC is not available in this version, please upgrade sdk.");
+            throw std::runtime_error("bmcv_faiss_indexPQ_ADC is not available in this version, please upgrade sdk.");
+        }
+        // 0. check dtype
+        bm_data_type_t centroids_dtype = centroids_vecs.dtype();
+        bm_data_type_t nycodes_dtype = nycodes_vecs.dtype();
+        if (centroids_dtype != BM_FLOAT32 || nycodes_dtype != BM_UINT8) {
+            SPDLOG_ERROR("faiss_indexPQ_ADC(): Data type error");
+            throw SailRuntimeError("invalid argument");
+        }
+
+        // 1. get the query input and check if input is a C-contiguous array
+        if (!pybind11::detail::check_flags(nxquery_vecs.ptr(), pybind11::detail::npy_api::NPY_ARRAY_C_CONTIGUOUS_)) {
+            pybind11::module np = pybind11::module::import("numpy");
+           nxquery_vecs = np.attr("ascontiguousarray")(nxquery_vecs, "dtype"_a="float32");
+        }
+
+        // 2. to tensor
+        float *query_data = static_cast<float*>(nxquery_vecs.request().ptr);
+        
+        pybind11::gil_scoped_release release;
+        
+        bm_device_mem_t nxquery_input_dev;
+        bm_status_t status;
+        status = bm_malloc_device_byte(handle_.data(), &nxquery_input_dev, query_vecs_num * vec_dims * sizeof(float));
+        if (BM_SUCCESS != status) {
+            SPDLOG_ERROR("faiss_indexPQ_ADC(): nxquery_input_dev bm_malloc_device_byte failed");
+            throw SailRuntimeError("faiss_indexPQ_ADC(): nxquery_input_dev bm_malloc_device_byte failed");
+        }
+        status = bm_memcpy_s2d(handle_.data(), nxquery_input_dev, (void *)query_data);
+        if (BM_SUCCESS != status) {
+            SPDLOG_ERROR("faiss_indexPQ_ADC(): bm_memcpy_s2d failed");
+            throw SailRuntimeError("faiss_indexPQ_ADC(): bm_memcpy_s2d failed");
+        }
+
+        Tensor nxquery_vecs_tensor = Tensor(handle_, {query_vecs_num, vec_dims}, BM_FLOAT32, false, true);
+        nxquery_vecs_tensor.reset_dev_data(nxquery_input_dev);
+
+        // 3. C++ Interface
+        auto result = faiss_indexPQ_ADC(nxquery_vecs_tensor, 
+                                                   centroids_vecs,
+                                                   nycodes_vecs,
+                                                   vec_dims,
+                                                   slice_num,
+                                                   centroids_num,
+                                                   database_vecs_num,
+                                                   query_vecs_num,
+                                                   topK,
+                                                   IP_metric);
+
+        Tensor distance_ = std::get<0>(result);
+        Tensor index_ = std::get<1>(result);
+        
+        // 4. save in numpy
+        pybind11::gil_scoped_acquire gil;
+        pybind11::module np = pybind11::module::import("numpy");  // like 'import numpy as np'
+        pybind11::list distance_shape = pybind11::cast(std::vector<int>{query_vecs_num, topK});
+        pybind11::array_t<float> distance = np.attr("zeros")(distance_shape, "dtype"_a="float");
+        memcpy((void *)distance.request().ptr, (void *)distance_.sys_data(), query_vecs_num * topK * sizeof(float));
+
+        pybind11::list index_shape = pybind11::cast(std::vector<int>{query_vecs_num, topK});
+        pybind11::array_t<int> index = np.attr("zeros")(index_shape, "dtype"_a="int");
+        memcpy((void *)index.request().ptr, (void *)index_.sys_data(), query_vecs_num * topK * sizeof(int));
+
+        return std::move(std::make_tuple(distance, index));
+    }
+
+#endif
+
+    // C++ Interface of faiss_indexPQ_ADC 
+    std::tuple<Tensor, Tensor> Bmcv::faiss_indexPQ_ADC (
+        Tensor &nxquery_vecs,
+        Tensor &centroids_vecs,
+        Tensor &nycodes_vecs,
+        int vec_dims,   
+        int slice_num,  
+        int centroids_num,
+        int database_vecs_num,
+        int query_vecs_num,
+        int topK,
+        int IP_metric
+    )
+    {
+        if (!bmcv_faiss_indexPQ_ADC) {
+            SPDLOG_ERROR("bmcv_faiss_indexPQ_ADC is not available in this version, please upgrade sdk.");
+            throw std::runtime_error("bmcv_faiss_indexPQ_ADC is not available in this version, please upgrade sdk.");
+        }
+        // 0. check dtype
+        bm_data_type_t nxquery_dtype = nxquery_vecs.dtype();
+        bm_data_type_t centroids_dtype = centroids_vecs.dtype();
+        bm_data_type_t nycodes_dtype = nycodes_vecs.dtype();
+        if (nxquery_dtype != BM_FLOAT32 || centroids_dtype != BM_FLOAT32 || nycodes_dtype != BM_UINT8) {
+            SPDLOG_ERROR("faiss_indexPQ_ADC(): Data type error");
+            throw SailRuntimeError("invalid argument");
+        }
+
+        // 1.1 get the query input (nxquery_vecs should own dev memory)
+        if (!nxquery_vecs.is_dev_data_valid()) {
+            spdlog::error("faiss_indexPQ_ADC(): nxquery_vecs tensor should own dev memory");
+            throw SailBMImageError("invalid argument");
+        }
+        bm_device_mem_t nxquery_input_dev;
+        nxquery_input_dev = nxquery_vecs.dev_data();
+
+        // 1.2 get the centroids input (centroids_vecs should own dev memory)
+        if (!centroids_vecs.is_dev_data_valid()) {
+            spdlog::error("faiss_indexPQ_ADC(): centroids_vecs tensor should own dev memory");
+            throw SailBMImageError("invalid argument");
+        }
+        bm_device_mem_t centroids_input_dev;
+        centroids_input_dev = centroids_vecs.dev_data();
+
+        // 1.3 get the encoded database input (nycodes_vecs should own dev memory)
+        if (!nycodes_vecs.is_dev_data_valid()) {
+            spdlog::error("faiss_indexPQ_ADC(): nycodes_vecs tensor should own dev memory");
+            throw SailBMImageError("invalid argument");
+        }
+        bm_device_mem_t nycodes_input_dev;
+        nycodes_input_dev = nycodes_vecs.dev_data();
+
+        // 2.1 distance_output
+        bm_device_mem_t distance_output_dev;
+        bm_status_t status;
+        status = bm_malloc_device_byte(handle_.data(), &distance_output_dev, query_vecs_num * topK * sizeof(float));
+        if (BM_SUCCESS != status) {
+            SPDLOG_ERROR("faiss_indexPQ_ADC(): distance_output_dev bm_malloc_device_byte failed");
+            throw SailRuntimeError("faiss_indexPQ_ADC(): distance_output_dev bm_malloc_device_byte failed");
+        }
+        std::unique_ptr<float[]> output_dis = std::make_unique<float[]>(query_vecs_num * topK);
+
+        // 2.2 index_output_dev
+        bm_device_mem_t index_output_dev;
+        status = bm_malloc_device_byte(handle_.data(), &index_output_dev, query_vecs_num * topK * sizeof(int));
+        if (BM_SUCCESS != status) {
+            SPDLOG_ERROR("faiss_indexPQ_ADC(): index_output_dev bm_malloc_device_byte failed");
+            throw SailRuntimeError("faiss_indexPQ_ADC(): index_output_dev bm_malloc_device_byte failed");
+        }
+        std::unique_ptr<int[]> output_inx = std::make_unique<int[]>(query_vecs_num * topK);
+
+        // 3. bmcv_faiss_indexPQ_ADC
+        status = bmcv_faiss_indexPQ_ADC(handle_.data(),
+                                        centroids_input_dev,
+                                        nxquery_input_dev,
+                                        nycodes_input_dev,
+                                        distance_output_dev,
+                                        index_output_dev,
+                                        vec_dims,
+                                        slice_num,
+                                        centroids_num,
+                                        database_vecs_num,
+                                        query_vecs_num,
+                                        topK,
+                                        IP_metric);
+        if (BM_SUCCESS != status) {
+            SPDLOG_ERROR("faiss_indexPQ_ADC(): bmcv_faiss_indexflatIP error");
+            throw SailRuntimeError("faiss_indexPQ_ADC(): bmcv_faiss_indexflatIP error");
+        }
+
+        // 4. d2s
+        status = bm_memcpy_d2s(handle_.data(), output_dis.get(), distance_output_dev);
+        if (BM_SUCCESS != status) {
+            SPDLOG_ERROR("faiss_indexPQ_ADC(): bm_memcpy_d2s");
+            throw SailRuntimeError("faiss_indexPQ_ADC(): bm_memcpy_d2s");
+        }
+        status = bm_memcpy_d2s(handle_.data(), output_inx.get(), index_output_dev);
+        if (BM_SUCCESS != status) {
+            SPDLOG_ERROR("faiss_indexPQ_ADC(): bm_memcpy_d2s");
+            throw SailRuntimeError("faiss_indexPQ_ADC(): bm_memcpy_d2s");
+        }
+
+        // 5. save in tensor
+        std::vector<int> shape = {query_vecs_num, topK};
+        Tensor distance = Tensor(handle_, {query_vecs_num, topK}, BM_FLOAT32, true, true);
+        distance.reset_sys_data((void *)output_dis.get(), shape);
+        Tensor index = Tensor(handle_, {query_vecs_num, topK}, BM_INT32, true, true);
+        index.reset_sys_data((void *)output_inx.get(), shape);
+
+        // 6. free
+        bm_free_device(handle_.data(), distance_output_dev);
+        bm_free_device(handle_.data(), index_output_dev);
+        
+        return std::make_tuple(distance, index);
+    }
+
+// faiss_indexPQ_SDC
+#ifdef PYTHON
+  // Python Interface1 of faiss_indexPQ_SDC
+  std::tuple<pybind11::array_t<float>, pybind11::array_t<int>> Bmcv::faiss_indexPQ_SDC (
+      pybind11::array_t<uint8_t> nxcodes_vecs,
+      pybind11::array_t<uint8_t> nycodes_vecs,
+      pybind11::array_t<float> sdc_table, 
+      int slice_num,  
+      int centroids_num,
+      int database_vecs_num,
+      int query_vecs_num,
+      int topK,
+      int IP_metric
+    )
+    {
+        if (!bmcv_faiss_indexPQ_SDC) {
+            SPDLOG_ERROR("bmcv_faiss_indexPQ_SDC is not available in this version, please upgrade sdk.");
+            throw std::runtime_error("bmcv_faiss_indexPQ_SDC is not available in this version, please upgrade sdk.");
+        }
+
+        // 1. check if input is a C-contiguous array for sdc_table and nycodes_vecs
+        if (!pybind11::detail::check_flags(nycodes_vecs.ptr(), pybind11::detail::npy_api::NPY_ARRAY_C_CONTIGUOUS_)) {
+            pybind11::module np = pybind11::module::import("numpy");
+            nycodes_vecs = np.attr("ascontiguousarray")(nycodes_vecs, "dtype"_a="uint8");
+        }
+        if (!pybind11::detail::check_flags(sdc_table.ptr(), pybind11::detail::npy_api::NPY_ARRAY_C_CONTIGUOUS_)) {
+            pybind11::module np = pybind11::module::import("numpy");
+            sdc_table = np.attr("ascontiguousarray")(sdc_table, "dtype"_a="float32");
+        }
+        
+        // 2.1 get the nycodes_vecs and sdc_table
+        uint8_t *nycodes_data = static_cast<uint8_t*>(nycodes_vecs.request().ptr);
+        float *sdc_data = static_cast<float*>(sdc_table.request().ptr);
+        
+        pybind11::gil_scoped_release release;
+
+        bm_device_mem_t sdc_table_input_dev;
+        bm_status_t status;
+        status = bm_malloc_device_byte(handle_.data(), &sdc_table_input_dev, slice_num * centroids_num * centroids_num * sizeof(float));
+        if (BM_SUCCESS != status) {
+            SPDLOG_ERROR("faiss_indexPQ_SDC(): sdc_table_input_dev bm_malloc_device_byte failed");
+            throw SailRuntimeError("faiss_indexPQ_SDC(): sdc_table_input_dev bm_malloc_device_byte failed");
+        }
+        status = bm_memcpy_s2d(handle_.data(), sdc_table_input_dev, (void *)sdc_data);
+        if (BM_SUCCESS != status) {
+            SPDLOG_ERROR("faiss_indexPQ_SDC(): bm_memcpy_s2d failed");
+            throw SailRuntimeError("faiss_indexPQ_SDC(): bm_memcpy_s2d failed");
+        }
+        Tensor sdc_table_ = Tensor(handle_, {slice_num, centroids_num, centroids_num}, BM_FLOAT32, false, true);
+        sdc_table_.reset_dev_data(sdc_table_input_dev);
+
+        bm_device_mem_t nycodes_input_dev;
+        status = bm_malloc_device_byte(handle_.data(), &nycodes_input_dev, database_vecs_num * slice_num * sizeof(uint8_t));
+        if (BM_SUCCESS != status) {
+            SPDLOG_ERROR("faiss_indexPQ_SDC(): nycodes_input_dev bm_malloc_device_byte failed");
+            throw SailRuntimeError("faiss_indexPQ_SDC(): nycodes_input_dev bm_malloc_device_byte failed");
+        }
+        status = bm_memcpy_s2d(handle_.data(), nycodes_input_dev, (void *)nycodes_data);
+        if (BM_SUCCESS != status) {
+            SPDLOG_ERROR("faiss_indexPQ_SDC(): bm_memcpy_s2d failed");
+            throw SailRuntimeError("faiss_indexPQ_SDC(): bm_memcpy_s2d failed");
+        }
+        Tensor nycodes_vecs_ = Tensor(handle_, {database_vecs_num, slice_num}, BM_UINT8, false, true);
+        nycodes_vecs_.reset_dev_data(nycodes_input_dev);
+
+        // 3. Python Interface 2
+        pybind11::gil_scoped_acquire gil;
+        std::tuple<pybind11::array_t<float>, pybind11::array_t<int>> results = Bmcv::faiss_indexPQ_SDC(nxcodes_vecs,
+                                                                                                    nycodes_vecs_,
+                                                                                                    sdc_table_,
+                                                                                                    slice_num,
+                                                                                                    centroids_num,
+                                                                                                    database_vecs_num,
+                                                                                                    query_vecs_num,
+                                                                                                    topK,
+                                                                                                    IP_metric);
+
+        return std::move(results);
+    }
+
+  // Python Interface2 of faiss_indexPQ_SDC
+  std::tuple<pybind11::array_t<float>, pybind11::array_t<int>> Bmcv::faiss_indexPQ_SDC (
+      pybind11::array_t<uint8_t> nxcodes_vecs,
+      Tensor &nycodes_vecs,
+      Tensor &sdc_table, 
+      int slice_num,  
+      int centroids_num,
+      int database_vecs_num,
+      int query_vecs_num,
+      int topK,
+      int IP_metric
+    )
+    {
+        if (!bmcv_faiss_indexPQ_SDC) {
+            SPDLOG_ERROR("bmcv_faiss_indexPQ_SDC is not available in this version, please upgrade sdk.");
+            throw std::runtime_error("bmcv_faiss_indexPQ_SDC is not available in this version, please upgrade sdk.");
+        }
+        // 0. check dtype
+        bm_data_type_t nycodes_dtype = nycodes_vecs.dtype();
+        bm_data_type_t sdc_dtype = sdc_table.dtype();
+        if (nycodes_dtype != BM_UINT8 || sdc_dtype != BM_FLOAT32) {
+            SPDLOG_ERROR("faiss_indexPQ_SDC(): Data type error");
+            throw SailRuntimeError("invalid argument");
+        }
+
+        // 1. get the nxcodes_vecs input and check if input is a C-contiguous array
+        if (!pybind11::detail::check_flags(nxcodes_vecs.ptr(), pybind11::detail::npy_api::NPY_ARRAY_C_CONTIGUOUS_)) {
+            pybind11::module np = pybind11::module::import("numpy");
+            nxcodes_vecs = np.attr("ascontiguousarray")(nxcodes_vecs, "dtype"_a="uint8");
+        }
+
+        // 2. to tensor
+        uint8_t *query_data = static_cast<uint8_t*>(nxcodes_vecs.request().ptr);
+        
+        pybind11::gil_scoped_release release;
+        
+        bm_device_mem_t nxcodes_input_dev;
+        bm_status_t status;
+        status = bm_malloc_device_byte(handle_.data(), &nxcodes_input_dev, query_vecs_num * slice_num * sizeof(uint8_t));
+        if (BM_SUCCESS != status) {
+            SPDLOG_ERROR("faiss_indexPQ_SDC(): nxquery_input_dev bm_malloc_device_byte failed");
+            throw SailRuntimeError("faiss_indexPQ_SDC(): nxquery_input_dev bm_malloc_device_byte failed");
+        }
+        status = bm_memcpy_s2d(handle_.data(), nxcodes_input_dev, (void *)query_data);
+        if (BM_SUCCESS != status) {
+            SPDLOG_ERROR("faiss_indexPQ_SDC(): bm_memcpy_s2d failed");
+            throw SailRuntimeError("faiss_indexPQ_SDC(): bm_memcpy_s2d failed");
+        }
+
+        Tensor nxcodes_vecs_tensor = Tensor(handle_, {query_vecs_num, slice_num}, BM_UINT8, false, true);
+        nxcodes_vecs_tensor.reset_dev_data(nxcodes_input_dev);
+
+        // 3. C++ Interface
+        int ret = 0;
+        std::vector<int> shape = {query_vecs_num, topK};
+        Tensor distance_ = Tensor(handle_, {query_vecs_num, topK}, BM_FLOAT32, true, true);
+        Tensor index_ = Tensor(handle_, {query_vecs_num, topK}, BM_INT32, true, true);
+
+        ret = faiss_indexPQ_SDC(nxcodes_vecs_tensor, 
+                                nycodes_vecs,
+                                sdc_table,
+                                distance_,
+                                index_,
+                                slice_num,
+                                centroids_num,
+                                database_vecs_num,
+                                query_vecs_num,
+                                topK,
+                                IP_metric);
+        
+        // 4. save in numpy
+        pybind11::gil_scoped_acquire gil;
+        distance_.sync_d2s();
+        index_.sync_d2s();
+        pybind11::module np = pybind11::module::import("numpy");  // like 'import numpy as np'
+        pybind11::list distance_shape = pybind11::cast(std::vector<int>{query_vecs_num, topK});
+        pybind11::array_t<float> distance = np.attr("zeros")(distance_shape, "dtype"_a="float");
+        memcpy((void *)distance.request().ptr, (void *)distance_.sys_data(), query_vecs_num * topK * sizeof(float));
+
+        pybind11::list index_shape = pybind11::cast(std::vector<int>{query_vecs_num, topK});
+        pybind11::array_t<int> index = np.attr("zeros")(index_shape, "dtype"_a="int");
+        memcpy((void *)index.request().ptr, (void *)index_.sys_data(), query_vecs_num * topK * sizeof(int));
+
+        return std::move(std::make_tuple(distance, index));
+    }
+
+    // Python Interface3 of faiss_indexPQ_SDC
+    std::tuple<pybind11::array_t<float>, pybind11::array_t<int>> Bmcv::faiss_indexPQ_SDC (
+        Tensor &nxcodes_vecs,
+        Tensor &nycodes_vecs,
+        Tensor &sdc_table, 
+        int slice_num,  
+        int centroids_num,
+        int database_vecs_num,
+        int query_vecs_num,
+        int topK,
+        int IP_metric
+    )
+    {
+        if (!bmcv_faiss_indexPQ_SDC) {
+            SPDLOG_ERROR("bmcv_faiss_indexPQ_SDC is not available in this version, please upgrade sdk.");
+            throw std::runtime_error("bmcv_faiss_indexPQ_SDC is not available in this version, please upgrade sdk.");
+        }
+
+        // Create output Tensor
+        std::vector<int> shape = {query_vecs_num, topK};
+        Tensor distance_ = Tensor(handle_, {query_vecs_num, topK}, BM_FLOAT32, true, true);
+        Tensor index_ = Tensor(handle_, {query_vecs_num, topK}, BM_INT32, true, true);
+
+        // Call C++ Interface of faiss_indexPQ_SDC
+        int ret = 0;
+        ret = faiss_indexPQ_SDC(nxcodes_vecs, 
+                                nycodes_vecs,
+                                sdc_table,
+                                distance_,
+                                index_,
+                                slice_num,
+                                centroids_num,
+                                database_vecs_num,
+                                query_vecs_num,
+                                topK,
+                                IP_metric);
+
+        // Save in numpy
+        distance_.sync_d2s();
+        index_.sync_d2s();
+        pybind11::module np = pybind11::module::import("numpy");  // like 'import numpy as np'
+        pybind11::list distance_shape = pybind11::cast(std::vector<int>{query_vecs_num, topK});
+        pybind11::array_t<float> distance = np.attr("zeros")(distance_shape, "dtype"_a="float");
+        memcpy((void *)distance.request().ptr, (void *)distance_.sys_data(), query_vecs_num * topK * sizeof(float));
+
+        pybind11::list index_shape = pybind11::cast(std::vector<int>{query_vecs_num, topK});
+        pybind11::array_t<int> index = np.attr("zeros")(index_shape, "dtype"_a="int");
+        memcpy((void *)index.request().ptr, (void *)index_.sys_data(), query_vecs_num * topK * sizeof(int));
+
+        return std::move(std::make_tuple(distance, index));
+    }
+
+#endif
+
+  // C++ Interface of faiss_indexPQ_SDC
+  int Bmcv::faiss_indexPQ_SDC (
+      Tensor &nxcodes_vecs,
+      Tensor &nycodes_vecs,
+      Tensor &sdc_table,
+      Tensor &distance,
+      Tensor &index,  
+      int slice_num,  
+      int centroids_num,
+      int database_vecs_num,
+      int query_vecs_num,
+      int topK,
+      int IP_metric
+    )
+    {
+        if (!bmcv_faiss_indexPQ_SDC) {
+            SPDLOG_ERROR("bmcv_faiss_indexPQ_SDC is not available in this version, please upgrade sdk.");
+            throw std::runtime_error("bmcv_faiss_indexPQ_SDC is not available in this version, please upgrade sdk.");
+        }
+        // 0. check dtype
+        bm_data_type_t nxcodes_dtype = nxcodes_vecs.dtype();
+        bm_data_type_t nycodes_dtype = nycodes_vecs.dtype();
+        bm_data_type_t sdc_dtype = sdc_table.dtype();
+        if (nxcodes_dtype != BM_UINT8 || nycodes_dtype != BM_UINT8 || sdc_dtype != BM_FLOAT32) {
+            SPDLOG_ERROR("faiss_indexPQ_SDC(): Data type error");
+            throw SailRuntimeError("invalid argument");
+        }
+
+        // 1.1 get the encoded query input (nxcodes_vecs should own dev memory)
+        if (!nxcodes_vecs.is_dev_data_valid()) {
+            spdlog::error("faiss_indexPQ_SDC(): nxcodes_vecs tensor should own dev memory");
+            throw SailBMImageError("invalid argument");
+        }
+        bm_device_mem_t nxcodes_input_dev;
+        nxcodes_input_dev = nxcodes_vecs.dev_data();
+
+        // 1.2 get the encoded database input (nycodes_vecs should own dev memory)
+        if (!nycodes_vecs.is_dev_data_valid()) {
+            spdlog::error("faiss_indexPQ_SDC(): nycodes_vecs tensor should own dev memory");
+            throw SailBMImageError("invalid argument");
+        }
+        bm_device_mem_t nycodes_input_dev;
+        nycodes_input_dev = nycodes_vecs.dev_data();
+
+        // 1.3 get the sdc_table input (sdc_table should own dev memory)
+        if (!sdc_table.is_dev_data_valid()) {
+            spdlog::error("faiss_indexPQ_SDC(): sdc_table tensor should own dev memory");
+            throw SailBMImageError("invalid argument");
+        }
+        bm_device_mem_t sdc_table_input_dev;
+        sdc_table_input_dev = sdc_table.dev_data();
+
+        // 2.1 distance_output
+        bm_device_mem_t distance_output_dev;
+        if (!distance.own_dev_data()) {
+            spdlog::error("faiss_indexPQ_SDC(): distance tensor should own dev memory");
+            throw SailBMImageError("invalid argument");
+        }
+        distance_output_dev = distance.dev_data();
+
+        // 2.2 index_output_dev
+        bm_device_mem_t index_output_dev;
+        if (!index.own_dev_data()) {
+            spdlog::error("faiss_indexPQ_SDC(): index tensor should own dev memory");
+            throw SailBMImageError("invalid argument");
+        }
+        index_output_dev = index.dev_data();
+        
+        // 3. bmcv_faiss_indexPQ_SDC
+        bm_status_t status;
+        status = bmcv_faiss_indexPQ_SDC(handle_.data(),
+                                        sdc_table_input_dev,
+                                        nxcodes_input_dev,
+                                        nycodes_input_dev,
+                                        distance_output_dev,
+                                        index_output_dev,
+                                        slice_num,
+                                        centroids_num,
+                                        database_vecs_num,
+                                        query_vecs_num,
+                                        topK,
+                                        IP_metric);
+        if (BM_SUCCESS != status) {
+            SPDLOG_ERROR("faiss_indexPQ_SDC(): bmcv_faiss_indexflatIP error");
+            return SAIL_ERR_BMI_BMCV;
+        }
+
+        // 5. save in tensor
+        std::vector<int> shape = {query_vecs_num, topK};
+        distance.reset(shape, BM_FLOAT32);
+        distance.reset_dev_data(distance_output_dev);
+        index.reset(shape, BM_INT32);
+        index.reset_dev_data(index_output_dev);
+        
+        return status;
+    }
+  
     int Bmcv::transpose(
         BMImage &src,
         BMImage &dst

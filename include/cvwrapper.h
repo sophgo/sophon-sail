@@ -324,6 +324,11 @@ class DECL_EXPORT BMImage {
   */
   void set_ipc_flag(bool f);
   
+  /**
+   * @brief get pts and dts
+   * @return the pts and dts of inner frame.
+  */
+  vector<double> get_pts_dts();
 
 #if defined(USE_BMCV) && defined(USE_OPENCV) && defined(PYTHON)
   pybind11::array_t<uint8_t> asmat();
@@ -354,6 +359,8 @@ class DECL_EXPORT BMImage {
   void cache_ost_mat(std::shared_ptr<cv::Mat>& ostrmat);
 #endif
 
+  void set_pts_dts(double pts, double dts);
+  
   friend class Bmcv;
   friend class Decoder;
   friend class Blend;
@@ -1836,7 +1843,6 @@ class DECL_EXPORT Bmcv {
    *         Each array has shape (batch, n_fft / 2 + 1, num_frames), where num_frames is the 
    *         number of overlapping segments computed from the input signal.
    */
-#if BMCV_VERSION_MAJOR > 1
   #ifdef PYTHON
   std::tuple<pybind11::array_t<float>, pybind11::array_t<float>> stft(
       pybind11::array_t<float> input_real,
@@ -1903,7 +1909,6 @@ class DECL_EXPORT Bmcv {
       int pad_mode,
       int win_mode
       );
-#endif
   /**
    * @brief fft.
    * 
@@ -1984,6 +1989,302 @@ class DECL_EXPORT Bmcv {
       std::vector<std::vector<int>> overlay_info, 
       std::vector<const BMImage *>        overlay_image);
 #endif
+
+// faiss series
+  /**
+   * @brief Calculate squared L2 distance between query vectors and database vectors, output the top topK L2sqr-values and the corresponding indices.
+   *
+   * @param query_vecs            Query vectors.
+   * @param query_vecs_L2norm     Query vectors' square.
+   * @param database_vecs         Database vectors.
+   * @param database_vecs_L2norm  Database vectors' square.
+   * @param vec_dims              The dimension of the Query vectors and Database vectors.
+   * @param query_vecs_nums       The number of the Query vectors.
+   * @param database_vecs_nums    The number of the Database vectors.
+   * @param topK                  Get top topK values.  
+   * @return std::tuple<pybind11::array_t<float>, pybind11::array_t<int>> A tuple containing
+   *         two numpy arrays: the first array represents the squares of the top K most matching L2 distances,
+   *         and the second array represents the  indices corresponding to the squares of the top K most matching L2 distances.
+   *         Each array has shape (query_vecs_nums, topK).
+   */
+  #ifdef PYTHON
+  // Python Interface 1
+  std::tuple<pybind11::array_t<float>, pybind11::array_t<int>> faiss_indexflatL2(
+    pybind11::array_t<float> query_vecs,
+    pybind11::array_t<float> query_vecs_L2norm,
+    pybind11::array_t<float> database_vecs,
+    pybind11::array_t<float> database_vecs_L2norm,
+    int vec_dims,
+    int query_vecs_nums,
+    int database_vecs_nums,
+    int topK
+  );
+
+  // Python Interface 2
+  std::tuple<pybind11::array_t<float>, pybind11::array_t<int>> faiss_indexflatL2(
+    pybind11::array_t<float> query_vecs,
+    pybind11::array_t<float> query_vecs_L2norm,
+    sail::Tensor& database_vecs,
+    sail::Tensor& database_vecs_L2norm,
+    int vec_dims,
+    int query_vecs_nums,
+    int database_vecs_nums,
+    int topK
+  );
+  #endif
+
+  // C++ Interface 
+  std::tuple<Tensor, Tensor> faiss_indexflatL2(
+    Tensor &query_vecs,
+    Tensor &query_vecs_L2norm,
+    Tensor &database_vecs,
+    Tensor& database_vecs_L2norm,
+    int vec_dims,
+    int query_vecs_nums,
+    int database_vecs_nums,
+    int topK
+  );
+
+  /**
+   * @brief Calculate inner product distance between query vectors and database vectors, output the top K IP-values and the corresponding indices.
+   *
+   * @param query_vecs          Query vectors.
+   * @param database_vecs       Database vectors.
+   * @param vec_dims            The dimension of the Query vectors and Database vectors.
+   * @param query_vecs_nums     The number of the Query vectors.
+   * @param database_vecs_nums  The number of the Database vectors.
+   * @param topK                Get top topK values.  
+   * @return std::tuple<pybind11::array_t<OutputType>, pybind11::array_t<int>> A tuple containing
+   *         two numpy arrays: the first array represents the squares of the top K most matching L2 distances,
+   *         and the second array represents the  indices corresponding to the squares of the top K most matching L2 distances.
+   *         Each array has shape (query_vecs_nums, topK).
+   */
+  #ifdef PYTHON
+  // Python Interface 1
+  std::tuple<pybind11::array_t<float>, pybind11::array_t<int>> faiss_indexflatIP(
+    pybind11::array_t<float> query_vecs,
+    sail::Tensor &database_vecs,
+    int vec_dims,
+    int query_vecs_nums,
+    int database_vecs_nums,
+    int topK
+  );
+
+  // Python Interface 2
+  std::tuple<pybind11::array_t<float>, pybind11::array_t<int>> faiss_indexflatIP(
+    pybind11::array_t<float> query_vecs,
+    pybind11::array_t<float> database_vecs,
+    int vec_dims,
+    int query_vecs_nums,
+    int database_vecs_nums,
+    int topK
+  );
+  #endif
+
+  // C++ Interface
+  std::tuple<Tensor, Tensor> faiss_indexflatIP(
+    Tensor &query_vecs,
+    Tensor &database_vecs,
+    int vec_dims,
+    int query_vecs_nums,
+    int database_vecs_nums,
+    int topK
+  );
+
+// PQ_encoder
+  /**
+   * @brief Encode vectors into int8 PQcodes, output the encoded PQcodes.
+   *
+   * @param input_vecs            Input vectors.
+   * @param centroids_vecs        Centroids vector.
+   * @param encode_vecs_num       The number of Input vectors.
+   * @param vec_dims              The dimension of the Input vectors and Centroids vector.
+   * @param slice_num             The number of the sliced vector.
+   * @param centroids_num         The number of the centroids.
+   * @param IP_metric             0 indicates L2 distance calculation, 1 indicates the IP distance calculation.  
+   * @return                      Encoded PQcodes.
+   */
+#ifdef PYTHON
+  // Python Interface1 of faiss_indexPQ_encode
+  Tensor faiss_indexPQ_encode(
+    pybind11::array_t<float> input_vecs,
+    Tensor &centroids_vecs,
+    int encode_vecs_num,
+    int vec_dims,
+    int slice_num,
+    int centroids_num,
+    int IP_metric
+  );
+
+  // Python Interface2 of faiss_indexPQ_encode
+  pybind11::array_t<uint8_t> faiss_indexPQ_encode(
+    pybind11::array_t<float> input_vecs,
+    pybind11::array_t<float> centroids_vecs,
+    int encode_vecs_num,
+    int vec_dims,
+    int slice_num,
+    int centroids_num,
+    int IP_metric
+  );
+
+  // Python Interface3 of faiss_indexPQ_encode
+  int faiss_indexPQ_encode(
+    pybind11::array_t<float> input_vecs,
+    Tensor &centroids_vecs,
+    Tensor &encoded_vecs,
+    int encode_vecs_num,
+    int vec_dims,
+    int slice_num,
+    int centroids_num,
+    int IP_metric
+  );
+#endif
+
+ // C++ Interface of faiss_indexPQ_encode
+ int faiss_indexPQ_encode(
+    Tensor &input_vecs,
+    Tensor &centroids_vecs,
+    Tensor &encoded_vecs,
+    int encode_vecs_num,
+    int vec_dims,
+    int slice_num,
+    int centroids_num,
+    int IP_metric
+ );
+
+
+// bmcv_faiss_indexPQ_ADC
+  /**
+   * @brief PQ Asymmetric Distance Computation, output the topK distance and label of x and q(ny).
+   *
+   * @param nxquery_vecs            Query vectors.
+   * @param centroids_vecs          Centroids vectors.
+   * @param nycodes_vecs            Encoded database vectors
+   * @param vec_dims                The dimension of the Input vectors.
+   * @param slice_num               The number of the sliced vectors.
+   * @param centroids_num           The number of the centroids.
+   * @param database_num            The number of the database vectors.
+   * @param query_num               The number of the query vectors.
+   * @param topK                    Get top topK values.
+   * @param IP_metric               0 indicates L2 distance calculation, 1 indicates the IP distance calculation.  
+   * @return                        The first array represents the top K most matching distances,and the second array 
+   *                                represents the  indices corresponding to the top K most matching distances.
+   */
+#ifdef PYTHON
+  // Python Interface1 of faiss_indexPQ_ADC
+  std::tuple<pybind11::array_t<float>, pybind11::array_t<int>> faiss_indexPQ_ADC (
+      pybind11::array_t<float> nxquery_vecs,
+      pybind11::array_t<float> centroids_vecs,
+      pybind11::array_t<uint8_t> nycodes_vecs,
+      int vec_dims,   
+      int slice_num,  
+      int centroids_num,
+      int database_vecs_num,
+      int query_vecs_num,
+      int topK,
+      int IP_metric
+  );
+
+  // Python Interface 2 of faiss_indexPQ_ADC
+  std::tuple<pybind11::array_t<float>, pybind11::array_t<int>> faiss_indexPQ_ADC (
+      pybind11::array_t<float> nxquery_vecs,
+      Tensor &centroids_vecs,
+      Tensor &nycodes_vecs,
+      int vec_dims,   
+      int slice_num,  
+      int centroids_num,
+      int database_vecs_num,
+      int query_vecs_num,
+      int topK,
+      int IP_metric
+  );
+#endif
+
+  // C++ Interface of faiss_indexPQ_ADC
+    std::tuple<Tensor, Tensor> faiss_indexPQ_ADC (
+      Tensor &nxquery_vecs,
+      Tensor &centroids_vecs,
+      Tensor &nycodes_vecs,
+      int vec_dims,   
+      int slice_num,  
+      int centroids_num,
+      int database_vecs_num,
+      int query_vecs_num,
+      int topK,
+      int IP_metric
+  );
+
+// bmcv_faiss_indexPQ_SDC
+  /**
+   * @brief  PQ Symmetric Distance Computation, output the topK distance and label of q(x) and q(ny).
+   *
+   * @param nxcodes_vecs            PQcodes of query vectors.
+   * @param nycodes_vecs            PQcodes of database vectors.
+   * @param sdc_table               sdc_table.
+   * @param slice_num               The num of sliced vector.
+   * @param centroids_num           The number of the centroids.
+   * @param database_vecs_num       The number of the database vectors.
+   * @param query_vecs_num          The number of the query vectors.
+   * @param topK                    Get top topK values.
+   * @param IP_metric               0 indicates L2 distance calculation, 1 indicates the IP distance calculation.  
+   * @return                        The first array represents the top K most matching distances,and the second array 
+   *                                represents the  indices corresponding to the top K most matching distances.
+   */
+#ifdef PYTHON
+  // Python Interface1 of faiss_indexPQ_SDC
+  std::tuple<pybind11::array_t<float>, pybind11::array_t<int>> faiss_indexPQ_SDC (
+      pybind11::array_t<uint8_t> nxcodes_vecs,
+      pybind11::array_t<uint8_t> nycodes_vecs,
+      pybind11::array_t<float> sdc_table, 
+      int slice_num,  
+      int centroids_num,
+      int database_vecs_num,
+      int query_vecs_num,
+      int topK,
+      int IP_metric
+  );
+
+  // Python Interface2 of faiss_indexPQ_SDC
+  std::tuple<pybind11::array_t<float>, pybind11::array_t<int>> faiss_indexPQ_SDC (
+      pybind11::array_t<uint8_t> nxcodes_vecs,
+      Tensor &nycodes_vecs,
+      Tensor &sdc_table, 
+      int slice_num,  
+      int centroids_num,
+      int database_vecs_num,
+      int query_vecs_num,
+      int topK,
+      int IP_metric
+  );
+
+  // Python Interface3 of faiss_indexPQ_SDC
+  std::tuple<pybind11::array_t<float>, pybind11::array_t<int>> faiss_indexPQ_SDC (
+      Tensor &nxcodes_vecs,
+      Tensor &nycodes_vecs,
+      Tensor &sdc_table, 
+      int slice_num,  
+      int centroids_num,
+      int database_vecs_num,
+      int query_vecs_num,
+      int topK,
+      int IP_metric
+  );
+#endif
+
+  // C++ Interface of faiss_indexPQ_SDC
+  int faiss_indexPQ_SDC (
+      Tensor &nxcodes_vecs,
+      Tensor &nycodes_vecs,
+      Tensor &sdc_table,
+      Tensor &distance,
+      Tensor &index, 
+      int slice_num,  
+      int centroids_num,
+      int database_vecs_num,
+      int query_vecs_num,
+      int topK,
+      int IP_metric
+  );
 
 #ifdef PYTHON
   pybind11::array_t<float> nms(pybind11::array_t<float> input_proposal, float threshold);

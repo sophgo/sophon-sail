@@ -218,7 +218,7 @@ align
 
 * ret : int  
 
-返回BMImage是否对齐成功,-1代表失败,0代表成功
+返回BMImage是否对齐成功, -1代表BMImage未创建, 0代表成功, 其他代表失败
 
 check_align
 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>
@@ -234,7 +234,7 @@ check_align
 
 * ret : bool  
 
-1代表已对齐,0代表未对齐
+1代表已对齐, 0代表未对齐, -1代表BMImage未创建
 
 unalign
 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>
@@ -250,7 +250,7 @@ unalign
 
 * ret : int  
 
-返回BMImage是否不对齐成功,-1代表失败,0代表成功
+返回BMImage是否不对齐成功, -1代表BMImage未创建, 0代表成功, 其他代表失败
 
 check_contiguous_memory
 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>
@@ -321,4 +321,50 @@ check_contiguous_memory
             sail::BMImage img_fromRawdata(handle, buf.data(), 200, 100, sail::Format::FORMAT_BGR_PACKED);
 
             return 0;  
+        }
+
+get_pts_dts
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+获取pts和dts
+
+**接口形式:**
+    .. code-block:: c
+    
+        vector<double> get_pts_dts()
+    
+**返回值说明:**
+
+* result: vector<double> 
+
+输出结果。输出具体的pts和dts值。
+
+
+**示例代码:**
+    .. code-block:: c
+
+        #include <sail/cvwrapper.h>
+
+        using namespace std;
+        using namespace sail;
+
+        int main() {
+            string file_path = "your_video_file_path.mp4";
+            int tpu_id = 0;
+
+            Handle handle(tpu_id);
+            Decoder decoder(file_path, true, tpu_id);
+            BMImage image;
+
+            int ret = decoder.read(handle, image);
+            if (ret != 0) {
+                cout << "Failed to read a frame!" << endl;
+                return ret;
+            }
+
+            std::vector<int> pts_dts;
+            pts_dts = image.get_pts_dts();
+            cout << "pts: " << pts_dts[0] << endl;
+            cout << "dts: " << pts_dts[1] << endl;
+            return 0;
         }

@@ -142,6 +142,115 @@ The class label of the detection result.
 
 The score of the detection result.
 
+**Interface 3:**
+    .. code-block:: c
+
+        std::vector<std::vector<std::tuple<int, int, int, int ,int, float>>> process(std::vector<TensorPTRWithName> &input_data, 
+                std::vector<int> &ost_w,
+                std::vector<int> &ost_h,
+                std::vector<std::vector<float>> &dete_threshold,
+                std::vector<float> &nms_threshold,
+                bool input_keep_aspect_ratio,
+                bool input_use_multiclass_nms);
+
+**Parameters 3:**
+
+* input_data: std::vector<TensorPTRWithName>
+
+Input parameter. Input data with three outputs or one output.
+
+* ost_w: std::vector<int>
+
+Input parameter. Width of original images.
+
+* ost_h: std::vector<int>
+
+Input parameter. Height of original images.
+
+* dete_threshold: std::vector<std::vector<float>>
+
+Input parameter. Detection threshold.
+
+* nms_threshold: std::vector<float>
+
+Input parameter. NMS threshold.
+
+* input_keep_aspect_ratio: bool
+
+Input parameter. Whether to keep aspect ratio in images.
+
+* input_use_multiclass_nms: bool
+
+Input parameter. Whether to use multiclass nms.
+
+**Interface 4:**
+    .. code-block:: c
+
+        std::vector<std::vector<std::tuple<int, int, int, int ,int, float>>> process(std::map<std::string, Tensor&>& input_data,
+                std::vector<int> &ost_w,
+                std::vector<int> &ost_h,
+                std::vector<std::vector<float>> &dete_threshold,
+                std::vector<float> &nms_threshold,
+                bool input_keep_aspect_ratio,
+                bool input_use_multiclass_nms);
+
+**Parameters 4:**
+
+* input_data: std::map<std::string, Tensor&>
+
+Input parameter. Input data with three outputs or one output.
+
+* ost_w: std::vector<int>
+
+Input parameter. Width of original images.
+
+* ost_h: std::vector<int>
+
+Input parameter. Height of original images.
+
+* dete_threshold: std::vector<std::vector<float>>
+
+Input parameter. Detection threshold.
+
+* nms_threshold: std::vector<float>
+
+Input parameter. NMS threshold.
+
+* input_keep_aspect_ratio: bool
+
+Input parameter. Whether to keep aspect ratio for boxes.
+
+* input_use_multiclass_nms: bool
+
+Input parameter. Whether to multiclass nms.
+
+**Returns:**
+
+std::vector<std::vector<std::tuple<left, top, right, bottom, class_id, score> > >
+
+* left: int 
+
+The leftmost x-coordinate of the detection result.
+
+* top: int
+
+The topmost y-coordinate of the detection result.
+
+* right: int
+
+The rightmost x-coordinate of the detection result.
+
+* bottom: int
+
+The bottommost y-coordinate of the detection result.
+
+* class_id: int
+
+The class label of the detection result.
+
+* score: float
+
+The score of the detection result.
 
 reset_anchors
 >>>>>>>>>>>>>>>>

@@ -324,3 +324,48 @@ Get whether the image memory in BMImage is continuous
 
             return 0;
         }
+
+get_pts_dts
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+Get pts or dts.
+
+**Interface:**
+    .. code-block:: c
+    
+        vector<double> get_pts_dts()
+
+**Returns**
+
+* result : int
+
+the value of pts and dts.
+
+**Sample:**
+    .. code-block:: c
+
+        #include <sail/cvwrapper.h>
+
+        using namespace std;
+        using namespace sail;
+
+        int main() {
+            string file_path = "your_video_file_path.mp4";
+            int tpu_id = 0;
+
+            Handle handle(tpu_id);
+            Decoder decoder(file_path, true, tpu_id);
+            BMImage image;
+
+            int ret = decoder.read(handle, image);
+            if (ret != 0) {
+                cout << "Failed to read a frame!" << endl;
+                return ret;
+            }
+            
+            std::vector<int> pts_dts;
+            pts_dts = image.get_pts_dts();
+            cout << "pts: " << pts_dts[0] << endl;
+            cout << "dts: " << pts_dts[1] << endl;
+            return 0;
+        }

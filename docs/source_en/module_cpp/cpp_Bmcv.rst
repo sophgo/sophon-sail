@@ -3623,3 +3623,502 @@ Inverse Short-Time Fourier Transform(ISTFT)
             std::tuple<sail::Tensor, sail::Tensor> result = bmcv.istft(input_real, input_imag, realInput, normalize, L, hop_len, pad_mode, win_mode);
             return 0;
         }
+
+faiss_indexflatL2
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+Calculate squared L2 distance between query vectors and database vectors, output the top topK L2sqr-values and the corresponding indices.
+
+**Interface:**
+    .. code-block:: C
+
+        std::tuple<Tensor, Tensor> faiss_indexflatL2(
+            Tensor &query_vecs,
+            Tensor &query_vecs_L2norm,
+            Tensor &database_vecs,
+            Tensor& database_vecs_L2norm,
+            int vec_dims,
+            int query_vecs_nums,
+            int database_vecs_nums,
+            int topK
+            );
+
+**Parameters:**
+
+* query_vecs: Tensor
+   The query vectors, the supported data type is only sail.Dtype.BM_FLOAT32.
+
+* query_vecs_L2norm: Tensor
+    Calculates the sum of the square values of the elements in each row of the query vector, the data type is sail.Dtype.BM_FLOAT32.
+
+* database_vecs: Tensor
+   The database vectors, the supported data type is only sail.Dtype.BM_FLOAT32.
+
+* database_vecs_L2norm: Tensor
+    Calculates the sum of the square values of the elements in each row of the database vector, the data type is sail.Dtype.BM_FLOAT32..
+
+* vec_dims: int
+    The dimension of the query vectors and database vectors.
+
+* query_vecs_nums: int
+   The numbers of the query vectors.
+
+* database_vecs_nums: int
+    The numbers of the database vectors.
+
+* topK: int
+    Get top topK values.
+
+**Returns:**
+
+* result: tuple[Tensor, Tensor]
+    Returns the square value of the top topK best-matched L2 distance and its corresponding index.
+
+***Sample:**
+    .. code-block:: C
+
+        #include <iostream>
+        #include <vector>
+        #include <sail/cvwrapper.h>
+
+        int main(){
+            // 1. database_vecs
+            std::vector<std::vector<float>> db_vecs = {
+                {-2.0f, 0.0f, 4.0f},
+                {-5.0f, 3.0f, -1.0f},
+                {1.0f, 2.0f, 4.0f},
+                {0.0f, 5.0f, -3.0f},
+                {2.0f, 1.0f, -4.0f}
+            };
+
+            // 2. query_vecs
+            std::vector<std::vector<float>> query_vecs = {
+                {1.0f, 2.0f, 3.0f}
+            };
+
+            // 3. test bmcv.faiss_indexflatL2
+            int tpu_id = 0;
+            sail::Handle handle(tpu_id);
+            sail::Bmcv bmcv(handle);
+
+            std::vector<float> db_vecs_l2norm;
+            for (const auto& vec : db_vecs) {
+                float sum = 0.0f;
+                for (const auto& val : vec) {
+                    sum += val * val;
+                }
+                db_vecs_l2norm.push_back(sum);
+            }
+
+            std::vector<float> query_vecs_l2norm;
+            for (const auto& vec : query_vecs) {
+                float sum = 0.0f;
+                for (const auto& val : vec) {
+                    sum += val * val;
+                }
+                query_vecs_l2norm.push_back(sum);
+            }
+
+            sail::Tensor database_vecs_tensor = Tensor(handle, {db_vecs.size(), db_vecs[0].size()}, BM_FLOAT32, true, true);
+            database_vecs_tensor.reset_sys_data(db_vecs.data(), {db_vecs.size(), db_vecs[0].size()});
+            database_vecs_tensor.sync_s2d();
+
+            sail::Tensor database_vecs_L2norm_tensor = Tensor(handle, {1, db_vecs.size()}, BM_FLOAT32, true, true);
+            database_vecs_L2norm_tensor.reset_sys_data(db_vecs_l2norm, {1, db_vecs.size()});
+            database_vecs_L2norm_tensor.sync_s2d();
+
+            sail::Tensor query_vecs_tensor = Tensor(handle, {query_vecs.size(), query_vecs[0].size()}, BM_FLOAT32, true, true);
+            query_vecs_tensor.reset_sys_data(query_vecs.data(), {query_vecs.size(), query_vecs[0].size()});
+            query_vecs_tensor.sync_s2d();
+
+            sail::Tensor query_vecs_L2norm_tensor = Tensor(handle, {1, query_vecs.size()}, BM_FLOAT32, true, true);
+            query_vecs_L2norm_tensor.reset_sys_data(query_vecs_l2norm.data(), {1, query_vecs.size()});
+            query_vecs_L2norm_tensor.sync_s2d();
+
+            std::tuple<sail::Tensor, sail::Tensor> result = bmcv.faiss_indexflatL2(query_vecs_tensor, query_vecs_L2norm_tensor, database_vecs_tensor, database_vecs_L2norm_tensor, 3, 1, 5, 3);
+
+            return 0;
+        }
+
+faiss_indexflatIP
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+Calculate inner product distance between query vectors and database vectors, output the top K IP-values and the corresponding indices.
+
+**Interface:**
+    .. code-block:: C
+
+        std::tuple<Tensor, Tensor> faiss_indexflatIP(
+            Tensor &query_vecs,
+            Tensor &database_vecs,
+            int vec_dims,
+            int query_vecs_nums,
+            int database_vecs_nums,
+            int topK
+            );
+
+**Parameters:**
+
+* query_vecs: Tensor
+   The query vectors, the supported data type is only sail.Dtype.BM_FLOAT32.
+
+* database_vecs: Tensor
+    The database vectors, the supported data type is only sail.Dtype.BM_FLOAT32.
+
+* vec_dims: int
+    The dimension of the query vectors and database vectors.
+
+* query_vecs_nums: int
+    The numbers of the query vectors.
+
+* database_vecs_nums: int
+    The numbers of the database vectors.
+
+* topK: int
+     Get top topK values.
+
+**Returns:**
+
+* result: tuple[Tensor, Tensor]
+    Returns the top topK best-matched inner product distance values and their corresponding indexes.
+
+**Sample:**
+    .. code-block:: C
+
+        #include <iostream>
+        #include <vector>
+        #include <sail/cvwrapper.h>
+
+        int main(){
+            // 1. database_vecs
+            std::vector<std::vector<float>> db_vecs = {
+                {-2.0f, 0.0f, 4.0f},
+                {-5.0f, 3.0f, -1.0f},
+                {1.0f, 2.0f, 4.0f},
+                {0.0f, 5.0f, -3.0f},
+                {2.0f, 1.0f, -4.0f}
+            };
+
+            // 2. query_vecs
+            std::vector<std::vector<float>> query_vecs = {
+                {1.0f, 2.0f, 3.0f}
+            };
+
+            // 3. test bmcv.faiss_indexflatL2
+            int tpu_id = 0;
+            sail::Handle handle(tpu_id);
+            sail::Bmcv bmcv(handle);
+
+            sail::Tensor database_vecs_tensor = Tensor(handle, {db_vecs.size(), db_vecs[0].size()}, BM_FLOAT32, true, true);
+            database_vecs_tensor.reset_sys_data(db_vecs.data(), {db_vecs.size(), db_vecs[0].size()});
+            database_vecs_tensor.sync_s2d();
+
+            sail::Tensor query_vecs_tensor = Tensor(handle, {query_vecs.size(), query_vecs[0].size()}, BM_FLOAT32, true, true);
+            query_vecs_tensor.reset_sys_data(query_vecs.data(), {query_vecs.size(), query_vecs[0].size()});
+            query_vecs_tensor.sync_s2d();
+
+            std::tuple<sail::Tensor, sail::Tensor> result = bmcv.faiss_indexflatIP(query_vecs_tensor, database_vecs_tensor, 3, 1, 5, 3);
+
+            return 0;
+        }
+
+faiss_indexPQ_encode
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+Perform PQ quantization encoding on the input vector and output the encoded vector.
+
+**Interface:**
+    .. code-block:: C
+
+        int faiss_indexPQ_encode(
+            Tensor &input_vecs,
+            Tensor &centroids_vecs,
+            Tensor &encoded_vecs,
+            int encode_vecs_num,
+            int vec_dims,
+            int slice_num,
+            int centroids_num,
+            int IP_metric
+        );
+
+**Parameters:**
+
+* input_vecs: Tensor
+    Input vector to be encoded, data types are supported only numpy.float32 or sail.Dtype.BM_FLOAT32, encode_vecs_num * vec_dims.
+
+* centroids_vecs: Tensor
+    centroids vector,  data types are supported only numpy.float32 or sail.Dtype.BM_FLOAT32, slice_num * centroids_num * (vec_dims / slice_num).
+
+* encoded_vecs: Tensor
+    Output the encoded vector. The data type is BM_UINT8 and the size is encode_vecs_num * slice_num.
+
+* encode_vecs_num: int
+    The number of vectors to be encoded.
+
+* vec_dims: int
+    Dimension of the vector to be encoded.
+
+* slice_num: int
+    The number of slices of the original vector dimensions, for example the original vector dimension is 512, slice_num = 8, and each subvector dimension is 64.
+
+* centroids_num: int
+    The number of centroids.
+
+* IP_metric: int
+    0 indicates that the distance is calculated using L2, and 1 indicates that the distance is calculated using IP.
+
+**Returns:**
+
+* result: int  
+    Returns 0 on success.
+
+**Sample:**
+    .. code-block:: C
+
+        #include <iostream>
+        #include <vector>
+        #include <sail/cvwrapper.h>
+
+        int main()
+        {   
+            int encode_vecs_num = 3;
+            int vec_dims = 64;
+            int db_vecs_num = 10000;
+            int slice_num = 8;
+            int centroids_num = 256;
+            int subvec_dims = vec_dims / slice_num;
+
+            int tpu_id = 0;
+            sail::Handle handle(tpu_id);
+            sail::Bmcv bmcv(handle);
+
+            // centroids Tensor
+            std::vector<int> centroids_shape = {slice_num, centroids_num, subvec_dim};
+            sail::Tensor centroids_tensor(handle, centroids_shape, BM_FLOAT32, false, true);
+
+            // input Tensor
+            std::vector<int> input_shape = {encode_vecs_num, vec_dims};
+            sail::Tensor input_tensor(handle, input_shape, BM_FLOAT32, false, true);
+
+            // encoded Tensor
+            std::vector<int> encoded_shape = {encode_vecs_num, slice_num};
+            sail::Tensor encoded_tensor(handle, encoded_shape, BM_UINT8, true, true);
+
+            int ret = 0;
+            ret = bmcv.faiss_indexPQ_encode(input_tensor,
+                                            centroids_tensor,
+                                            encoded_tensor,
+                                            encode_vecs_num,
+                                            vec_dims,
+                                            slice_num,
+                                            centroids_num,
+                                            0);
+            
+            return ret;
+        }
+
+faiss_indexPQ_ADC
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+The distance table is calculated by the query vector and the clustering center (centroid) vector, and the encoded database vector searches the table to calculate the distance and sorts it, output the topK distances and the corresponding indices.
+
+**Interface:**
+    .. code-block:: C
+
+        std::tuple<Tensor, Tensor> faiss_indexPQ_ADC (
+            Tensor &nxquery_vecs,
+            Tensor &centroids_vecs,
+            Tensor &nycodes_vecs,
+            int vec_dims,   
+            int slice_num,  
+            int centroids_num,
+            int database_vecs_num,
+            int query_vecs_num,
+            int topK,
+            int IP_metric
+        );
+
+**Parameters:**
+
+* nxquery_vecs: Tensor
+   query vectors, data types are supported only sail.Dtype.BM_FLOAT32, and the size is query_vecs_nums * vec_dims.
+
+* centroids_vecs: Tensor
+    centroids vectors, data types are supported only sail.Dtype.BM_FLOAT32, and the size is slice_num * centroids_num * (vec_dims / slice_num).
+
+* nycodes_vecs: Tensor
+    Encoded database vector, data types are supported only sail.Dtype.BM_UINT8, and the size is database_vecs_nums * slice_num.
+
+* vec_dims: int
+    dimension of the query vector.
+
+* slice_num: int
+    The number of slices of the original vector dimensions, for example the original vector dimension is 512, slice_num = 8, and each subvector dimension is 64.  
+   
+* centroids_num: int
+    The number of centroids.
+
+* database_vecs_nums: int
+    The number of database vectors.
+
+* query_vecs_nums: int
+    The number of query vectors.
+
+* topK: int
+    Get top topK values.
+
+* IP_metric: int
+    0 indicates that the distance is calculated using L2, and 1 indicates that the distance is calculated using IP.
+
+**Returns:**
+
+* result: tuple[Tensor, Tensor]
+   Returns the top topK best-matched distance values and their corresponding indexes.
+
+**Sample:**
+    .. code-block:: C
+
+        #include <iostream>
+        #include <vector>
+        #include <sail/cvwrapper.h>
+
+        int main()
+        {   
+            int vec_dims = 512;
+            int slice_num = 8;
+            int centroids_num = 256;
+            int database_vecs_num = 10000;
+            int query_vecs_num = 1;
+            int subvec_dims = vec_dims / slice_num;
+            int topK = 5;
+
+            int tpu_id = 0;
+            sail::Handle handle(tpu_id);
+            sail::Bmcv bmcv(handle);
+
+            // nxquery Tensor
+            std::vector<int> nxquery_shape = {query_vecs_num, vec_dims};
+            sail::Tensor nxquery_tensor(handle, nxquery_shape, BM_FLOAT32, false, true);
+
+            // centroids Tensor
+            std::vector<int> centroids_shape = {slice_num, centroids_num, subvec_dim};
+            sail::Tensor centroids_tensor(handle, centroids_shape, BM_FLOAT32, false, true);
+
+            // nycodes Tensor
+            std::vector<int> nycodes_shape = {database_vecs_nums, slice_num};
+            sail::Tensor nycodes_tensor(handle, nycodes_shape, BM_UINT8, true, true);
+
+            std::tuple<sail::Tensor, sail::Tensor> results = bmcv.faiss_indexPQ_ADC(nxquery_tensor,
+                                        centroids_tensor,
+                                        nycodes_tensor,
+                                        vec_dims,
+                                        slice_num,
+                                        centroids_num,
+                                        database_vecs_num,
+                                        query_vecs_num,
+                                        topK,
+                                        0);
+
+            return results;
+        }
+
+faiss_indexPQ_SDC
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+The Symmetric Distance Computation (SDC) lookup table is used to speed up the distance calculation between PQ encodings, output the topK distances and the corresponding indices.
+
+**Interface:**
+    .. code-block:: C
+
+        std::tuple<Tensor, Tensor> faiss_indexPQ_SDC (
+            Tensor &nxcodes_vecs,
+            Tensor &nycodes_vecs,
+            Tensor &sdc_table, 
+            int slice_num,  
+            int centroids_num,
+            int database_vecs_num,
+            int query_vecs_num,
+            int topK,
+            int IP_metric
+        );
+
+**Parameters:**
+
+* nxcodes_vecs: Tensor
+   Encoded query vectors, data types are supported only sail.Dtype.BM_UINT8, and the size is query_vecs_nums * slice_num.
+
+* nycodes_vecs: Tensor
+    Encoded database vector, data types are supported only sail.Dtype.BM_UINT8, and the size is database_vecs_nums * slice_num.
+
+* sdc_table: Tensor
+    The Symmetric Distance Computation (SDC) lookup table, data types are supported only sail.Dtype.BM_FLOAT32, and the size is slice_num * centroids_num * centroids_num.
+
+* slice_num: int
+    The number of slices of the original vector dimensions, for example the original vector dimension is 512, slice_num = 8, and each subvector dimension is 64.  
+   
+* centroids_num: int
+    The number of centroids.
+
+* database_vecs_nums: int
+    The number of database vectors.
+
+* query_vecs_nums: int
+    The number of query vectors.
+
+* topK: int
+    Get top topK values.
+
+* IP_metric: int
+    0 indicates that the distance is calculated using L2, and 1 indicates that the distance is calculated using IP.
+
+**Returns:**
+
+* result: tuple[Tensor, Tensor]
+   Returns the top topK best-matched distance values and their corresponding indexes.
+
+**Sample:**
+    .. code-block:: C
+
+        #include <iostream>
+        #include <vector>
+        #include <sail/cvwrapper.h>
+
+        int main()
+        {   
+            int vec_dims = 512;
+            int slice_num = 8;
+            int centroids_num = 256;
+            int database_vecs_num = 10000;
+            int query_vecs_num = 1;
+            int subvec_dims = vec_dims / slice_num;
+            int topK = 5;
+
+            int tpu_id = 0;
+            sail::Handle handle(tpu_id);
+            sail::Bmcv bmcv(handle);
+
+            // nxcodes Tensor
+            std::vector<int> nxcodes_shape = {query_vecs_num, slice_num};
+            sail::Tensor nxcodes_tensor(handle, nxcodes_shape, BM_UINT8, false, true);
+
+            // nycodes Tensor
+            std::vector<int> nycodes_shape = {database_vecs_nums, slice_num};
+            sail::Tensor nycodes_tensor(handle, nycodes_shape, BM_UINT8, false, true);
+
+            // sdc_table Tensor
+            std::vector<int> sdc_shape = {slice_num, centroids_num, centroids_num};
+            sail::Tensor sdc_tensor(handle, sdc_shape, BM_FLOAT32, false, true);
+
+
+            std::tuple<sail::Tensor, sail::Tensor> results = bmcv.faiss_indexPQ_SDC(nxcodes_tensor,
+                                                                                    nycodes_tensor,
+                                                                                    sdc_tensor,
+                                                                                    slice_num,
+                                                                                    centroids_num,
+                                                                                    database_vecs_num,
+                                                                                    query_vecs_num,
+                                                                                    topK,
+                                                                                    0);
+
+            return results;
+        }

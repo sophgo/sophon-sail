@@ -238,6 +238,6 @@ tuple[tuple[left, top, right, bottom, class_id, score],channel_idx, image_idx]
             nms_thresholds = np.ones(len(channels),dtype=np.float32)
             dete_thresholds = 0.2*dete_thresholds
             nms_thresholds = 0.5*nms_thresholds
-            ret = yolox_post.push_data(channels, imageidxs, output_tensor_map, dete_thresholds, nms_thresholds, width_list, height_list, padding_atrr)
+            ret = yolox_post.push_data(channels, imageidxs, output_tensor_map[0], dete_thresholds, nms_thresholds, width_list, height_list, padding_atrr)
             objs, channel, image_idx = yolox_post.get_result_npy()
             print(objs, channel, image_idx)
