@@ -45,7 +45,7 @@ push_data
 
 输入数据，支持任意batchsize的输入。
 
-**接口形式:**
+**接口形式1:**
     .. code-block:: python
 
         def push_data(self, 
@@ -58,7 +58,7 @@ push_data
             ost_h: list[int],
             padding_attrs: list[list[int]]) -> int
 
-**参数说明:**
+**参数说明1:**
 
 * channel_idx: list[int]
 
@@ -73,6 +73,57 @@ push_data
 输入参数。输入数据，包含三个输出。
 
 * dete_threshold: list[float]
+
+输入参数。检测阈值序列。
+
+* nms_threshold: list[float]
+
+输入参数。nms阈值序列。
+
+* ost_w: list[int]
+
+输入参数。原始图片序列的宽。
+
+* ost_h: list[int]
+
+输入参数。 原始图片序列的高。
+
+* padding_attrs: list[list[int]]
+
+输入参数。填充图像序列的属性列表，填充的起始点坐标x、起始点坐标y、尺度变换之后的宽度、尺度变换之后的高度。
+
+**返回值说明:**
+
+成功返回0，其他值表示失败。
+
+**接口形式2:**
+    .. code-block:: python
+
+        def push_data(self, 
+            channel_idx: list[int], 
+            image_idx: list[int], 
+            input_data: list[TensorPTRWithName], 
+            dete_threshold: list[list[float]],
+            nms_threshold: list[float],
+            ost_w: list[int],
+            ost_h: list[int],
+            padding_attrs: list[list[int]]) -> int
+
+**参数说明2:**
+
+* channel_idx: list[int]
+
+输入参数。输入图像序列的通道号。
+
+* image_idx: list[int]
+
+输入参数。输入图像序列的编号。
+
+* input_data: list[TensorPTRWithName],
+
+输入参数。输入数据，包含三个输出。
+
+* dete_threshold: list[list[float]]
 
 输入参数。检测阈值序列。
 

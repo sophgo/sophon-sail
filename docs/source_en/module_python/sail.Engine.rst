@@ -85,16 +85,14 @@ Specify the input/output tensors are in system memory or device memory
     .. code-block:: python
 
         import sophon.sail as sail
+        import os
         if __name__ == '__main__':
-            bmodel_path = "your_bmodel.bmodel"
-
             engine1 = sail.Engine(0)
-
+            bmodel_path = "your_bmodel.bmodel"
             handle = sail.Handle(0)
-            engine2 = sail.Engine(bmodel_path,handle)
+            engine2 = sail.Engine(handle)
 
             engine3 = sail.Engine(bmodel_path,0,sail.IOMode.SYSI)
-
             file = open(bmodel_path,"rb")
             datas = file.read()
             file_size = os.path.getsize(bmodel_path)
@@ -738,18 +736,19 @@ This parameter is only valid for processors that support multi-core inference, a
     .. code-block:: python
 
         import sophon.sail as sail
-        import os
+
         if __name__ == '__main__':
             bmodel_path = "your_bmodel.bmodel"
             engine = sail.Engine(bmodel_path,0,sail.IOMode.SYSI)
             graph_name = engine.get_graph_names()[0]
             # prepare tensor map
             input_tensors_map = engine.create_input_tensors_map(graph_name)
-            # inference type1 
-            output_tensors_map = engine.process(graph_name, input_tensors_map)
-            
-            # inference type2 
-            output_tensors_map_ = engine.create_output_tensors_map(graph_name,)
+            data_dict = {key: tensor.asnumpy() for key, tensor in input_tensors_map.items()}
+            # inference type1
+            output_tensors_map = engine.process(graph_name, data_dict)
+
+            # inference type2
+            output_tensors_map_ = engine.create_output_tensors_map(graph_name)
             engine.process(graph_name, input_tensors_map, output_tensors_map_)
 
 get_device_id

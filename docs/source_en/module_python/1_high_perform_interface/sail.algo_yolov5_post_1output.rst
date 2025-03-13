@@ -131,7 +131,7 @@ push_data
 
 Input data. The value of batchsize other than 1 is supported.
 
-**Interface:**
+**Interface1:**
     .. code-block:: python
 
         def push_data(self, 
@@ -144,7 +144,7 @@ Input data. The value of batchsize other than 1 is supported.
             ost_h: list[int],
             padding_attrs: list[list[int]]) -> int
 
-**Parameters:**
+**Parameters1:**
 
 * channel_idx: int
 
@@ -183,6 +183,57 @@ width after scaling, height after scaling.
 
 Return 0 if successful, otherwise failed.
 
+**Interface2:**
+    .. code-block:: python
+
+        def push_data(self, 
+            channel_idx: list[int], 
+            image_idx: list[int], 
+            input_data: TensorPTRWithName, 
+            dete_threshold: list[list[float]],
+            nms_threshold: list[float],
+            ost_w: list[int],
+            ost_h: list[int],
+            padding_attrs: list[list[int]]) -> int
+
+**Parameters2:**
+
+* channel_idx: int
+
+The channel number of the input image.
+
+* image_idx: int
+
+The sequence number of the input image.
+
+* data: numpy.ndarray[Any, numpy.dtype[numpy.float\_]],
+
+The input data.
+
+* dete_threshold: float
+
+Detection threshold sequence.
+
+* nms_threshold: float
+
+nms threshold.
+
+* ost_w: int
+
+The width of original image.
+
+* ost_h: int
+
+The height of original image.
+
+* padding_attrs: list[list[int]]
+
+The attribute list of the fill image, starting point coordinate x, starting point coordinate y, \
+width after scaling, height after scaling.
+
+**Returns:**
+
+Return 0 if successful, otherwise failed.
 
 get_result_npy
 >>>>>>>>>>>>>>>>>

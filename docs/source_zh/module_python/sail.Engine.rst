@@ -65,15 +65,15 @@ bmodel在内存中的字节数
     .. code-block:: python
 
         import sophon.sail as sail
+        import os
+        
         if __name__ == '__main__':
-            bmodel_path = "your_bmodel.bmodel"
             engine1 = sail.Engine(0)
-
+            bmodel_path = "your_bmodel.bmodel"
             handle = sail.Handle(0)
-            engine2 = sail.Engine(bmodel_path,handle)
+            engine2 = sail.Engine(handle)
 
             engine3 = sail.Engine(bmodel_path,0,sail.IOMode.SYSI)
-
             file = open(bmodel_path,"rb")
             datas = file.read()
             file_size = os.path.getsize(bmodel_path)
@@ -99,6 +99,7 @@ get_handle
     .. code-block:: python
 
         import sophon.sail as sail
+
         if __name__ == '__main__':
             engine1 = sail.Engine(0)
             handle = engine1.get_handle()
@@ -145,6 +146,7 @@ bmodel在内存中的字节数。
     .. code-block:: python
 
         import sophon.sail as sail
+
         if __name__ == '__main__':
             bmodel_path = "your_bmodel.bmodel"
             engine1 = sail.Engine(0)
@@ -171,6 +173,7 @@ Engine中所有计算图的name的列表。
     .. code-block:: python
 
         import sophon.sail as sail
+
         if __name__ == '__main__':
             bmodel_path = "your_bmodel.bmodel"
             engine1 = sail.Engine(0)
@@ -202,7 +205,6 @@ set_io_mode
     .. code-block:: python
 
         import sophon.sail as sail
-        
 
         if __name__ == '__main__':
             bmodel_path = "your_bmodel.bmodel"
@@ -237,7 +239,6 @@ graph_is_dynamic
 
         import sophon.sail as sail
         
-
         if __name__ == '__main__':
             bmodel_path = "your_bmodel.bmodel"
             engine = sail.Engine(bmodel_path,0,sail.IOMode.SYSI)
@@ -272,7 +273,6 @@ get_input_names
 
         import sophon.sail as sail
         
-
         if __name__ == '__main__':
             bmodel_path = "your_bmodel.bmodel"
             engine = sail.Engine(bmodel_path,0,sail.IOMode.SYSI)
@@ -307,7 +307,6 @@ get_output_names
 
         import sophon.sail as sail
         
-
         if __name__ == '__main__':
             bmodel_path = "your_bmodel.bmodel"
             engine = sail.Engine(bmodel_path,0,sail.IOMode.SYSI)
@@ -346,7 +345,6 @@ get_max_input_shapes
 
         import sophon.sail as sail
         
-
         if __name__ == '__main__':
             bmodel_path = "your_bmodel.bmodel"
             engine = sail.Engine(bmodel_path,0,sail.IOMode.SYSI)
@@ -385,7 +383,6 @@ get_input_shape
 
         import sophon.sail as sail
         
-
         if __name__ == '__main__':
             bmodel_path = "your_bmodel.bmodel"
             engine = sail.Engine(bmodel_path,0,sail.IOMode.SYSI)
@@ -425,7 +422,6 @@ get_max_output_shapes
 
         import sophon.sail as sail
         
-
         if __name__ == '__main__':
             bmodel_path = "your_bmodel.bmodel"
             engine = sail.Engine(bmodel_path,0,sail.IOMode.SYSI)
@@ -464,7 +460,6 @@ get_output_shape
 
         import sophon.sail as sail
         
-
         if __name__ == '__main__':
             bmodel_path = "your_bmodel.bmodel"
             engine = sail.Engine(bmodel_path,0,sail.IOMode.SYSI)
@@ -504,7 +499,6 @@ get_input_dtype
 
         import sophon.sail as sail
         
-
         if __name__ == '__main__':
             bmodel_path = "your_bmodel.bmodel"
             engine = sail.Engine(bmodel_path,0,sail.IOMode.SYSI)
@@ -543,7 +537,6 @@ get_output_dtype
 
         import sophon.sail as sail
         
-
         if __name__ == '__main__':
             bmodel_path = "your_bmodel.bmodel"
             engine = sail.Engine(bmodel_path,0,sail.IOMode.SYSI)
@@ -582,7 +575,6 @@ get_input_scale
 
         import sophon.sail as sail
         
-
         if __name__ == '__main__':
             bmodel_path = "your_bmodel.bmodel"
             engine = sail.Engine(bmodel_path,0,sail.IOMode.SYSI)
@@ -620,7 +612,6 @@ get_output_scale
     .. code-block:: python
 
         import sophon.sail as sail
-        
 
         if __name__ == '__main__':
             bmodel_path = "your_bmodel.bmodel"
@@ -694,7 +685,6 @@ process
     .. code-block:: python
 
         import sophon.sail as sail
-        
 
         if __name__ == '__main__':
             bmodel_path = "your_bmodel.bmodel"
@@ -702,10 +692,11 @@ process
             graph_name = engine.get_graph_names()[0]
             # prepare tensor map
             input_tensors_map = engine.create_input_tensors_map(graph_name)
-            # inference type1 
-            output_tensors_map = engine.process(graph_name, input_tensors_map)
-            
-            # inference type2 
+            data_dict = {key: tensor.asnumpy() for key, tensor in input_tensors_map.items()}
+            # inference type1
+            output_tensors_map = engine.process(graph_name, data_dict)
+
+            # inference type2
             output_tensors_map_ = engine.create_output_tensors_map(graph_name)
             engine.process(graph_name, input_tensors_map, output_tensors_map_)
 

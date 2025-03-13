@@ -2280,6 +2280,7 @@ return sail.BMImage.
     .. code-block:: python
 
         import sophon.sail as sail
+        import cv2
 
         if __name__ == '__main__':
             tpu_id = 0
@@ -2314,6 +2315,7 @@ returns 0 if success.
     .. code-block:: python
 
         import sophon.sail as sail
+        import cv2
 
         if __name__ == '__main__':
             tpu_id = 0
@@ -2632,7 +2634,6 @@ Whether the return was successful
             decoder = sail.Decoder(image_name,True,tpu_id)
             BMimg1 = decoder.read(handle)# here is a sail.BMImage
             bmcv = sail.Bmcv(handle)
-            bmg = sail.BMImage()
             water_name = 'your_watermark_path'
             ret = bmcv.watermark_superpose(BMimg1,water_name,0,117,[[0,0,117,79],[0,90,117,79]],[128,128,128])
             bmcv.imwrite("aafaa.jpg",BMimg1)
@@ -2727,16 +2728,15 @@ returns porcessed BMImage.
 
         import sophon.sail as sail
         if __name__ == '__main__':
-            handle = sail.Handle(0)
+            tpu_id = 0
+            handle = sail.Handle(tpu_id)
             bmcv = sail.Bmcv(handle)
-
             bmimg = sail.BMImage()
-            decoder = sail.Decoder("your_img.jpg",True,1)
+            decoder = sail.Decoder("your_img.jpg",True,tpu_id)
             bmimg = decoder.read(handle)
-            
+
             print(bmimg.format())
             output = bmcv.Sobel(bmimg, 1, 1)
-
             bmcv.imwrite("out.jpg",output)
 
 
@@ -3065,4 +3065,539 @@ Use other libraries to generate the watermark of Chinese text, and use overlay t
 
             ret = bmcv.bmcv_overlay(org_image, overlay_info, overlay_images)
             ret = bmcv.imwrite("overlayed.jpg", org_image)
+
+faiss_indexflatL2
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+Calculate squared L2 distance between query vectors and database vectors, output the top topK L2sqr-values and the corresponding indices.
+
+**Interface1:**
+    .. code-block:: python
+
+        faiss_indexflatL2(self, query_vecs: numpy.ndarray, query_vecs_L2norm: numpy.ndarray, database_vecs: numpy.ndarray, database_vecs_L2norm: numpy.ndarray,
+                        vec_dims: int, query_vecs_nums: int, database_vecs_nums: int, topK: int) -> tuple[numpy.ndarray, numpy.ndarray]:
+        
+        faiss_indexflatL2(self, query_vecs: numpy.ndarray, query_vecs_L2norm: numpy.ndarray, database_vecs: Tensor, database_vecs_L2norm: Tensor,
+                        vec_dims: int, query_vecs_nums: int, database_vecs_nums: int, topK: int) -> tuple[numpy.ndarray, numpy.ndarray]:
+
+**Parameters:**
+
+* query_vecs: numpy.ndarray
+    The query vectors, the supported data type is only numpy.float32.
+
+* query_vecs_L2norm: numpy.ndarray
+    Calculates the sum of the square values of the elements in each row of the query vector, numpy.float32.
+
+* database_vecs: numpy.ndarray or Tensor
+    The database vectors, the supported data type is only numpy.float32 or sail.Dtype.BM_FLOAT32.
+
+* database_vecs_L2norm: numpy.ndarray or Tensor
+    Calculates the sum of the square values of the elements in each row of the database vector, numpy.float32 or sail.Dtype.BM_FLOAT32.
+
+* vec_dims: int
+    The dimension of the query vectors and database vectors.
+
+* query_vecs_nums: int
+    The numbers of the query vectors.
+
+* database_vecs_nums: int
+    The numbers of the database vectors.
+
+* topK: int
+    Get top topK values.
+
+**Returns:**
+
+* result: tuple[numpy.ndarray, numpy.ndarray]
+    Returns the square value of the top topK best-matched L2 distance and its corresponding index.
+
+**Sample1:**
+    .. code-block:: python
+
+        import numpy as np
+        import sophon.sail as sail
+        import time
+
+        if __name__ == '__main__':
+            # 1. database_vecs
+            db_vecs = np.array([
+                [-2.0, 0.0, 4.0],
+                [-5.0, 3.0, -1.0],
+                [1.0, 2.0, 4.0],
+                [0.0, 5.0, -3.0],
+                [2.0, 1.0, -4.0],
+            ], dtype=np.float32)
+
+            # 2. query_vecs
+            query_vecs = np.array([
+                [1.0, 2.0, 3.0]
+            ], dtype=np.float16)
+
+            # 3. test bmcv.faiss_indexflatL2
+            tpu_id = 0
+            handle = sail.Handle(tpu_id)
+            bmcv = sail.Bmcv(handle)
+
+            db_vecs_square = np.square(db_vecs)
+            db_vecs_l2norm = np.sum(db_vecs_square, axis=1)
+            print("db_vecs_l2norm:", db_vecs_l2norm)
+
+            query_vecs_square = np.square(query_vecs)
+            query_vecs_l2norm = np.sum(query_vecs_square, axis=1)
+            print("query_vecs_l2norm:", query_vecs_l2norm)
+
+            start = time.time()
+            similarity_L2, index_L2 = bmcv.faiss_indexflatL2(query_vecs, query_vecs_l2norm, db_vecs, db_vecs_l2norm, 3, 1, 5, 3)
+            end = time.time()
+            execution_time_milliseconds_L2 = (end - start) * 1000
+            print(f"Execution time: {execution_time_milliseconds_L2:.6f} milliseconds")
+            print("similarity_L2:", similarity_L2)
+            print("index_L2:", index_L2)
+
+**Sample2:**
+    .. code-block:: python 
+        
+        import numpy as np
+        import sophon.sail as sail
+        import time
+
+        if __name__ == '__main__':
+            # 1. database_vecs
+            db_vecs = np.array([
+                [-2.0, 0.0, 4.0],
+                [-5.0, 3.0, -1.0],
+                [1.0, 2.0, 4.0],
+                [0.0, 5.0, -3.0],
+                [2.0, 1.0, -4.0],
+            ], dtype=np.float32)
+
+            # 2. query_vecs
+            query_vecs = np.array([
+                [1.0, 2.0, 3.0]
+            ], dtype=np.float16)
+
+            # 3. test bmcv.faiss_indexflatL2
+            tpu_id = 0
+            handle = sail.Handle(tpu_id)
+            bmcv = sail.Bmcv(handle)
+
+            db_vecs_square = np.square(db_vecs)
+            db_vecs_l2norm = np.sum(db_vecs_square, axis=1)
+            print("db_vecs_l2norm:", db_vecs_l2norm)
+
+            query_vecs_square = np.square(query_vecs)
+            query_vecs_l2norm = np.sum(query_vecs_square, axis=1)
+            print("query_vecs_l2norm:", query_vecs_l2norm)
+            
+            # 4. database_vecs and db_vecs_l2norm to sail::Tensor
+            db_tensor = sail.Tensor(handle, db_vecs, False)
+            db_tensor_l2norm = sail.Tensor(handle, db_vecs_l2norm, False)
+            
+            start = time.time()
+            similarity_L2, index_L2 = bmcv.faiss_indexflatL2(query_vecs, query_vecs_l2norm, db_tensor, db_tensor_l2norm, 3, 1, 5, 3)
+            end = time.time()
+            execution_time_milliseconds_L2 = (end - start) * 1000
+            print(f"Execution time: {execution_time_milliseconds_L2:.6f} milliseconds")
+            print("similarity_L2:", similarity_L2)
+            print("index_L2:", index_L2)
+
+faiss_indexflatIP
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+Calculate inner product distance between query vectors and database vectors, output the top K IP-values and the corresponding indices.
+
+**Interface:**
+    .. code-block:: python
+
+        faiss_indexflatIP(self, query_vecs: numpy.ndarray, database_vecs: numpy.ndarray,
+                        vec_dims: int, query_vecs_nums: int, database_vecs_nums: int, topK: int) -> tuple[numpy.ndarray, numpy.ndarray]:
+        
+        faiss_indexflatIP(self, query_vecs: numpy.ndarray, database_vecs: Tensor,
+                        vec_dims: int, query_vecs_nums: int, database_vecs_nums: int, topK: int) -> tuple[numpy.ndarray, numpy.ndarray]:
+
+**Parameters:**
+
+* query_vecs: numpy.ndarray
+    The query vectors, the supported data type is only numpy.float32.
+
+* database_vecs: numpy.ndarray or Tensor
+    The database vectors, the supported data type is only numpy.float32 or sail.Dtype.BM_FLOAT32.
+
+* vec_dims: int
+    The dimension of the query vectors and database vectors.
+
+* query_vecs_nums: int
+    The numbers of the query vectors.
+
+* database_vecs_nums: int
+    The numbers of the database vectors.
+
+* topK: int
+    Get top topK values.
+
+**Returns:**
+
+* result: tuple[numpy.ndarray, numpy.ndarray]
+    Returns the top topK best-matched inner product distance values and their corresponding indexes.
+
+**Sample:**
+    .. code-block:: python
+
+        import numpy as np
+        import sophon.sail as sail
+        import time
+
+        if __name__ == '__main__':
+            # 1. database_vecs
+            db_vecs = np.array([
+                [-2.0, 0.0, 4.0],
+                [-5.0, 3.0, -1.0],
+                [1.0, 2.0, 4.0],
+                [0.0, 5.0, -3.0],
+                [2.0, 1.0, -4.0],
+            ], dtype=np.float32)
+
+            # 2. query_vecs
+            query_vecs = np.array([
+                [1.0, 2.0, 3.0]
+            ], dtype=np.float16)
+
+            # 3. test bmcv.faiss_indexflatIP
+            tpu_id = 0
+            handle = sail.Handle(tpu_id)
+            bmcv = sail.Bmcv(handle)
+
+            db_tensor = sail.Tensor(handle, db_vecs, False)
+            start = time.time()
+            similarity_IP, index_IP = bmcv.faiss_indexflatIP(query_vecs, db_tensor, 3, 1, 5, 3)
+            # similarity_IP, index_IP = bmcv.faiss_indexflatIP(query_vecs, db_vecs, 3, 1, 5, 3)
+            end = time.time()
+            execution_time_milliseconds_L2 = (end - start) * 1000
+            print(f"Execution time: {execution_time_milliseconds_L2:.6f} milliseconds")
+            print("similarity_IP:", similarity_IP)
+            print("index_IP:", index_IP)
+
+faiss_indexPQ_encode
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+Perform PQ quantization encoding on the input vector and output the encoded vector.
+
+**Interface:**
+    .. code-block:: python
+
+        faiss_indexPQ_encode(self, input_vecs: Tensor, centroids_vecs: Tensor,
+                        encode_vecs_num: int, vec_dims: int, slice_num: int, centroids_num: int, IP_metric: int) -> Tensor:
+        
+        faiss_indexPQ_encode(self, input_vecs: numpy.ndarray, centroids_vecs: numpy.ndarray,
+                        encode_vecs_num: int, vec_dims: int, slice_num: int, centroids_num: int, IP_metric: int) -> numpy.ndarray:
+        
+        faiss_indexPQ_encode(self, input_vecs: numpy.ndarray, centroids_vecs: Tensor, encoded_vecs: Tensor 
+                        encode_vecs_num: int, vec_dims: int, slice_num: int, centroids_num: int, IP_metric: int) -> int:
+
+**Parameters:**
+
+* input_vecs: numpy.ndarray or Tensor
+    Input vector to be encoded, data types are supported only numpy.float32 or sail.Dtype.BM_FLOAT32, encode_vecs_num * vec_dims.
+
+* centroids_vecs: numpy.ndarray or Tensor
+    centroids vector,  data types are supported only numpy.float32 or sail.Dtype.BM_FLOAT32, slice_num * centroids_num * (vec_dims / slice_num).
+
+* encode_vecs_num: int
+    The number of vectors to be encoded.
+
+* vec_dims: int
+    Dimension of the vector to be encoded.
+
+* slice_num: int
+    The number of slices of the original vector dimensions, for example the original vector dimension is 512, slice_num = 8, and each subvector dimension is 64.
+
+* centroids_num: int
+    The number of centroids.
+
+* IP_metric: int
+    0 indicates that the distance is calculated using L2, and 1 indicates that the distance is calculated using IP.
+
+**Returns:**
+
+* result: numpy.ndarray or Tensor 
+    Output the encoded vector, numpy.ndarray (uint8) or Tensor (BM_UINT8).
+
+**Sample:**
+    .. code-block:: python
+
+        import faiss
+        import numpy as np
+        import sophon.sail as sail
+
+        encode_vecs_num = 3
+        vec_dims = 64
+        db_vecs_num = 10000
+        slice_num = 8
+        centroids_num = 256
+        nbits = 8
+
+        np.random.seed(666)
+        data = np.random.rand(db_vecs_num, vec_dims).astype('float32')
+        pq = faiss.ProductQuantizer(vec_dims, slice_num, nbits)
+        pq.train(data)
+
+        # get centroids
+        centroids = faiss.vector_float_to_array(pq.centroids)
+        print('centroids.shape: ', centroids.shape)
+        np.save('pq_centroids_random.npy', centroids)
+
+        # faiss PQ encode
+        input_vector = np.random.rand(encode_vecs_num, vec_dims).astype('float32')
+        faiss_PQ_encode = pq.compute_codes(input_vector)
+        print('faiss_PQ_encode:\n', faiss_PQ_encode)
+        print('faiss_PQ_encode shape:', faiss_PQ_encode.shape)
+
+        # test sail bmcv.faiss_indexPQ_encode
+        handle = sail.Handle(0)
+        bmcv = sail.Bmcv(handle)
+
+        centroids_vecs = np.load("pq_centroids_random.npy").astype(np.float32)
+        print("centroids_vecs shape:", centroids_vecs.shape)
+        print("centroids_vecs dtype:", type(centroids_vecs))
+
+        input_tensor = sail.Tensor(handle, input_vector, False)
+        centroids_tensor = sail.Tensor(handle, centroids_vecs, False)
+
+        encode_tensor = bmcv.faiss_indexPQ_encode(input_tensor, centroids_tensor, encode_vecs_num, vec_dims, slice_num, centroids_num, 0)
+        print('bmcv_faiss_indexPQ_encode:\n', encode_tensor.asnumpy())
+
+        encode = bmcv.faiss_indexPQ_encode(input_vector, centroids_vecs, encode_vecs_num, vec_dims, slice_num, centroids_num, 0)
+        print('bmcv_faiss_indexPQ_encode:\n', encode)
+
+faiss_indexPQ_ADC
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+The distance table is calculated by the query vector and the clustering center (centroid) vector, and the encoded database vector searches the table to calculate the distance and sorts it, output the topK distances and the corresponding indices.
+
+**Interface:**
+    .. code-block:: python
+
+        faiss_indexPQ_ADC(self, nxquery_vecs: numpy.ndarray, centroids_vecs: numpy.ndarray, nycodes_vecs: numpy.ndarray,
+                        vec_dims: int, slice_num: int, centroids_num: int, database_vecs_num: int, query_vecs_num: int, topK: int, IP_metric: int) -> tuple[numpy.ndarray, numpy.ndarray]:
+        
+        faiss_indexPQ_ADC(self, nxquery_vecs: numpy.ndarray, centroids_vecs: Tensor, nycodes_vecs: Tensor,
+                        vec_dims: int, slice_num: int, centroids_num: int, database_vecs_num: int, query_vecs_num: int, topK: int, IP_metric: int) -> tuple[numpy.ndarray, numpy.ndarray]:
+
+**Parameters:**
+
+* nxquery_vecs: numpy.ndarray
+   query vectors, data types are supported only numpy.float32, and the size is query_vecs_nums * vec_dims.
+
+* centroids_vecs: numpy.ndarray or Tensor
+    centroids vectors, data types are supported only numpy.float32 or sail.Dtype.BM_FLOAT32, and the size is slice_num * centroids_num * (vec_dims / slice_num).
+
+* nycodes_vecs: numpy.ndarray or Tensor
+    Encoded database vector, data types are supported only numpy.uint8 or sail.Dtype.BM_UINT8, and the size is database_vecs_nums * slice_num.
+
+* vec_dims: int
+    dimension of the query vector.
+
+* slice_num: int
+    The number of slices of the original vector dimensions, for example the original vector dimension is 512, slice_num = 8, and each subvector dimension is 64.  
+   
+* centroids_num: int
+    The number of centroids.
+
+* database_vecs_nums: int
+    The number of database vectors.
+
+* query_vecs_nums: int
+    The number of query vectors.
+
+* topK: int
+    Get top topK values.
+
+* IP_metric: int
+    0 indicates that the distance is calculated using L2, and 1 indicates that the distance is calculated using IP.
+
+**Returns:**
+
+* result: tuple[numpy.ndarray, numpy.ndarray]
+    Returns the top topK best-matched distance values and their corresponding indexes.
+
+**Sample:**
+    .. code-block:: python
+
+        import numpy as np
+        import faiss
+        import sophon.sail as sail
+
+        np.random.seed(1024)
+        vec_dims = 512
+        database_vecs_num = 10000
+        query_vecs_num = 1
+
+        nydb_vecs = np.random.rand(database_vecs_num, vec_dims).astype('float32')
+        nxquery_vecs = np.random.rand(query_vecs_num, vec_dims).astype('float32')
+
+        slice_num = 8
+        n_bits = 8
+        index = faiss.IndexPQ(vec_dims, slice_num, n_bits)
+        index.train(nydb_vecs)
+        index.add(nydb_vecs)
+
+        # save centroids
+        centroids_faiss = index.pq.centroids
+        centroids = faiss.vector_float_to_array(centroids_faiss)
+        print('centroids.shape: ', centroids.shape)
+        np.save('centroids_random.npy', centroids)
+
+        # Compute PQ codes for the database vectors and save
+        db_codes = index.pq.compute_codes(nydb_vecs)
+        print('db_codes.shape:', db_codes.shape)
+        np.save('db_codes.npy', db_codes)
+
+        # faiss 
+        D, I = index.search(nxquery_vecs, k=5)
+        print("The index of faiss:\n", I)
+        print("The distance of faiss:\n", D)
+
+        # test faiss_indexPQ_ADC of sail
+        handle = sail.Handle(0)
+        bmcv = sail.Bmcv(handle)
+
+        # get centroids
+        centroids_vecs = np.load("centroids_random.npy").astype(np.float32)
+        print("centroids_vecs shape:", centroids_vecs.shape)
+        print("centroids_vecs dtype:", type(centroids_vecs))
+        # get PQ codes for the database vectors
+        nycodes_vecs = np.load("db_codes.npy")
+        print("nycodes_vecs shape:", nycodes_vecs.shape)
+        print("nycodes_vecs dtype:", type(nycodes_vecs))
+
+        # to tensor
+        centroids_tensor = sail.Tensor(handle, centroids_vecs, False)
+        nycode_tensor = sail.Tensor(handle, nycodes_vecs, False)
+
+        # D_, I_ = bmcv.faiss_indexPQ_ADC(nxquery_vecs, centroids_tensor, nycode_tensor, vec_dims, slice_num, 256, database_vecs_num, query_vecs_num, 5, 0)
+        D_, I_ = bmcv.faiss_indexPQ_ADC(nxquery_vecs, centroids_vecs, nycodes_vecs, vec_dims, slice_num, 256, database_vecs_num, query_vecs_num, 5, 0)
+        print("The index of sail:\n", I_)
+        print("The distance of sail:\n", D_)
+
+faiss_indexPQ_SDC
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+The Symmetric Distance Computation (SDC) lookup table is used to speed up the distance calculation between PQ encodings, output the topK distances and the corresponding indices.
+
+**Interface:**
+    .. code-block:: python
+
+        faiss_indexPQ_SDC(self, nxcodes_vecs: numpy.ndarray, nycodes_vecs: numpy.ndarray, sdc_table: numpy.ndarray,
+                        slice_num: int, centroids_num: int, database_vecs_num: int, query_vecs_num: int, topK: int, IP_metric: int) -> tuple[numpy.ndarray, numpy.ndarray]:
+        
+        faiss_indexPQ_SDC(self, nxcodes_vecs: numpy.ndarray, nycodes_vecs: Tensor, sdc_table: Tensor,
+                        slice_num: int, centroids_num: int, database_vecs_num: int, query_vecs_num: int, topK: int, IP_metric: int) -> tuple[numpy.ndarray, numpy.ndarray]:
+
+**Parameters:**
+
+* nxcodes_vecs: numpy.ndarray
+   Encoded query vectors, data types are supported only numpy.uint8, and the size is query_vecs_nums * slice_num.
+
+* nycodes_vecs: numpy.ndarray or Tensor
+    Encoded database vector, data types are supported only numpy.uint8 or sail.Dtype.BM_UINT8, and the size is database_vecs_nums * slice_num.
+
+* sdc_table: numpy.ndarray or Tensor
+    The Symmetric Distance Computation (SDC) lookup table, data types are supported only numpy.float32 or sail.Dtype.BM_FLOAT32, and the size is slice_num * centroids_num * centroids_num.
+
+* slice_num: int
+    The number of slices of the original vector dimensions, for example the original vector dimension is 512, slice_num = 8, and each subvector dimension is 64.  
+   
+* centroids_num: int
+    The number of centroids.
+
+* database_vecs_nums: int
+    The number of database vectors.
+
+* query_vecs_nums: int
+    The number of query vectors.
+
+* topK: int
+    Get top topK values.
+
+* IP_metric: int
+    0 indicates that the distance is calculated using L2, and 1 indicates that the distance is calculated using IP.
+
+**Returns:**
+
+* result: tuple[numpy.ndarray, numpy.ndarray]
+    Returns the top topK best-matched distance values and their corresponding indexes.
+
+**Sample:**
+    .. code-block:: python
+
+        import numpy as np
+        import faiss
+        import sophon.sail as sail
+
+        np.random.seed(1024)
+        vec_dims = 512             # The dimension of the vectors.
+        database_vecs_num = 10000  # The number of the database vectors.
+        query_vecs_num = 1         # The number of the query vectors.
+
+        # 1. Random database and query
+        database = np.random.rand(database_vecs_num, vec_dims).astype('float32')
+        query = np.random.rand(query_vecs_num, vec_dims).astype('float32')
+
+        # 2. The parameters of PQ
+        slice_num = 8       # Divide the vector of the vec_dims dimension into 8 subvectors
+        n_bits = 8          # centroids = 256 = 2^n_bits
+
+        # 3. Create a PQ index
+        index = faiss.IndexPQ(vec_dims, slice_num, n_bits)
+        index.train(database)  # Train the PQ index
+        index.add(database)
+
+        # 4. Set to SDC (Symmetric Distance Calculation)
+        index.search_type = faiss.IndexPQ.ST_SDC
+
+        # 5. Calculate sdc_table and save it 
+        index.pq.compute_sdc_table()
+
+        sdc_table = faiss.vector_float_to_array(index.pq.sdc_table)
+        print('sdc_table shape:', sdc_table.shape)
+        np.save('sdc_table.npy', sdc_table)
+
+        # 6. Query operations using faiss
+        topK = 5
+        D, I = index.search(query, topK)
+        print("The index of faiss:\n", I)
+        print("The distance of faiss:\n", D)
+
+        # Calculate and save the PQ encoding of the database vector (for sail test)
+        db_codes = index.pq.compute_codes(database)
+        print('db_codes.shape:', db_codes.shape)
+        np.save('db_codes.npy', db_codes)
+
+        # Calculate and save the PQ encoding of the query vectors (for sail test)
+        query_code = index.pq.compute_codes(query)
+        print('query_code.shape:', query_code.shape)
+        np.save('query_code.npy', query_code)
+        print("________________________________________________________________________________")
+
+        # test faiss_indexPQ_SDC
+        handle = sail.Handle(0)
+        bmcv = sail.Bmcv(handle)
+
+        # 1. get PQ codes of the database vectors
+        nycodes_vecs = np.load("db_codes.npy")
+        print("nycodes_vecs shape:", nycodes_vecs.shape)
+        print("nycodes_vecs dtype:", nycodes_vecs.dtype)
+
+        # 2. get PQ codes of the query vectors
+        nxcodes_vecs = np.load('query_code.npy')
+        print("nxcodes_vecs shape:", nxcodes_vecs.shape)
+        print("nxcodes_vecs dtype:", nxcodes_vecs.dtype)
+
+        # 3. get the SDC table
+        SDC_tables = np.load('sdc_table.npy')
+
+        D_, I_ = bmcv.faiss_indexPQ_SDC(nxcodes_vecs, nycodes_vecs, SDC_tables, slice_num, 256, database_vecs_num, query_vecs_num, topK, 0)
+        print("The index of sail:\n", I_)
+        print("The distance of sail:\n", D_)
+
 

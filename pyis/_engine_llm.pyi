@@ -15,6 +15,24 @@ class EngineLLM:
         """
         pass
 
+    def __init__(self, bmodel_path: str, flags: int, dev_ids: list[int]) :
+        """ Constructor, which loads bmodel from file, with specific bmrt flags.
+            Old SDK versions may not support this interface.
+        
+        Parameters:
+        -----------
+        bmodel_path: str
+            The path of bmodel to be load.
+        flags: int
+            flags for bmruntime.
+            Value should be set by enum BmrtFlag, like BM_RUNTIME_SHARE_MEM.
+            Refer to Bmruntime doc for more details
+        dev_ids : list[int]
+            A list of int, representing device indexes used to inference.
+
+        """
+        pass
+
     def __init__(self, bmodel_bytes: bytes, bmodel_size: int, dev_ids: list[int]) : 
         """ Constructor, which loads bmodel from bytes.
 

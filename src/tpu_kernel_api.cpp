@@ -729,8 +729,17 @@ int tpu_kernel_api_openpose_part_nms::tpu_kernel_api_openpose_part_nms_cc::proce
     api_params.max_peak_num = max_peak_num;
     api_params.nms_thresh = threshold;
 
-    assert(BM_SUCCESS == tpu_kernel_launch(handle_->data(), func_id, &api_params, sizeof(api_params)));
-    bm_thread_sync(handle_->data());
+    int ret = BM_SUCCESS;
+    ret = tpu_kernel_launch(handle_->data(), func_id, &api_params, sizeof(api_params));
+    if (ret != BM_SUCCESS) {
+        SPDLOG_ERROR("tpu_kernel_launch failed, ret: ", ret);
+        return ret;
+    }
+    ret = bm_thread_sync(handle_->data());
+    if (ret != BM_SUCCESS) {
+        SPDLOG_ERROR("bm_thread_sync failed, ret: ", ret);
+        return ret;
+    }
     
     output_num->sync_d2s();
     int* peak_count = (int*)output_num->sys_data();
@@ -749,16 +758,17 @@ int tpu_kernel_api_openpose_part_nms::tpu_kernel_api_openpose_part_nms_cc::proce
     bm_set_device_mem(&score_data_mem, peak_num * sizeof(float), in_data_ptr);
     bm_device_mem_t coor_data_mem;
     bm_set_device_mem(&coor_data_mem, peak_num * sizeof(int), in_data_ptr + peak_num * sizeof(float));
-    std::vector<int> output_shape = {peak_num, 1};
-    output_tensor->reset(output_shape, BM_FLOAT32);
-    output_tensor->reset_dev_data(score_data_mem);
-    float* score_output_data = (float*)output_tensor->sys_data();
-    output_tensor->reset(output_shape, BM_UINT32);
-    output_tensor->reset_dev_data(coor_data_mem);
-    int* coor_output_data = (int*)output_tensor->sys_data();
-    
-    memcpy((void*)score_out_result.data(), (void*)score_output_data, sizeof(float) * peak_num);
-    memcpy((void*)coor_out_result.data(), (void*)coor_output_data, sizeof(int) * peak_num);
+
+    ret = bm_memcpy_d2s(handle_->data(), score_out_result.data(), score_data_mem);
+    if (ret != BM_SUCCESS) {
+        SPDLOG_ERROR("bm_memcpy_d2s failed, ret: ", ret);
+        return ret;
+    }
+    ret = bm_memcpy_d2s(handle_->data(), coor_out_result.data(), coor_data_mem);
+    if (ret != BM_SUCCESS) {
+        SPDLOG_ERROR("bm_memcpy_d2s failed, ret: ", ret);
+        return ret;
+    }
     memcpy((void*)num_result.data(), (void*)peak_count, sizeof(int) * channel_num);
     return SAIL_TPU_KERNEL_SUCCESS;
 }

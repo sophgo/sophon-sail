@@ -3,3 +3,4 @@ set(SAIL_LIB_DIRS "@sail_install_path@/lib")
 
 find_library(SAIL_LIBRARY NAMES sail PATHS ${SAIL_LIB_DIRS} NO_DEFAULT_PATH)
 
+@sail_def_bmrt_flag@

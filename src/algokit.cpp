@@ -1,7 +1,7 @@
 #include <algokit.h>
 #include <mutex>
 #include <queue>
-#include <spdlog/spdlog.h>
+#include <spdlog/spdlog.h> 
 #include <graph.h>
 #include <algorithm>
 
@@ -114,6 +114,15 @@ public:
 
     int push_data(std::vector<int> channel_idx, 
                     std::vector<int> image_idx, 
+                    sail::Tensor* input_data, 
+                    std::vector<std::vector<float>> dete_threshold,
+                    std::vector<float> nms_threshold,
+                    std::vector<int> ost_w,
+                    std::vector<int> ost_h,
+                    std::vector<std::vector<int>> padding_attr);
+
+    int push_data(std::vector<int> channel_idx, 
+                    std::vector<int> image_idx, 
                     float* input_data, 
                     std::vector<float> dete_threshold,
                     std::vector<float> nms_threshold,
@@ -132,7 +141,7 @@ private:
 
     sail::Tensor* get_data(std::vector<int>& channel_idx, 
                 std::vector<int>& image_idx, 
-                std::vector<float> &dete_threshold, 
+                std::vector<std::vector<float>> &dete_threshold, 
                 std::vector<float> &nms_threshold,
                 std::vector<int>& ost_w, 
                 std::vector<int>& ost_h, 
@@ -167,7 +176,8 @@ private:
     std::queue<int> channels_queue_;        //
     std::queue<int> image_idx_queue_;       //
     std::queue<sail::Tensor*> tensor_in_queue_;   //
-    std::queue<float> dete_threshold_queue;   //
+    std::queue<std::vector<float>> dete_threshold_queue;   //
+
     std::queue<float> nms_threshold_queue;    //
 
     std::queue<int> ost_w_queue;            //
@@ -296,6 +306,74 @@ int algo_yolov5_post_1output::algo_yolov5_post_1output_cc::push_data(
     for(int i=0; i <batch_size;++i) {
         channels_queue_.push(channel_idx[i]);
         image_idx_queue_.push(image_idx[i]);
+        dete_threshold_queue.push({dete_threshold[i]});
+        nms_threshold_queue.push(nms_threshold[i]);
+        ost_w_queue.push(ost_w[i]);                    //
+        ost_h_queue.push(ost_h[i]);                    //
+        padding_left_queue.push(padding_attr[i][0]);      //
+        padding_top_queue.push(padding_attr[i][1]);        //
+        padding_width_queue.push(padding_attr[i][2]);    //
+        padding_height_queue.push(padding_attr[i][3]);  //
+    }
+    tensor_in_queue_.push(std::move(input_data));
+
+    if(!post_thread_run){
+        std::thread thread_post = std::thread(&algo_yolov5_post_1output_cc::post_thread,this);
+        thread_post.detach();
+        post_thread_run = true;
+    }
+    notify_data_push();
+    return SAIL_ALGO_SUCCESS;
+};
+
+int algo_yolov5_post_1output::algo_yolov5_post_1output_cc::push_data(
+        std::vector<int> channel_idx, 
+        std::vector<int> image_idx, 
+        sail::Tensor* input_data, 
+        std::vector<std::vector<float>> dete_threshold,
+        std::vector<float> nms_threshold,
+        std::vector<int> ost_w,
+        std::vector<int> ost_h,
+        std::vector<std::vector<int>> padding_attr){
+ #ifdef PYTHON
+    pybind11::gil_scoped_release release;
+#endif
+    if(channel_idx.size() != batch_size ||
+        image_idx.size() != batch_size ||
+        input_data->shape()[0] != batch_size ||
+        dete_threshold.size() != batch_size ||
+        padding_attr.size() != batch_size ||
+        ost_w.size() != batch_size ||
+        ost_h.size() != batch_size ||
+        nms_threshold.size() != batch_size){
+        SPDLOG_ERROR("Input shape {},{},{}",input_data->shape()[0],input_data->shape()[1],input_data->shape()[2]);
+        SPDLOG_ERROR("Input batch size mismatch, {} vs. {}, {}, {}, {}, {}, {}, {}, {}",
+            batch_size, channel_idx.size(), image_idx.size(), input_data->shape()[0], dete_threshold.size(),padding_attr.size(),
+            ost_w.size(), ost_h.size(), nms_threshold.size());
+        return SAIL_ALGO_ERROR_BATCHSIZE;
+    }
+
+    if(data_shape_.size() != input_data->shape().size()){
+        SPDLOG_ERROR("The shape of the pushed data is incorrect!");
+        return SAIL_ALGO_ERROR_SHAPES;
+    }else{
+        for(int i=0;i<data_shape_.size();i++){
+            if(data_shape_[i]!=input_data->shape()[i]){
+                SPDLOG_ERROR("The shape of the pushed data is incorrect!");
+                return SAIL_ALGO_ERROR_SHAPES;
+            }
+            else
+                continue;
+        }
+    }
+    
+    std::lock_guard<std::mutex> lock(mutex_data);
+    if(tensor_in_queue_.size() >= max_queue_size_) {
+        return SAIL_ALGO_BUFFER_FULL;
+    }
+    for(int i=0; i <batch_size;++i) {
+        channels_queue_.push(channel_idx[i]);
+        image_idx_queue_.push(image_idx[i]);
         dete_threshold_queue.push(dete_threshold[i]);
         nms_threshold_queue.push(nms_threshold[i]);
         ost_w_queue.push(ost_w[i]);                    //
@@ -319,7 +397,7 @@ int algo_yolov5_post_1output::algo_yolov5_post_1output_cc::push_data(
 sail::Tensor* algo_yolov5_post_1output::algo_yolov5_post_1output_cc::get_data(
         std::vector<int>& channel_idx, 
         std::vector<int>& image_idx, 
-        std::vector<float> &dete_threshold, 
+        std::vector<std::vector<float>> &dete_threshold, 
         std::vector<float> &nms_threshold,
         std::vector<int>& ost_w, 
         std::vector<int>& ost_h, 
@@ -419,7 +497,7 @@ void algo_yolov5_post_1output::algo_yolov5_post_1output_cc::post_thread()
         }  
         std::vector<int> channel_idxs;
         std::vector<int> image_idxs;
-        std::vector<float> dete_thresholds;
+        std::vector<std::vector<float>> dete_thresholds;
         std::vector<float> nms_thresholds;
         std::vector<int> ost_ws;
         std::vector<int> ost_hs;
@@ -450,7 +528,7 @@ void algo_yolov5_post_1output::algo_yolov5_post_1output_cc::post_thread()
         for (int index = 0; index < batch_size; ++index){
             int channel_idx = channel_idxs[index];
             int image_idx = image_idxs[index];
-            float dete_threshold = dete_thresholds[index];
+            std::vector<float> dete_threshold = dete_thresholds[index];
             float nms_threshold = nms_thresholds[index];
             int ost_w = ost_ws[index];
             int ost_h = ost_hs[index];
@@ -463,16 +541,26 @@ void algo_yolov5_post_1output::algo_yolov5_post_1output_cc::post_thread()
             float scale_w = (float)ost_w/padding_width;
             float scale_h = (float)ost_h/padding_height;
             float* data = data_ost + index*buffer_size_;
-
+            float min_dete_threshold= *std::min_element(dete_threshold.begin(), dete_threshold.end());
             std::vector<DeteObjRect> dete_rects;
 
             for (int i = 0; i < data_shape_[1]; ++i){               
                 float confidence = data[4];
-                if (confidence >= dete_threshold) {
+                if (confidence >= min_dete_threshold) {
                     float *classes_scores = data + 5;
                     if(input_use_multiclass_nms){
+                        if(classes_ != dete_threshold.size() && dete_threshold.size() != 1){
+                            SPDLOG_ERROR("dete_threshold count Mismatch!");
+                            set_thread_exit();
+                            {
+                                std::lock_guard<std::mutex> lock(mutex_exit_);      //防止未收到退出信号导致卡死
+                                exit_thread_flag = true;
+                            }
+                            return ;
+                        }
                         for(int cls_id=0; cls_id<classes_; cls_id++){
-                            if(confidence * (*(classes_scores + cls_id)) > dete_threshold){
+                            float dete_threshold_=dete_threshold[cls_id<dete_threshold.size()?cls_id:0];
+                            if(confidence * (*(classes_scores + cls_id)) > dete_threshold_){
                                 DeteObjRect dete_rect;
                                 dete_rect.score = confidence * (*(classes_scores + cls_id));
                                 dete_rect.class_id = cls_id;
@@ -498,10 +586,11 @@ void algo_yolov5_post_1output::algo_yolov5_post_1output_cc::post_thread()
                         cv::Point class_id;
                         double max_class_score;
                         cv::minMaxLoc(scores, 0, &max_class_score, 0, &class_id);
+                        float dete_threshold_=dete_threshold[class_id.x<dete_threshold.size()?class_id.x:0];
 
                         DeteObjRect dete_rect;
-                        if (max_class_score > dete_threshold) {
-                            dete_rect.score = confidence;
+                        if (confidence*max_class_score > dete_threshold_) {
+                            dete_rect.score = confidence*max_class_score;
                             dete_rect.class_id = class_id.x;
                             dete_rect.width = data[2];
                             dete_rect.height = data[3];
@@ -712,7 +801,18 @@ int algo_yolov5_post_1output::push_data(
 {
     return _impl->push_data(channel_idx,image_idx,input_data.data,dete_threshold,nms_threshold, ost_w, ost_h, padding_attr);
 }
-
+int algo_yolov5_post_1output::push_data(
+        std::vector<int> channel_idx, 
+        std::vector<int> image_idx, 
+        TensorPTRWithName input_data, 
+        std::vector<std::vector<float>> dete_threshold,
+        std::vector<float> nms_threshold,
+        std::vector<int> ost_w,
+        std::vector<int> ost_h,
+        std::vector<std::vector<int>> padding_attr)
+{
+    return _impl->push_data(channel_idx,image_idx,input_data.data,dete_threshold,nms_threshold, ost_w, ost_h, padding_attr);
+}
 std::tuple<std::vector<DeteObjRect>,int,int> algo_yolov5_post_1output::get_result()
 {
     return _impl->get_result();
@@ -2091,6 +2191,14 @@ public:
                     std::vector<int> ost_h,
                     std::vector<std::vector<int>> padding_attr);
 
+    int push_data(std::vector<int> channel_idx, 
+                    std::vector<int> image_idx, 
+                    std::vector<sail::Tensor *> input_data, 
+                    std::vector<std::vector<float>> dete_threshold,
+                    std::vector<float> nms_threshold,
+                    std::vector<int> ost_w,
+                    std::vector<int> ost_h,
+                    std::vector<std::vector<int>> padding_attr);
     std::tuple<std::vector<DeteObjRect>,int,int> get_result();
 
     int reset_anchors(std::vector<std::vector<std::vector<int>>> anchors_new);
@@ -2100,7 +2208,7 @@ private:
 
     std::vector<sail::Tensor*> get_data(std::vector<int>& channel_idx, 
                 std::vector<int>& image_idx, 
-                std::vector<float> &dete_threshold, 
+                std::vector<std::vector<float>> &dete_threshold, 
                 std::vector<float> &nms_threshold,
                 std::vector<int>& ost_w, 
                 std::vector<int>& ost_h, 
@@ -2134,7 +2242,7 @@ private:
     std::queue<int> channels_queue_;        //
     std::queue<int> image_idx_queue_;       //
     std::queue<std::vector<sail::Tensor*>> tensor_in_queue_;   //
-    std::queue<float> dete_threshold_queue;   //
+    std::queue<std::vector<float>> dete_threshold_queue;   //
     std::queue<float> nms_threshold_queue;    //
 
     std::queue<int> ost_w_queue;            //
@@ -2276,6 +2384,59 @@ int algo_yolov5_post_3output::algo_yolov5_post_3output_cc::push_data(
     for(int i=0; i <batch_size;++i) {
         channels_queue_.push(channel_idx[i]);
         image_idx_queue_.push(image_idx[i]);
+        dete_threshold_queue.push({dete_threshold[i]});
+        nms_threshold_queue.push(nms_threshold[i]);
+        ost_w_queue.push(ost_w[i]);                    //
+        ost_h_queue.push(ost_h[i]);                    //
+        padding_left_queue.push(padding_attr[i][0]);      //
+        padding_top_queue.push(padding_attr[i][1]);        //
+        padding_width_queue.push(padding_attr[i][2]);    //
+        padding_height_queue.push(padding_attr[i][3]);  //
+    }
+    tensor_in_queue_.push(std::move(input_data));
+
+    if(!post_thread_run){
+        std::thread thread_post = std::thread(&algo_yolov5_post_3output_cc::post_thread,this);
+        thread_post.detach();
+        post_thread_run = true;
+    }
+    notify_data_push();
+    return SAIL_ALGO_SUCCESS;
+};
+
+int algo_yolov5_post_3output::algo_yolov5_post_3output_cc::push_data(
+        std::vector<int> channel_idx, 
+        std::vector<int> image_idx, 
+        std::vector<sail::Tensor*> input_data, 
+        std::vector<std::vector<float>> dete_threshold,
+        std::vector<float> nms_threshold,
+        std::vector<int> ost_w,
+        std::vector<int> ost_h,
+        std::vector<std::vector<int>> padding_attr){
+ #ifdef PYTHON
+    pybind11::gil_scoped_release release;
+#endif
+    if(channel_idx.size() != batch_size ||
+        image_idx.size() != batch_size ||
+        input_data[0]->shape()[0] != batch_size ||
+        dete_threshold.size() != batch_size ||
+        padding_attr.size() != batch_size ||
+        ost_w.size() != batch_size ||
+        ost_h.size() != batch_size ||
+        nms_threshold.size() != batch_size){
+        SPDLOG_ERROR("Input shape {},{},{},{},{}",input_data[0]->shape()[0],input_data[0]->shape()[1],input_data[0]->shape()[2],input_data[0]->shape()[3],input_data[0]->shape()[4]);
+        SPDLOG_ERROR("Input batch size mismatch, {} vs. {}, {}, {}, {}, {}, {}, {}, {}",
+            batch_size, channel_idx.size(), image_idx.size(), input_data[0]->shape()[0], dete_threshold.size(),padding_attr.size(),
+            ost_w.size(), ost_h.size(), nms_threshold.size());
+        return SAIL_ALGO_ERROR_BATCHSIZE;
+    }
+    std::lock_guard<std::mutex> lock(mutex_data);
+    if(tensor_in_queue_.size() >= max_queue_size_) {
+        return SAIL_ALGO_BUFFER_FULL;
+    }
+    for(int i=0; i <batch_size;++i) {
+        channels_queue_.push(channel_idx[i]);
+        image_idx_queue_.push(image_idx[i]);
         dete_threshold_queue.push(dete_threshold[i]);
         nms_threshold_queue.push(nms_threshold[i]);
         ost_w_queue.push(ost_w[i]);                    //
@@ -2299,7 +2460,7 @@ int algo_yolov5_post_3output::algo_yolov5_post_3output_cc::push_data(
 std::vector<sail::Tensor*> algo_yolov5_post_3output::algo_yolov5_post_3output_cc::get_data(
         std::vector<int>& channel_idx, 
         std::vector<int>& image_idx, 
-        std::vector<float> &dete_threshold, 
+        std::vector<std::vector<float>> &dete_threshold, 
         std::vector<float> &nms_threshold,
         std::vector<int>& ost_w, 
         std::vector<int>& ost_h, 
@@ -2400,7 +2561,7 @@ void algo_yolov5_post_3output::algo_yolov5_post_3output_cc::post_thread()
         }  
         std::vector<int> channel_idxs;
         std::vector<int> image_idxs;
-        std::vector<float> dete_thresholds;
+        std::vector<std::vector<float>> dete_thresholds;
         std::vector<float> nms_thresholds;
         std::vector<int> ost_ws;
         std::vector<int> ost_hs;
@@ -2429,7 +2590,7 @@ void algo_yolov5_post_3output::algo_yolov5_post_3output_cc::post_thread()
         for (int index = 0; index < batch_size; ++index){
             int channel_idx = channel_idxs[index];
             int image_idx = image_idxs[index];
-            float dete_threshold = dete_thresholds[index];
+            std::vector<float> dete_threshold = dete_thresholds[index];
             float nms_threshold = nms_thresholds[index];
             int ost_w = ost_ws[index];
             int ost_h = ost_hs[index];
@@ -2441,7 +2602,8 @@ void algo_yolov5_post_3output::algo_yolov5_post_3output_cc::post_thread()
             double time_start = get_current_time_us();
             float scale_w = (float)ost_w/padding_width;
             float scale_h = (float)ost_h/padding_height;
-            
+            float min_dete_threshold= *std::min_element(dete_threshold.begin(), dete_threshold.end());
+
             std::vector<DeteObjRect> dete_rects;
             for (int tidx = 0; tidx < in_data.size(); tidx++){
                 float* data_ost = (float*)in_data[tidx]->sys_data();
@@ -2463,15 +2625,25 @@ void algo_yolov5_post_3output::algo_yolov5_post_3output_cc::post_thread()
                         ptr[2] = pow((sigmoid(ptr[2]) * 2), 2) * anchors[tidx][anchor_idx][0];
                         ptr[3] = pow((sigmoid(ptr[3]) * 2), 2) * anchors[tidx][anchor_idx][1];
                         float score = sigmoid(ptr[4]);
-                        if (score > dete_threshold) {
+                        if (score > min_dete_threshold) {
                             for (int d = 5; d < nout; d++) {
                                 ptr[d] = sigmoid(ptr[d]);
                             }
                             float *classes_scores = ptr + 5;
                             
                             if(input_use_multiclass_nms){
+                                if(classes_ != dete_threshold.size() && dete_threshold.size() != 1){
+                                    SPDLOG_ERROR("dete_threshold count Mismatch!");
+                                    {
+                                        std::lock_guard<std::mutex> lock(mutex_exit_);      //防止未收到退出信号导致卡死
+                                        exit_thread_flag = true;
+                                    }
+                                    return ;
+                                }
                                 for(int cls_id=0; cls_id<classes_; cls_id++){
-                                    if(score * (*(classes_scores + cls_id)) > dete_threshold){
+                                    float dete_threshold_=dete_threshold[cls_id<dete_threshold.size()?cls_id:0];
+
+                                    if(score * (*(classes_scores + cls_id)) > dete_threshold_){
                                         DeteObjRect dete_rect;
                                         dete_rect.score = score * (*(classes_scores + cls_id));
                                         dete_rect.class_id = cls_id;
@@ -2497,8 +2669,10 @@ void algo_yolov5_post_3output::algo_yolov5_post_3output_cc::post_thread()
                                 cv::Point class_id;
                                 double max_class_score;
                                 cv::minMaxLoc(scores, 0, &max_class_score, 0, &class_id);
+                                float dete_threshold_=dete_threshold[class_id.x<dete_threshold.size()?class_id.x:0];
+
                                 DeteObjRect dete_rect;
-                                if (score * max_class_score > dete_threshold) {
+                                if (score * max_class_score > dete_threshold_) {
                                     dete_rect.score = score * max_class_score;
                                     dete_rect.class_id = class_id.x;
                                     dete_rect.width = ptr[2];
@@ -2691,6 +2865,24 @@ int algo_yolov5_post_3output::push_data(
     return _impl->push_data(channel_idx,image_idx,input_data_,dete_threshold,nms_threshold, ost_w, ost_h, padding_attr);
 }
 
+int algo_yolov5_post_3output::push_data(
+        std::vector<int> channel_idx, 
+        std::vector<int> image_idx, 
+        std::vector<TensorPTRWithName> input_data, 
+        std::vector<std::vector<float>> dete_threshold,
+        std::vector<float> nms_threshold,
+        std::vector<int> ost_w,
+        std::vector<int> ost_h,
+        std::vector<std::vector<int>> padding_attr)
+{
+    std::vector<sail::Tensor*> input_data_;
+    for(int i=0;i<input_data.size();i++){
+        input_data_.push_back(input_data[i].data);
+        // SPDLOG_INFO(input_data[i].name);
+    }
+    return _impl->push_data(channel_idx,image_idx,input_data_,dete_threshold,nms_threshold, ost_w, ost_h, padding_attr);
+}
+
 std::tuple<std::vector<DeteObjRect>,int,int> algo_yolov5_post_3output::get_result()
 {
     return _impl->get_result();
@@ -2737,6 +2929,15 @@ public:
                     std::vector<int> ost_h,
                     std::vector<std::vector<int>> padding_attr);
 
+    int push_data(std::vector<int> channel_idx, 
+                    std::vector<int> image_idx, 
+                    std::vector<sail::Tensor *> input_data, 
+                    std::vector<std::vector<float>> dete_threshold,
+                    std::vector<float> nms_threshold,
+                    std::vector<int> ost_w,
+                    std::vector<int> ost_h,
+                    std::vector<std::vector<int>> padding_attr);
+
     std::tuple<std::vector<DeteObjRect>,int,int> get_result();
 
     int reset_anchors(std::vector<std::vector<std::vector<int>>> anchors_new);
@@ -2746,7 +2947,7 @@ private:
 
     std::vector<sail::Tensor*> get_data(std::vector<int>& channel_idx, 
                 std::vector<int>& image_idx, 
-                std::vector<float> &dete_threshold, 
+                std::vector<std::vector<float>> &dete_threshold, 
                 std::vector<float> &nms_threshold,
                 std::vector<int>& ost_w, 
                 std::vector<int>& ost_h, 
@@ -2780,7 +2981,7 @@ private:
     std::queue<int> channels_queue_;        //
     std::queue<int> image_idx_queue_;       //
     std::queue<std::vector<sail::Tensor*>> tensor_in_queue_;   //
-    std::queue<float> dete_threshold_queue;   //
+    std::queue<std::vector<float>> dete_threshold_queue;   //
     std::queue<float> nms_threshold_queue;    //
 
     std::queue<int> ost_w_queue;            //
@@ -2916,6 +3117,59 @@ int algo_yolov5_post_cpu_opt_async::algo_yolov5_post_cpu_opt_async_cc::push_data
     for(int i=0; i <batch_size;++i) {
         channels_queue_.push(channel_idx[i]);
         image_idx_queue_.push(image_idx[i]);
+        dete_threshold_queue.push({dete_threshold[i]});
+        nms_threshold_queue.push(nms_threshold[i]);
+        ost_w_queue.push(ost_w[i]);                    //
+        ost_h_queue.push(ost_h[i]);                    //
+        padding_left_queue.push(padding_attr[i][0]);      //
+        padding_top_queue.push(padding_attr[i][1]);        //
+        padding_width_queue.push(padding_attr[i][2]);    //
+        padding_height_queue.push(padding_attr[i][3]);  //
+    }
+    tensor_in_queue_.push(std::move(input_data));
+
+    if(!post_thread_run){
+        std::thread thread_post = std::thread(&algo_yolov5_post_cpu_opt_async_cc::post_thread,this);
+        thread_post.detach();
+        post_thread_run = true;
+    }
+    notify_data_push();
+    return SAIL_ALGO_SUCCESS;
+};
+
+int algo_yolov5_post_cpu_opt_async::algo_yolov5_post_cpu_opt_async_cc::push_data(
+        std::vector<int> channel_idx, 
+        std::vector<int> image_idx, 
+        std::vector<sail::Tensor*> input_data, 
+        std::vector<std::vector<float>> dete_threshold,
+        std::vector<float> nms_threshold,
+        std::vector<int> ost_w,
+        std::vector<int> ost_h,
+        std::vector<std::vector<int>> padding_attr){
+ #ifdef PYTHON
+    pybind11::gil_scoped_release release;
+#endif
+    if(channel_idx.size() != batch_size ||
+        image_idx.size() != batch_size ||
+        input_data[0]->shape()[0] != batch_size ||
+        dete_threshold.size() != batch_size ||
+        padding_attr.size() != batch_size ||
+        ost_w.size() != batch_size ||
+        ost_h.size() != batch_size ||
+        nms_threshold.size() != batch_size){
+        SPDLOG_ERROR("Input shape {},{},{},{},{}",input_data[0]->shape()[0],input_data[0]->shape()[1],input_data[0]->shape()[2],input_data[0]->shape()[3],input_data[0]->shape()[4]);
+        SPDLOG_ERROR("Input batch size mismatch, {} vs. {}, {}, {}, {}, {}, {}, {}, {}",
+            batch_size, channel_idx.size(), image_idx.size(), input_data[0]->shape()[0], dete_threshold.size(),padding_attr.size(),
+            ost_w.size(), ost_h.size(), nms_threshold.size());
+        return SAIL_ALGO_ERROR_BATCHSIZE;
+    }
+    std::lock_guard<std::mutex> lock(mutex_data);
+    if(tensor_in_queue_.size() >= max_queue_size_) {
+        return SAIL_ALGO_BUFFER_FULL;
+    }
+    for(int i=0; i <batch_size;++i) {
+        channels_queue_.push(channel_idx[i]);
+        image_idx_queue_.push(image_idx[i]);
         dete_threshold_queue.push(dete_threshold[i]);
         nms_threshold_queue.push(nms_threshold[i]);
         ost_w_queue.push(ost_w[i]);                    //
@@ -2936,10 +3190,11 @@ int algo_yolov5_post_cpu_opt_async::algo_yolov5_post_cpu_opt_async_cc::push_data
     return SAIL_ALGO_SUCCESS;
 };
 
+
 std::vector<sail::Tensor*> algo_yolov5_post_cpu_opt_async::algo_yolov5_post_cpu_opt_async_cc::get_data(
         std::vector<int>& channel_idx, 
         std::vector<int>& image_idx, 
-        std::vector<float> &dete_threshold, 
+        std::vector<std::vector<float>> &dete_threshold, 
         std::vector<float> &nms_threshold,
         std::vector<int>& ost_w, 
         std::vector<int>& ost_h, 
@@ -3040,7 +3295,7 @@ void algo_yolov5_post_cpu_opt_async::algo_yolov5_post_cpu_opt_async_cc::post_thr
         }  
         std::vector<int> channel_idxs;
         std::vector<int> image_idxs;
-        std::vector<float> dete_thresholds;
+        std::vector<std::vector<float>> dete_thresholds;
         std::vector<float> nms_thresholds;
         std::vector<int> ost_ws;
         std::vector<int> ost_hs;
@@ -3066,9 +3321,11 @@ void algo_yolov5_post_cpu_opt_async::algo_yolov5_post_cpu_opt_async_cc::post_thr
         for (int index = 0; index < batch_size; ++index){
             int channel_idx = channel_idxs[index];
             int image_idx = image_idxs[index];
-            float dete_threshold = dete_thresholds[index];
+            std::vector<float> dete_threshold = dete_thresholds[index];
             float nms_threshold = nms_thresholds[index];
-            float opposite_log_reciprocal_m_confThreshold_sub_one = - std::log(1 / dete_threshold - 1);
+            float min_dete_threshold= *std::min_element(dete_threshold.begin(), dete_threshold.end());
+
+            float min_opposite_log_reciprocal_m_confThreshold_sub_one = - std::log(1 / min_dete_threshold - 1);
             int ost_w = ost_ws[index];
             int ost_h = ost_hs[index];
             int padding_left = padding_lefts[index];
@@ -3079,7 +3336,7 @@ void algo_yolov5_post_cpu_opt_async::algo_yolov5_post_cpu_opt_async_cc::post_thr
             double time_start = get_current_time_us();
             float scale_w = (float)ost_w/padding_width;
             float scale_h = (float)ost_h/padding_height;
-            
+
             std::vector<DeteObjRect> dete_rects;
             for (int tidx = 0; tidx < in_data.size(); tidx++){
                 float* data_ost = (float*)in_data[tidx]->sys_data();
@@ -3097,7 +3354,7 @@ void algo_yolov5_post_cpu_opt_async::algo_yolov5_post_cpu_opt_async_cc::post_thr
                 for (int anchor_idx = 0; anchor_idx < anchor_num; anchor_idx++) {
                     float* ptr = data + anchor_idx * feature_size;
                     for (int i = 0; i < area; i++) {
-                        if(ptr[4] <= opposite_log_reciprocal_m_confThreshold_sub_one){
+                        if(ptr[4] <= min_opposite_log_reciprocal_m_confThreshold_sub_one){
                             ptr += nout;
                             continue;
                         }
@@ -3112,9 +3369,10 @@ void algo_yolov5_post_cpu_opt_async::algo_yolov5_post_cpu_opt_async_cc::post_thr
                             cv::Mat scores(1, classes_, CV_32FC1, classes_scores);
                             cv::Point class_id;
                             double max_class_score;
+                            float dete_threshold_=dete_threshold[class_id.x<dete_threshold.size()?class_id.x:0];
                             cv::minMaxLoc(scores, 0, &max_class_score, 0, &class_id);
                             DeteObjRect dete_rect;
-                            float box_transformed_m_confThreshold = - std::log(score / dete_threshold - 1);
+                            float box_transformed_m_confThreshold = - std::log(score / dete_threshold_ - 1);
                             if (max_class_score > box_transformed_m_confThreshold) {
                                 dete_rect.score = score * sigmoid(max_class_score);
                                 dete_rect.class_id = class_id.x;
@@ -3131,8 +3389,16 @@ void algo_yolov5_post_cpu_opt_async::algo_yolov5_post_cpu_opt_async_cc::post_thr
                         // for multi class nms
                         else {
                             float *classes_scores = ptr + 5;
-                            float box_transformed_m_confThreshold = - std::log(score / dete_threshold - 1);
+                            if(classes_ != dete_threshold.size() && dete_threshold.size() != 1){
+                                SPDLOG_ERROR("dete_threshold count Mismatch!");
+                                {
+                                    std::lock_guard<std::mutex> lock(mutex_exit_);      //防止未收到退出信号导致卡死
+                                    exit_thread_flag = true;
+                                }
+                                return ;
+                            }
                             for (int offset = 0; offset < classes_; offset++) {
+                                float box_transformed_m_confThreshold = - std::log(score / dete_threshold[offset < dete_threshold.size()?offset:0] - 1);
                                 if (*(classes_scores + offset) > box_transformed_m_confThreshold) {
                                     DeteObjRect dete_rect;
                                     dete_rect.left = ptr[0] - 0.5 * ptr[2] + offset * max_wh;
@@ -3314,7 +3580,23 @@ int algo_yolov5_post_cpu_opt_async::push_data(
     }
     return _impl->push_data(channel_idx,image_idx,input_data_,dete_threshold,nms_threshold, ost_w, ost_h, padding_attr);
 }
-
+int algo_yolov5_post_cpu_opt_async::push_data(
+        std::vector<int> channel_idx, 
+        std::vector<int> image_idx, 
+        std::vector<TensorPTRWithName> input_data, 
+        std::vector<std::vector<float>> dete_threshold,
+        std::vector<float> nms_threshold,
+        std::vector<int> ost_w,
+        std::vector<int> ost_h,
+        std::vector<std::vector<int>> padding_attr)
+{
+    std::vector<sail::Tensor*> input_data_;
+    for(int i=0;i<input_data.size();i++){
+        input_data_.push_back(input_data[i].data);
+        // SPDLOG_INFO(input_data[i].name);
+    }
+    return _impl->push_data(channel_idx,image_idx,input_data_,dete_threshold,nms_threshold, ost_w, ost_h, padding_attr);
+}
 std::tuple<std::vector<DeteObjRect>,int,int> algo_yolov5_post_cpu_opt_async::get_result()
 {
     return _impl->get_result();
@@ -4000,7 +4282,18 @@ public:
 
     int reset_anchors(std::vector<std::vector<std::vector<int>>> anchors_new);
 
+
+
     int process(std::vector<sail::Tensor*> &input_data, 
+                std::vector<int> &ost_w,
+                std::vector<int> &ost_h,
+                std::vector<std::vector<DeteObjRect>> &out_doxs,
+                std::vector<std::vector<float>> &dete_threshold,
+                std::vector<float> &nms_threshold,
+                bool input_keep_aspect_ratio,
+                bool input_use_multiclass_nms);
+
+    int process(std::vector<TensorPTRWithName> &input_data, 
                 std::vector<int> &ost_w,
                 std::vector<int> &ost_h,
                 std::vector<std::vector<DeteObjRect>> &out_doxs,
@@ -4013,7 +4306,7 @@ public:
                 std::vector<int> &ost_w,
                 std::vector<int> &ost_h,
                 std::vector<std::vector<DeteObjRect>> &out_doxs,
-                std::vector<float> &dete_threshold,
+                std::vector<std::vector<float>> &dete_threshold,
                 std::vector<float> &nms_threshold,
                 bool input_keep_aspect_ratio,
                 bool input_use_multiclass_nms);
@@ -4191,7 +4484,7 @@ int algo_yolov5_post_cpu_opt::algo_yolov5_post_cpu_opt_cc::process(std::vector<s
                                                                 std::vector<int> &ost_w,
                                                                 std::vector<int> &ost_h,
                                                                 std::vector<std::vector<DeteObjRect>> &out_doxs,
-                                                                std::vector<float> &dete_threshold,
+                                                                std::vector<std::vector<float>> &dete_thresholds,
                                                                 std::vector<float> &nms_threshold,
                                                                 bool input_keep_aspect_ratio,
                                                                 bool input_use_multiclass_nms)
@@ -4206,7 +4499,8 @@ int algo_yolov5_post_cpu_opt::algo_yolov5_post_cpu_opt_cc::process(std::vector<s
         int box_num = network_box_num;
         int frame_width = ost_w[batch_idx];
         int frame_height = ost_h[batch_idx];
-
+        std::vector<float> dete_threshold = dete_thresholds[batch_idx];
+        float min_dete_threshold= *std::min_element(dete_threshold.begin(), dete_threshold.end());
         int tx1 = 0, ty1 = 0;
         float ratio_h = (float)net_h / frame_height, ratio_w = (float)net_w / frame_width;
         if (input_keep_aspect_ratio) {
@@ -4225,7 +4519,7 @@ int algo_yolov5_post_cpu_opt::algo_yolov5_post_cpu_opt_cc::process(std::vector<s
         int out_nout = 7;
         if (input_use_multiclass_nms)
             out_nout = nout;
-        float opposite_log_reciprocal_m_confThreshold_sub_one = - std::log(1 / dete_threshold[batch_idx] - 1);
+        float min_opposite_log_reciprocal_m_confThreshold_sub_one = - std::log(1 / min_dete_threshold - 1);
 
         float* output_data = nullptr;
         std::vector<float> decoded_data;
@@ -4250,7 +4544,7 @@ int algo_yolov5_post_cpu_opt::algo_yolov5_post_cpu_opt_cc::process(std::vector<s
                 for (int anchor_idx = 0; anchor_idx < anchor_num; anchor_idx++) {
                     float* ptr = tensor_data + anchor_idx * feature_size;
                     for (int i = 0; i < area; i++) {
-                        if(ptr[4] <= opposite_log_reciprocal_m_confThreshold_sub_one){
+                        if(ptr[4] <= min_opposite_log_reciprocal_m_confThreshold_sub_one){
                             ptr += nout;
                             continue;
                         }
@@ -4259,21 +4553,9 @@ int algo_yolov5_post_cpu_opt::algo_yolov5_post_cpu_opt_cc::process(std::vector<s
                         dst[2] = pow((sigmoid(ptr[2]) * 2), 2) * anchors[tidx][anchor_idx][0];
                         dst[3] = pow((sigmoid(ptr[3]) * 2), 2) * anchors[tidx][anchor_idx][1];
                         dst[4] = sigmoid(ptr[4]);
-                        if (input_use_multiclass_nms) {
-                            for(int d = 5; d < nout; d++)
-                                dst[d] = ptr[d];
-                        }
-                        else {
-                            dst[5] = ptr[5];
-                            dst[6] = 5;
-                            for(int d=6; d<nout; d++){
-                                if(ptr[d] > dst[5]){
-                                    dst[5] = ptr[d];
-                                    dst[6] = d;
-                                }
-                            }
-                            dst[6] -= 5;
-                        }
+                        for(int d = 5; d < nout; d++)
+                            dst[d] = ptr[d];
+                       
                         dst += out_nout;
                         ptr += nout;
                     }
@@ -4293,16 +4575,20 @@ int algo_yolov5_post_cpu_opt::algo_yolov5_post_cpu_opt_cc::process(std::vector<s
         for (int i = 0; i < box_num; i++) {
             float* ptr = output_data + i * out_nout;
             float score = ptr[4];
-            float box_transformed_m_confThreshold = - std::log(score / dete_threshold[batch_idx] - 1);
-            if(min_dim != 5)
-                box_transformed_m_confThreshold = dete_threshold[batch_idx] / score;
+            
             if (input_use_multiclass_nms) {
                 assert(min_dim == 5);
                 float centerX = ptr[0];
                 float centerY = ptr[1];
                 float width = ptr[2];
                 float height = ptr[3];
+                if(class_num != dete_threshold.size() && dete_threshold.size() != 1){
+                    SPDLOG_ERROR("dete_threshold count Mismatch!");
+                    return SAIL_ALGO_ERROR_SHAPES;
+                }
+                
                 for (int j = 0; j < class_num; j++) {
+                    float box_transformed_m_confThreshold = - std::log(score / dete_threshold[j<dete_threshold.size()?j:0] - 1);
                     float confidence = ptr[5 + j];
                     int class_id = j;
                     if (confidence > box_transformed_m_confThreshold)
@@ -4329,15 +4615,20 @@ int algo_yolov5_post_cpu_opt::algo_yolov5_post_cpu_opt_cc::process(std::vector<s
                 }
             }
             else {
-                int class_id = ptr[6];
-                float confidence = ptr[5];
-                if(min_dim != 5){
-                    ptr = output_data + i * nout;
-                    score = ptr[4];
-                    class_id = argmax(&ptr[5], class_num);
-                    confidence = ptr[class_id + 5];
-                }            
-                if (confidence > box_transformed_m_confThreshold) {
+              
+                
+                ptr = output_data + i * nout;
+                score = ptr[4];
+                int class_id = argmax(&ptr[5], class_num);
+                float confidence = ptr[class_id + 5];
+                          
+                float confThreshold_ = dete_threshold[class_id<dete_threshold.size()?class_id:0];
+                float opposite_log_reciprocal_m_confThreshold_sub_one;
+                if(min_dim != 5)
+                    opposite_log_reciprocal_m_confThreshold_sub_one = confThreshold_ / score;
+                else
+                    opposite_log_reciprocal_m_confThreshold_sub_one = - std::log(score / confThreshold_ - 1);
+                if (confidence > opposite_log_reciprocal_m_confThreshold_sub_one) {
                     float centerX = ptr[0];
                     float centerY = ptr[1];
                     float width = ptr[2];
@@ -4417,6 +4708,68 @@ int algo_yolov5_post_cpu_opt::algo_yolov5_post_cpu_opt_cc::process(std::vector<T
                                                                 bool input_keep_aspect_ratio,
                                                                 bool input_use_multiclass_nms){
     std::vector<sail::Tensor*> input_list;
+    std::vector<std::vector<float>> dete_threshold_;
+    for (int i = 0; i < batch_size; i++) {
+        dete_threshold_.push_back({dete_threshold[i]});
+    }
+    
+    for (int i = 0; i < input_num; i++) {
+        input_list.push_back(nullptr);
+    }
+    //重排序
+    for(int i = 0; i < input_data.size(); ++i){
+        sail::Tensor* data = input_data[i].data;
+        const std::vector<int>& input_shape = data->shape();
+        if(input_shape.size() != min_dim){
+            SPDLOG_ERROR("Input Tensor shape Mismatch!");
+            return SAIL_ALGO_ERROR_SHAPES;
+        }
+        if(batch_size != input_shape[0]){
+            SPDLOG_ERROR("Input Batch Size Mismatch!");
+            return SAIL_ALGO_ERROR_SHAPES;
+        }
+        bool has_match = false;
+        for(int j = 0; j < input_shapes.size(); ++j){
+            bool cur_match = true;
+            for (int z = 0; z < min_dim; z++) {
+                if(input_shape[z] != input_shapes[j][z])
+                {
+                    cur_match = false;
+                    break;    
+                }
+            }
+            if (cur_match)
+            {
+                if(input_list[j] != NULL){
+                    SPDLOG_ERROR("Input Tensor shape Mismatch!");
+                    return SAIL_ALGO_ERROR_SHAPES;
+                }
+                input_list[j] = data;
+                has_match = true;
+            }
+            
+        }
+        if(!has_match){         //没有匹配到shape
+            SPDLOG_ERROR("Input Tensor shape Mismatch!");
+            return SAIL_ALGO_ERROR_SHAPES;
+        }
+    }
+
+    // for(int i = 0; i < input_data.size(); ++i)
+    //     input_list.push_back(input_data[i].data);
+
+    return process(input_list, ost_w, ost_h, out_doxs, dete_threshold_, nms_threshold, input_keep_aspect_ratio, input_use_multiclass_nms);
+}
+
+int algo_yolov5_post_cpu_opt::algo_yolov5_post_cpu_opt_cc::process(std::vector<TensorPTRWithName> &input_data, 
+                                                                std::vector<int> &ost_w,
+                                                                std::vector<int> &ost_h,
+                                                                std::vector<std::vector<DeteObjRect>> &out_doxs,
+                                                                std::vector<std::vector<float>> &dete_threshold,
+                                                                std::vector<float> &nms_threshold,
+                                                                bool input_keep_aspect_ratio,
+                                                                bool input_use_multiclass_nms){
+    std::vector<sail::Tensor*> input_list;
 
     for (int i = 0; i < input_num; i++) {
         input_list.push_back(nullptr);
@@ -4466,7 +4819,6 @@ int algo_yolov5_post_cpu_opt::algo_yolov5_post_cpu_opt_cc::process(std::vector<T
     return process(input_list, ost_w, ost_h, out_doxs, dete_threshold, nms_threshold, input_keep_aspect_ratio, input_use_multiclass_nms);
 }
 
-
 algo_yolov5_post_cpu_opt::algo_yolov5_post_cpu_opt(const std::vector<std::vector<int>>& shapes, 
                                             int network_w, 
                                             int network_h)
@@ -4491,7 +4843,17 @@ int algo_yolov5_post_cpu_opt::process(std::vector<TensorPTRWithName> &input_data
     return _impl->process(input_data, ost_w, ost_h, out_doxs, dete_threshold, nms_threshold, input_keep_aspect_ratio, input_use_multiclass_nms);
 }
 
-
+int algo_yolov5_post_cpu_opt::process(std::vector<TensorPTRWithName> &input_data, 
+                                        std::vector<int> &ost_w,
+                                        std::vector<int> &ost_h,
+                                        std::vector<std::vector<DeteObjRect>> &out_doxs,
+                                        std::vector<std::vector<float>> &dete_threshold,
+                                        std::vector<float> &nms_threshold,
+                                        bool input_keep_aspect_ratio,
+                                        bool input_use_multiclass_nms){
+            
+    return _impl->process(input_data, ost_w, ost_h, out_doxs, dete_threshold, nms_threshold, input_keep_aspect_ratio, input_use_multiclass_nms);
+}
 std::vector<std::vector<std::tuple<int, int, int, int ,int, float>>> 
     algo_yolov5_post_cpu_opt::process(std::vector<TensorPTRWithName> &input_data, 
                                         std::vector<int> &ost_w,
@@ -4529,7 +4891,43 @@ std::vector<std::vector<std::tuple<int, int, int, int ,int, float>>>
     }
     return results;
 }
+std::vector<std::vector<std::tuple<int, int, int, int ,int, float>>> 
+    algo_yolov5_post_cpu_opt::process(std::vector<TensorPTRWithName> &input_data, 
+                                        std::vector<int> &ost_w,
+                                        std::vector<int> &ost_h,
+                                        std::vector<std::vector<float>> &dete_threshold,
+                                        std::vector<float> &nms_threshold,
+                                        bool input_keep_aspect_ratio,
+                                        bool input_use_multiclass_nms)
+{
+    std::vector<std::vector<std::tuple<int, int, int, int ,int, float>>> results;
+    results.clear();
+    std::vector<std::vector<DeteObjRect>> out_doxs;
+    int ret = process(input_data, ost_w, ost_h, out_doxs, dete_threshold, nms_threshold, input_keep_aspect_ratio, input_use_multiclass_nms);
+    if(ret != SAIL_ALGO_SUCCESS){
+        return results;
+    }
+    for(int i = 0; i < out_doxs.size(); ++i){
+        std::vector<std::tuple<int, int, int, int ,int, float>> objs;
+        for(int j = 0; j < out_doxs[i].size(); ++j){
+            int left_temp = out_doxs[i][j].left;
+            int top_temp = out_doxs[i][j].top;
+            int right_temp = out_doxs[i][j].right;
+            int bottom_temp = out_doxs[i][j].bottom;
+            int class_id_temp = out_doxs[i][j].class_id;
+            float score_temp = out_doxs[i][j].score;
 
+            objs.push_back(std::make_tuple(left_temp,
+                                        top_temp,
+                                        right_temp,
+                                        bottom_temp,
+                                        class_id_temp,
+                                        score_temp));
+        }
+        results.push_back(objs);
+    }
+    return results;
+}
 std::vector<std::vector<std::tuple<int, int, int, int ,int, float>>> 
     algo_yolov5_post_cpu_opt::process(std::map<std::string, Tensor&>& input,
                                         std::vector<int> &ost_w,
@@ -4550,7 +4948,26 @@ std::vector<std::vector<std::tuple<int, int, int, int ,int, float>>>
     }
     return process(input_data, ost_w, ost_h, dete_threshold, nms_threshold, input_keep_aspect_ratio, input_use_multiclass_nms);
 }
-
+std::vector<std::vector<std::tuple<int, int, int, int ,int, float>>> 
+    algo_yolov5_post_cpu_opt::process(std::map<std::string, Tensor&>& input,
+                                        std::vector<int> &ost_w,
+                                        std::vector<int> &ost_h,
+                                        std::vector<std::vector<float>> &dete_threshold,
+                                        std::vector<float> &nms_threshold,
+                                        bool input_keep_aspect_ratio,
+                                        bool input_use_multiclass_nms)
+{
+    std::vector<TensorPTRWithName> input_data;
+    auto iter_temp = input.begin();
+    while(iter_temp != input.end()){
+        TensorPTRWithName in_data_ptr;
+        in_data_ptr.data = &iter_temp->second;
+        in_data_ptr.name = iter_temp->first;
+        input_data.push_back(in_data_ptr);
+        iter_temp++;
+    }
+    return process(input_data, ost_w, ost_h, dete_threshold, nms_threshold, input_keep_aspect_ratio, input_use_multiclass_nms);
+}
 int algo_yolov5_post_cpu_opt::reset_anchors(std::vector<std::vector<std::vector<int>>> anchors_new)
 {
     return _impl->reset_anchors(anchors_new);

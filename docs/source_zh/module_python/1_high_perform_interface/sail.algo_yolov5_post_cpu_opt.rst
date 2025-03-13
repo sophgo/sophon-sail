@@ -149,6 +149,119 @@ list[list[tuple[left, top, right, bottom, class_id, score]]]
 
 检测结果的分数。
 
+**接口形式3:**
+    .. code-block:: python
+
+        def process(self, 
+            input_data: list[TensorPTRWithName], 
+            ost_w: list[int], 
+            ost_h: list[int], 
+            dete_threshold: list[list[float]], 
+            nms_threshold: list[float], 
+            input_keep_aspect_ratio: bool, 
+            input_use_multiclass_nms: bool) 
+                -> list[list[tuple[int, int, int, int, int, float]]]
+
+**参数说明3:**
+
+* input_data: list[TensorPTRWithName]
+
+输入参数。输入数据，包含三个输出或一个输出。
+
+* ost_w: list[int]
+
+输入参数。原始图片的宽度。
+
+* ost_h: list[int]
+
+输入参数。原始图片的高度。
+
+* dete_threshold: list[list[float]]
+
+输入参数。检测阈值。
+
+* nms_threshold: float
+
+输入参数。nms阈值序列。
+
+* input_keep_aspect_ratio: bool
+
+输入参数。输入图片是否保持纵横比。
+
+* input_use_multiclass_nms: bool
+
+输入参数。是否用多类nms。
+
+**接口形式4:**
+    .. code-block:: python
+
+        def process(self, 
+            input_data: dict[str, Tensor], 
+            ost_w: list[int], 
+            ost_h: list[int], 
+            dete_threshold: list[list[float]], 
+            nms_threshold: list[float],
+            input_keep_aspect_ratio: bool, 
+            input_use_multiclass_nms: bool) 
+                -> list[list[tuple[int, int, int, int, int, float]]]
+
+**参数说明4:**
+
+* input_data: dict[str, Tensor]
+
+输入参数。输入数据，包含三个输出或一个输出。
+
+* ost_w: list[int]
+
+输入参数。原始图片的宽度。
+
+* ost_h: list[int]
+
+输入参数。原始图片的高度。
+
+* dete_threshold: list[list[float]]
+
+输入参数。检测阈值。
+
+* nms_threshold: float
+
+输入参数。nms阈值序列。
+
+* input_keep_aspect_ratio: bool
+
+输入参数。输入图片是否保持纵横比。
+
+* input_use_multiclass_nms: bool
+
+输入参数。是否用多类nms。
+
+**返回值说明:**
+
+list[list[tuple[left, top, right, bottom, class_id, score]]]
+
+* left: int 
+
+检测结果最左x坐标。
+
+* top: int
+
+检测结果最上y坐标。
+
+* right: int
+
+检测结果最右x坐标。
+
+* bottom: int
+
+检测结果最下y坐标。
+
+* class_id: int
+
+检测结果的类别编号。
+
+* score: float
+
+检测结果的分数。
 
 reset_anchors
 >>>>>>>>>>>>>

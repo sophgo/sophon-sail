@@ -51,12 +51,13 @@ print_flag为True时，打印程序的计算主要的耗时信息，否则不打
 
         import sophon.sail as sail
         if __name__ == '__main__':
-            set_print_flag(True)
+            sail.set_print_flag(True)
 
 set_dump_io_flag
 >>>>>>>>>>>>>>>>>>>>>>>>>>
 
 设置是否存储输入数据和输出数据。
+每个输入或输出Tensor数据将被分别保存为一个独立的二进制文件。文件名的前缀为时间戳。
 
 **接口形式:**
     .. code-block:: python
@@ -75,7 +76,7 @@ dump_io_flag为True时，存储输入数据和输出数据，否则不存储。
 
         import sophon.sail as sail
         if __name__ == '__main__':
-            set_dump_io_flag(True)
+            sail.set_dump_io_flag(True)
             
 
 set_loglevel

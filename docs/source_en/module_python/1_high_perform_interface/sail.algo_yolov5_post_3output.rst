@@ -51,7 +51,7 @@ push_data
 
 Support input with arbitrary batchsize.
 
-**Interface:**
+**Interface1:**
     .. code-block:: python
 
         def push_data(self, 
@@ -64,7 +64,7 @@ Support input with arbitrary batchsize.
             ost_h: list[int],
             padding_attrs: list[list[int]]) -> int
 
-**Parameters:**
+**Parameters1:**
 
 * channel_idx: list[int]
 
@@ -79,6 +79,58 @@ The sequence number of the input image.
 The input data, including three outputs.
 
 * dete_threshold: list[float]
+
+Detection threshold sequence.
+
+* nms_threshold: list[float]
+
+nms threshold.
+
+* ost_w: list[int]
+
+The width of original image.
+
+* ost_h: list[int]
+
+The height of original image.
+
+* padding_attrs: list[list[int]]
+
+The attribute list of the fill image, starting point coordinate x, starting point coordinate y, \
+width after scaling, height after scaling.
+
+**Returns:**
+
+Return 0 if successful, otherwise failed.
+
+**Interface2:**
+    .. code-block:: python
+
+        def push_data(self, 
+            channel_idx: list[int], 
+            image_idx: list[int], 
+            input_data: list[TensorPTRWithName], 
+            dete_threshold: list[list[float]],
+            nms_threshold: list[float],
+            ost_w: list[int],
+            ost_h: list[int],
+            padding_attrs: list[list[int]]) -> int
+
+**Parameters2:**
+
+* channel_idx: list[int]
+
+The channel number of the input image.
+
+* image_idx: list[int]
+
+The sequence number of the input image.
+
+* input_data: list[TensorPTRWithName],
+
+The input data, including three outputs.
+
+* dete_threshold: list[list[float]]
 
 Detection threshold sequence.
 

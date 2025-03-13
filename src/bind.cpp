@@ -243,6 +243,16 @@ py::register_exception<ExceptionName>(m, #ExceptionName);
     //.value("BM_INT64", bm_data_type_t::BM_INT64)
     .export_values();
 
+#if SAIL_WITH_BMRT_FLAG
+  // arithmetic: Annotation to mark enums as an arithmetic type.
+  py::enum_<bm_runtime_flag_t>(m, "BmrtFlag", pybind11::arithmetic())
+    .value("BM_RUNTIME_AUTO", bm_runtime_flag_t::BM_RUNTIME_AUTO)
+    .value("BM_RUNTIME_SHARE_MEM", bm_runtime_flag_t::BM_RUNTIME_SHARE_MEM)
+    // Gemini 1.6 supports bmrt flag but not support BM_RUNTIME_CHECK_MEM
+    // .value("BM_RUNTIME_CHECK_MEM", bm_runtime_flag_t::BM_RUNTIME_CHECK_MEM)
+    .export_values();
+#endif  // SAIL_WITH_BMRT_FLAG
+
   py::enum_<IOMode>(m, "IOMode")
     .value("SYSI", IOMode::SYSI)
     .value("SYSO", IOMode::SYSO)
@@ -384,9 +394,12 @@ py::register_exception<ExceptionName>(m, #ExceptionName);
   
 #ifdef BUILD_ENGINELLM
   py::class_<EngineLLM>(m, "EngineLLM")
-    .def(py::init<const std::string&, std::vector<int>>())
-    .def(py::init<py::bytes&, size_t, std::vector<int>>())
-    
+    .def(py::init<const std::string&, std::vector<int>>(), py::arg("bmodel_path"), py::arg("tpu_ids"))
+#if SAIL_WITH_BMRT_FLAG
+    .def(py::init<const std::string&, uint32_t, std::vector<int>>(), py::arg("bmodel_path"), py::arg("flags"), py::arg("tpu_ids"))
+#endif  // SAIL_WITH_BMRT_FLAG
+    .def(py::init<py::bytes&, size_t, std::vector<int>>(), py::arg("bmodel_bytes"), py::arg("bmodel_size"), py::arg("tpu_ids"))
+
     .def("get_device_ids",      &EngineLLM::get_device_ids)
     .def("get_graph_names",     &EngineLLM::get_graph_names)
     .def("get_addr_mode",       &EngineLLM::get_addr_mode)
@@ -456,9 +469,9 @@ py::register_exception<ExceptionName>(m, #ExceptionName);
     .export_values();
 
   py::class_<Decoder>(m, "Decoder")
-    .def(py::init<const std::string&>())
-    .def(py::init<const std::string&, bool>())
-    .def(py::init<const std::string&, bool, int>())
+    .def(py::init<const std::string&>(), py::call_guard<py::gil_scoped_release>())
+    .def(py::init<const std::string&, bool>(), py::call_guard<py::gil_scoped_release>())
+    .def(py::init<const std::string&, bool, int>(), py::call_guard<py::gil_scoped_release>())
     .def("is_opened",            &Decoder::is_opened)
     .def("get_frame_shape",      &Decoder::get_frame_shape)
     .def("read",                 (BMImage  (Decoder::*)(Handle&))            &Decoder::read, py::call_guard<py::gil_scoped_release>())
@@ -556,6 +569,7 @@ py::register_exception<ExceptionName>(m, #ExceptionName);
     .def("unalign",              (int (BMImage::*)())                &BMImage::unalign)
     .def("check_contiguous_memory",              (int (BMImage::*)() const)          &BMImage::check_contiguous_memory)
     .def("asnumpy",              (pybind11::array (BMImage::*)() const)          &BMImage::asnumpy)
+    .def("get_pts_dts",          &BMImage::get_pts_dts)
     ;
     
   declareBMImageArray<2>(m); // BMImageArray2D
@@ -670,7 +684,34 @@ py::register_exception<ExceptionName>(m, #ExceptionName);
     .def("imencode",            (pybind11::array_t<uint8_t> (Bmcv::*)(std::string&, BMImage&)) &Bmcv::imencode)
     .def("imread",              (BMImage (Bmcv::*)(const std::string &))             &Bmcv::imread,
       py::arg("filename"))
-  #if BMCV_VERSION_MAJOR > 1
+  
+    .def("faiss_indexflatL2", (std::tuple<pybind11::array_t<float>, pybind11::array_t<int>> (Bmcv::*)(pybind11::array_t<float>, pybind11::array_t<float>, Tensor&, Tensor&, int, int, int, int)) &Bmcv::faiss_indexflatL2,
+      py::arg("query_vecs"), py::arg("query_vecs_L2norm"), py::arg("database_vecs"), py::arg("database_vecs_L2norm"), py::arg("vec_dims"), py::arg("query_vecs_nums"), py::arg("database_vecs_nums"), py::arg("topK"))
+    .def("faiss_indexflatL2", (std::tuple<pybind11::array_t<float>, pybind11::array_t<int>> (Bmcv::*)(pybind11::array_t<float>, pybind11::array_t<float>, pybind11::array_t<float>, pybind11::array_t<float>, int, int, int, int)) &Bmcv::faiss_indexflatL2,
+      py::arg("query_vecs"), py::arg("query_vecs_L2norm"), py::arg("database_vecs"), py::arg("database_vecs_L2norm"), py::arg("vec_dims"), py::arg("query_vecs_nums"), py::arg("database_vecs_nums"), py::arg("topK"))
+    .def("faiss_indexflatIP", (std::tuple<pybind11::array_t<float>, pybind11::array_t<int>> (Bmcv::*)(pybind11::array_t<float>, pybind11::array_t<float>, int, int, int, int)) &Bmcv::faiss_indexflatIP,
+      py::arg("query_vecs"), py::arg("database_vecs"), py::arg("vec_dims"), py::arg("query_vecs_nums"), py::arg("database_vecs_nums"), py::arg("topK"))
+    .def("faiss_indexflatIP", (std::tuple<pybind11::array_t<float>, pybind11::array_t<int>> (Bmcv::*)(pybind11::array_t<float>, Tensor&, int, int, int, int)) &Bmcv::faiss_indexflatIP,
+      py::arg("query_vecs"), py::arg("database_vecs"), py::arg("vec_dims"), py::arg("query_vecs_nums"), py::arg("database_vecs_nums"), py::arg("topK"))
+     
+     .def("faiss_indexPQ_encode", (Tensor (Bmcv::*)(pybind11::array_t<float>, Tensor&, int, int, int, int, int)) &Bmcv::faiss_indexPQ_encode,
+      py::arg("input_vecs"), py::arg("centroids_vecs"), py::arg("encode_vecs_num"), py::arg("vec_dims"), py::arg("slice_num"), py::arg("centroids_num"), py::arg("IP_metric"))
+    .def("faiss_indexPQ_encode", (pybind11::array_t<uint8_t> (Bmcv::*)(pybind11::array_t<float>, pybind11::array_t<float>, int, int, int, int, int)) &Bmcv::faiss_indexPQ_encode,
+      py::arg("input_vecs"), py::arg("centroids_vecs"), py::arg("encode_vecs_num"), py::arg("vec_dims"), py::arg("slice_num"), py::arg("centroids_num"), py::arg("IP_metric"))
+    .def("faiss_indexPQ_encode", (int (Bmcv::*)(pybind11::array_t<float>, Tensor&, Tensor&, int, int, int, int, int)) &Bmcv::faiss_indexPQ_encode,
+      py::arg("input_vecs"), py::arg("centroids_vecs"), py::arg("encoded_vecs"), py::arg("encode_vecs_num"), py::arg("vec_dims"), py::arg("slice_num"), py::arg("centroids_num"), py::arg("IP_metric"))
+    
+    .def("faiss_indexPQ_ADC", (std::tuple<pybind11::array_t<float>, pybind11::array_t<int>> (Bmcv::*)(pybind11::array_t<float>, Tensor&, Tensor&, int, int, int, int, int, int, int)) &Bmcv::faiss_indexPQ_ADC,
+      py::arg("nxquery_vecs"), py::arg("centroids_vecs"), py::arg("nycodes_vecs"), py::arg("vec_dims"), py::arg("slice_num"), py::arg("centroids_num"), py::arg("database_vecs_num"), py::arg("query_vecs_num"), py::arg("topK"), py::arg("IP_metric"))
+    .def("faiss_indexPQ_ADC", (std::tuple<pybind11::array_t<float>, pybind11::array_t<int>> (Bmcv::*)(pybind11::array_t<float>, pybind11::array_t<float>, pybind11::array_t<uint8_t>, int, int, int, int, int, int, int)) &Bmcv::faiss_indexPQ_ADC,
+      py::arg("nxquery_vecs"), py::arg("centroids_vecs"), py::arg("nycodes_vecs"), py::arg("vec_dims"), py::arg("slice_num"), py::arg("centroids_num"), py::arg("database_vecs_num"), py::arg("query_vecs_num"), py::arg("topK"), py::arg("IP_metric"))
+    
+    .def("faiss_indexPQ_SDC", (std::tuple<pybind11::array_t<float>, pybind11::array_t<int>> (Bmcv::*)(pybind11::array_t<uint8_t>, Tensor&, Tensor&, int, int, int, int, int, int)) &Bmcv::faiss_indexPQ_SDC,
+      py::arg("nxcodes_vecs"), py::arg("nycodes_vecs"), py::arg("sdc_table"), py::arg("slice_num"), py::arg("centroids_num"), py::arg("database_vecs_num"), py::arg("query_vecs_num"), py::arg("topK"), py::arg("IP_metric"))
+    .def("faiss_indexPQ_SDC", (std::tuple<pybind11::array_t<float>, pybind11::array_t<int>> (Bmcv::*)(pybind11::array_t<uint8_t>, pybind11::array_t<uint8_t>, pybind11::array_t<float>, int, int, int, int, int, int)) &Bmcv::faiss_indexPQ_SDC,
+       py::arg("nxcodes_vecs"), py::arg("nycodes_vecs"), py::arg("sdc_table"), py::arg("slice_num"), py::arg("centroids_num"), py::arg("database_vecs_num"), py::arg("query_vecs_num"), py::arg("topK"), py::arg("IP_metric"))
+    .def("faiss_indexPQ_SDC", (std::tuple<pybind11::array_t<float>, pybind11::array_t<int>> (Bmcv::*)(Tensor&, Tensor&, Tensor&, int, int, int, int, int, int)) &Bmcv::faiss_indexPQ_SDC,
+      py::arg("nxcodes_vecs"), py::arg("nycodes_vecs"), py::arg("sdc_table"), py::arg("slice_num"), py::arg("centroids_num"), py::arg("database_vecs_num"), py::arg("query_vecs_num"), py::arg("topK"), py::arg("IP_metric"))
     .def("stft",           (std::tuple<pybind11::array_t<float>, pybind11::array_t<float>> (Bmcv::*)(pybind11::array_t<float>, pybind11::array_t<float>, bool, bool, int, int, int, int)) &Bmcv::stft,
           "Short-Time Fourier Transform",
       py::arg("input_real"), py::arg("input_imag"), py::arg("realInput"), py::arg("normalize"), py::arg("n_fft"), py::arg("hop_len"), py::arg("pad_mode"), py::arg("win_mode"))
@@ -683,7 +724,6 @@ py::register_exception<ExceptionName>(m, #ExceptionName);
     .def("istft",            (std::tuple<Tensor, Tensor> (Bmcv::*)(Tensor&, Tensor&, bool, bool, int, int, int, int)) &Bmcv::istft,
           "Inverse Short-Time Fourier Transform",
       py::arg("input_real"), py::arg("input_imag"), py::arg("realInput"), py::arg("normalize"), py::arg("L"), py::arg("hop_len"), py::arg("pad_mode"), py::arg("win_mode"))
-  #endif
     .def("fft",                 (std::vector<Tensor> (Bmcv::*)(bool, Tensor&)) &Bmcv::fft)
     .def("fft",                 (std::vector<Tensor> (Bmcv::*)(bool, Tensor&, Tensor&)) &Bmcv::fft)
     // .def("convert_yuv420p_to_gray",                  &Bmcv::convert_yuv420p_to_gray)
@@ -877,7 +917,32 @@ auto byte_size = input_arr.dtype().itemsize();
     py::class_<algo_yolov5_post_1output>(m, "algo_yolov5_post_1output")
     .def(py::init<const std::vector<int>&, int, int, int, bool, bool> (), 
       py::arg("shape"),py::arg("network_w")=640,py::arg("network_h")=640,py::arg("max_queue_size")=20,py::arg("input_use_multiclass_nms")=true,py::arg("agnostic")=false)
-    .def("push_data",    &algo_yolov5_post_1output::push_data)
+    .def("push_data", 
+          (int (algo_yolov5_post_1output::*)(std::vector<int>, std::vector<int>, TensorPTRWithName, 
+                    std::vector<float>, std::vector<float>, 
+                    std::vector<int>, std::vector<int>, 
+                    std::vector<std::vector<int>>)) &algo_yolov5_post_1output::push_data,
+          py::arg("channel_idx"),
+          py::arg("image_idx"),
+          py::arg("input_data"),
+          py::arg("dete_threshold"),
+          py::arg("nms_threshold"),
+          py::arg("ost_w"),
+          py::arg("ost_h"),
+          py::arg("padding_attr"))
+    .def("push_data", 
+          (int (algo_yolov5_post_1output::*)(std::vector<int>, std::vector<int>, TensorPTRWithName, 
+                    std::vector<std::vector<float>>, std::vector<float>, 
+                    std::vector<int>, std::vector<int>, 
+                    std::vector<std::vector<int>>)) &algo_yolov5_post_1output::push_data,
+          py::arg("channel_idx"),
+          py::arg("image_idx"),
+          py::arg("input_data"),
+          py::arg("dete_threshold"),
+          py::arg("nms_threshold"),
+          py::arg("ost_w"),
+          py::arg("ost_h"),
+          py::arg("padding_attr"))
     .def("push_npy",     &algo_yolov5_post_1output::push_npy)
     .def("get_result",   &algo_yolov5_post_1output::get_result)
     .def("get_result_npy",   &algo_yolov5_post_1output::get_result_npy);
@@ -902,7 +967,32 @@ auto byte_size = input_arr.dtype().itemsize();
     .def(py::init<const std::vector<std::vector<int>>&, int, int, int,bool,bool> (), 
       py::arg("shape"),py::arg("network_w")=640,py::arg("network_h")=640,py::arg("max_queue_size")=20,py::arg("input_use_multiclass_nms")=true,py::arg("agnostic")=false)
     .def("reset_anchors",    &algo_yolov5_post_3output::reset_anchors)
-    .def("push_data",    &algo_yolov5_post_3output::push_data)
+    .def("push_data", 
+          (int (algo_yolov5_post_3output::*)(std::vector<int>, std::vector<int>, std::vector<TensorPTRWithName>, 
+                    std::vector<float>, std::vector<float>, 
+                    std::vector<int>, std::vector<int>, 
+                    std::vector<std::vector<int>>)) &algo_yolov5_post_3output::push_data,
+          py::arg("channel_idx"),
+          py::arg("image_idx"),
+          py::arg("input_data"),
+          py::arg("dete_threshold"),
+          py::arg("nms_threshold"),
+          py::arg("ost_w"),
+          py::arg("ost_h"),
+          py::arg("padding_attr"))
+    .def("push_data", 
+          (int (algo_yolov5_post_3output::*)(std::vector<int>, std::vector<int>, std::vector<TensorPTRWithName>, 
+                    std::vector<std::vector<float>>, std::vector<float>, 
+                    std::vector<int>, std::vector<int>, 
+                    std::vector<std::vector<int>>)) &algo_yolov5_post_3output::push_data,
+          py::arg("channel_idx"),
+          py::arg("image_idx"),
+          py::arg("input_data"),
+          py::arg("dete_threshold"),
+          py::arg("nms_threshold"),
+          py::arg("ost_w"),
+          py::arg("ost_h"),
+          py::arg("padding_attr"))
     // .def("push_npy",     &algo_yolov5_post_3output::push_npy)
     .def("get_result",   &algo_yolov5_post_3output::get_result)
     .def("get_result_npy",   &algo_yolov5_post_3output::get_result_npy);
@@ -911,7 +1001,32 @@ auto byte_size = input_arr.dtype().itemsize();
     .def(py::init<const std::vector<std::vector<int>>&, int, int, int, bool> (), 
       py::arg("shape"),py::arg("network_w")=640,py::arg("network_h")=640,py::arg("max_queue_size")=20,py::arg("use_multiclass_nms")=true)
     .def("reset_anchors",    &algo_yolov5_post_cpu_opt_async::reset_anchors)
-    .def("push_data",    &algo_yolov5_post_cpu_opt_async::push_data)
+    .def("push_data", 
+          (int (algo_yolov5_post_cpu_opt_async::*)(std::vector<int>, std::vector<int>, std::vector<TensorPTRWithName>, 
+                    std::vector<float>, std::vector<float>, 
+                    std::vector<int>, std::vector<int>, 
+                    std::vector<std::vector<int>>)) &algo_yolov5_post_cpu_opt_async::push_data,
+          py::arg("channel_idx"),
+          py::arg("image_idx"),
+          py::arg("input_data"),
+          py::arg("dete_threshold"),
+          py::arg("nms_threshold"),
+          py::arg("ost_w"),
+          py::arg("ost_h"),
+          py::arg("padding_attr"))
+    .def("push_data", 
+          (int (algo_yolov5_post_cpu_opt_async::*)(std::vector<int>, std::vector<int>, std::vector<TensorPTRWithName>, 
+                    std::vector<std::vector<float>>, std::vector<float>, 
+                    std::vector<int>, std::vector<int>, 
+                    std::vector<std::vector<int>>)) &algo_yolov5_post_cpu_opt_async::push_data,
+          py::arg("channel_idx"),
+          py::arg("image_idx"),
+          py::arg("input_data"),
+          py::arg("dete_threshold"),
+          py::arg("nms_threshold"),
+          py::arg("ost_w"),
+          py::arg("ost_h"),
+          py::arg("padding_attr"))
     // .def("push_npy",     &algo_yolov5_post_cpu_opt_async::push_npy)
     .def("get_result",   &algo_yolov5_post_cpu_opt_async::get_result)
     .def("get_result_npy",   &algo_yolov5_post_cpu_opt_async::get_result_npy);
@@ -935,7 +1050,15 @@ auto byte_size = input_arr.dtype().itemsize();
           &algo_yolov5_post_cpu_opt::process)
     .def("process",           
         (std::vector<std::vector<std::tuple<int, int, int, int ,int, float>>>  
+          (algo_yolov5_post_cpu_opt::*)(std::vector<TensorPTRWithName>&, std::vector<int>&, std::vector<int>&, std::vector<std::vector<float>>&, std::vector<float>&, bool, bool))   
+          &algo_yolov5_post_cpu_opt::process)
+    .def("process",           
+        (std::vector<std::vector<std::tuple<int, int, int, int ,int, float>>>  
           (algo_yolov5_post_cpu_opt::*)(std::map<std::string, Tensor&>&, std::vector<int>&, std::vector<int>&, std::vector<float>&, std::vector<float>&, bool, bool))   
+          &algo_yolov5_post_cpu_opt::process)
+    .def("process",           
+        (std::vector<std::vector<std::tuple<int, int, int, int ,int, float>>>  
+          (algo_yolov5_post_cpu_opt::*)(std::map<std::string, Tensor&>&, std::vector<int>&, std::vector<int>&, std::vector<std::vector<float>>&, std::vector<float>&, bool, bool))   
           &algo_yolov5_post_cpu_opt::process)
     .def("reset_anchors",     &algo_yolov5_post_cpu_opt::reset_anchors);
 

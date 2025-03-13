@@ -111,3 +111,4 @@ release
             bmi = sail.BMImage()
             ret = decoder.read(raw264, bmi, True)
             encoder.video_write(bmi)
+        decoder.release()

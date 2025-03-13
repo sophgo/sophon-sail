@@ -332,6 +332,8 @@ dump
     .. code-block:: python
 
         import sophon.sail as sail
+        import time
+        
         if __name__ == '__main__':
             dev_id = 0
             input_file_path = "your_rtsp_url"

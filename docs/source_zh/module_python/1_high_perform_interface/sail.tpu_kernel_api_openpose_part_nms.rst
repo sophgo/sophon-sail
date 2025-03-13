@@ -139,8 +139,7 @@ reset_network_c
         if __name__ == '__main__':
             tpu_id = 0
             image_path = '../../../sophon-demo/sample/OpenPose/datasets/test/3.jpg'
-            decoder = sail.Decoder(image_path, True, tpu_id)
-            bmodel_path = '../../../sophon-demo/sample/OpenPose/models/BM1684/pose_coco_fp32_1b.bmodel'
+            bmodel_path = '../../../sophon-demo/sample/OpenPose/models/BM1684x/pose_coco_fp32_1b.bmodel'
             handle = sail.Handle(tpu_id)
             net = sail.Engine(bmodel_path, tpu_id, sail.IOMode.SYSIO)
             src_img = cv2.imdecode(np.fromfile(image_path, dtype=np.uint8), -1)
@@ -156,7 +155,7 @@ reset_network_c
             resize_img = cv2.resize(src_img, (0, 0), fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
             pad_img = cv2.copyMakeBorder(resize_img,0,net_h - resize_img.shape[0],0,net_w - resize_img.shape[1],cv2.BORDER_CONSTANT,value=(114,114,114))
             img = np.transpose((pad_img.astype('float32')-128)/255, (2, 0, 1))
-
+            img = np.stack([img])
             outputs = net.process(graph_name, {input_name: img})
 
             # output = np.transpose(list(outputs.values())[0], (1, 2, 0))
