@@ -190,7 +190,7 @@ The configuration value of this property
 base64_enc
 >>>>>>>>>>>>>>>>>>>>>>>>
 
-Base64 encode the data to generate the corresponding base64 encoded string.
+Base64 encode the data to generate the corresponding base64 encoded string. BM1688 and CV186AH PCIE mode are not supported.
     .. code-block:: c
 
         int base64_enc(Handle& handle, const void *data, uint32_t dlen, std::string& encoded);
@@ -242,7 +242,7 @@ Return 0 on successful base64 encoding, otherwise return -1.
 
 base64_dec
 >>>>>>>>>>>>>>>>>>>>>>>>
-Base64 encode the data to generate the corresponding base64 encoded string.
+Base64 encode the data to generate the corresponding base64 encoded string. BM1688 and CV186AH PCIE mode are not supported.
 
     .. code-block:: c
 

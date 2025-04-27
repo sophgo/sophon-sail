@@ -167,7 +167,7 @@ set_decoder_env
 base64_encode
 >>>>>>>>>>>>>>>>>>>>>>>>>>
 
-将字节数据进行base64编码，返回bytes类型的编码数据
+将字节数据进行base64编码，返回bytes类型的编码数据。不支持BM1688和CV186AH PCIE模式。
 
 **接口形式：**
     .. code-block:: python
@@ -207,7 +207,7 @@ base64_encode
 base64_decode
 >>>>>>>>>>>>>>>>>>>>>>>>>>>
 
-将base64的字节编码数据进行解码，返回解码后的字节数据
+将base64的字节编码数据进行解码，返回解码后的字节数据。不支持BM1688和CV186AH PCIE模式。
 
 **接口形式：**
     .. code-block:: python
@@ -253,7 +253,7 @@ base64的字节编码数据
 base64_encode_array
 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
-对numpy.array进行base64编码，生成字节编码数据。
+对numpy.array进行base64编码，生成字节编码数据。不支持BM1688和CV186AH PCIE模式。
 
 示例代码请参考 **base64_decode_asarray** 接口提供的示例代码
 

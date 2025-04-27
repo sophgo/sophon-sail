@@ -166,7 +166,7 @@ Environment value.
 base64_encode
 >>>>>>>>>>>>>>>>>>>>>>>>>>
 
-Encode byte data into base64 and return the encoded data as bytes
+Encode byte data into base64 and return the encoded data as bytes. BM1688 and CV186AH PCIE mode are not supported.
 
 **Interface:**
     .. code-block:: python
@@ -209,7 +209,7 @@ The byte data encoded in base64.
 base64_decode
 >>>>>>>>>>>>>>>>>>>>>>>>
 
-Decode the byte-encoded data in base64 and return the decoded byte data.
+Decode the byte-encoded data in base64 and return the decoded byte data. BM1688 and CV186AH PCIE mode are not supported.
 
 **Interface:**
     .. code-block:: python
@@ -257,7 +257,7 @@ The byte data decoded from base64.
 base64_encode_array
 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
-Encode a numpy.array into base64, generating byte-encoded data.
+Encode a numpy.array into base64, generating byte-encoded data. BM1688 and CV186AH PCIE mode are not supported.
 
 **Interface:**
     .. code-block:: python

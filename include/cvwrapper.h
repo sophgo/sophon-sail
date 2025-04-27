@@ -657,6 +657,12 @@ class DECL_EXPORT Decoder {
   */
   int dump(int dump_pre_seconds, int dump_post_seconds, std::string& file_path);
 
+  /**
+   * @brief Get whether end of file is reached. 
+   * @return Return true if EOF is reached else false.
+  */
+  bool is_eof() const;
+
  private:
   class Decoder_CC;
   class Decoder_CC* const _impl;
@@ -700,9 +706,10 @@ private:
 
 #ifdef USE_BMCV
 
-#if BMCV_VERSION_MAJOR > 1
+#if BMCV_VERSION_MAJOR > 1 && defined(IS_SOC_MODE)  // Blend is only supported on SoC
+
 /**
- * @brief A class for image stitch.
+ * @brief A class for image stitch. Only supported on SoC mode
  */
 class DECL_EXPORT Blend{
 public:
@@ -731,7 +738,7 @@ private:
   class Blend_CC;
   Blend_CC* _impl;
 };
-#endif
+#endif  // Blend is only supported on SoC
 
 /**
  * @brief A class for image processing by VPP/TPU.

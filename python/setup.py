@@ -5,8 +5,9 @@ Setup file for SOPHON
 import os
 import sys
 import shutil
-from distutils.core import setup, Extension
+# from distutils.core import setup, Extension
 from setuptools import find_packages
+from setuptools import setup
 
 def merge_pyis(file_list,save_name="sail.pyi"):
     with open(save_name,"w+",encoding='utf-8') as fp:
@@ -183,7 +184,9 @@ if __name__ == "__main__":
     Guide to deploying deep-learning inference networks and deep vision primitives on SOPHON TPU.
     ''',
         packages=PACKAGES,
-        include_package_data=True)
+        include_package_data=True,
+        install_requires = ['numpy>=1']
+    )
 
 
 # current_folder = os.path.dirname(os.path.abspath(__file__))

@@ -67,14 +67,17 @@ add_channel
 
 添加一个通道。
 
-**接口形式:**
+**接口形式1:**
+
+通过该接口添加的通道，不会自动停止解码，会自动循环，直到该MultiDecoder析构，或者调用del_channel。
+
     .. code-block:: c
 
         int add_channel(
             const std::string&  file_path, 
             int                 frame_skip_num=0);
             
-**参数说明:**
+**参数说明1:**
 
 * file_path: string
 
@@ -83,6 +86,57 @@ add_channel
 * frame_skip_num: int
 
 输入参数。解码缓存的主动丢帧数，默认是0，不主动丢帧。
+
+**返回值说明1**
+
+返回视频对应的唯一的通道号。类型为整形。
+
+**示例代码1:**
+    .. code-block:: c
+
+        #include <sail/cvwrapper.h>
+        #include <sail/decoder_multi.h>
+
+        using namespace std;  
+
+        int main() {  
+            int queue_size = 16;
+            int dev_id = 0;
+            int discard_mode = 0;
+            sail::MultiDecoder multiDecoder(queue_size, dev_id, discard_mode); 
+            vector<int> channel_list;  
+            for (int i = 0; i < 4; i++) {  
+                int idx = multiDecoder.add_channel("your_video_path");  
+                if(idx<0) return -1;
+                channel_list.push_back(idx);   
+            }   
+            return 0;
+        }
+
+**接口形式2:**
+
+该接口添加通道时，支持设置循环次数。仅适用于解码本地视频文件的场景。
+
+    .. code-block:: c
+
+        int add_channel(
+            const std::string&  file_path, 
+            int                 frame_skip_num
+            int                 loopnum);
+            
+**参数说明2:**
+
+* file_path: string
+
+输入参数。视频的路径或者链接。
+
+* frame_skip_num: int
+
+输入参数。解码缓存的主动丢帧数。设置为0表示不主动丢帧。
+
+* loopnum: int
+
+输入参数。解码循环次数。设置为0表示不循环，解码一遍后停止。
 
 **返回值说明**
 
@@ -101,9 +155,12 @@ add_channel
             int dev_id = 0;
             int discard_mode = 0;
             sail::MultiDecoder multiDecoder(queue_size, dev_id, discard_mode); 
-            vector<int> channel_list;  
+            vector<int> channel_list;
+            std::string file_path = "your_video_path";
+            int frame_skip_num = 0;
+            int loopnum = 0;
             for (int i = 0; i < 4; i++) {  
-                int idx = multiDecoder.add_channel("your_video_path");  
+                int idx = multiDecoder.add_channel(file_path, frame_skip_num, loopnum);  
                 if(idx<0) return -1;
                 channel_list.push_back(idx);   
             }   
@@ -715,5 +772,71 @@ get_channel_status
                 std::cout << "Channel " << i << " status: " << status << std::endl;
             }
 
+            return 0;
+        }
+
+is_channel_eof
+>>>>>>>>>>>>>>>>>>
+
+查询某个通道的解码器是否已经到达文件结尾。
+
+**接口形式:**
+    .. code-block:: cpp
+
+        bool is_channel_eof(int channel_idx) const
+
+**参数说明:**
+
+    - ``channel_idx`` : 要查询状态的通道索引。
+
+**返回值说明:**
+
+    如果该通道已经到达文件结尾（EOF, end of file），则返回True，否则返回False。
+    如果不存在索引对应的通道，则抛出异常。
+
+**示例代码:**
+    .. code-block:: cpp
+
+        #include <sail/cvwrapper.h>
+        #include <sail/decoder_multi.h>
+
+        int main() {
+            std::string filepath{"./jellyfish_200frames.mkv"};
+            sail::MultiDecoder md;
+            md.set_local_flag(true);
+            int frame_skip_num = 0;
+            int loopnum = 0;  // no loop
+            auto idx = md.add_channel(filepath, frame_skip_num, loopnum);
+            if (idx != 0) {
+                std::cerr << "add_channel fail, ret: " << idx << std::endl;
+                return 1;
+            }
+            auto cnt = 0;
+            while (true) {
+                sail::BMImage img;
+                int read_mode = 1;  // wait block
+                auto ret = md.read(idx, img, read_mode);
+                if (ret != 0) {
+                    std::cout << "===================="
+                            << "channel status: "
+                            << static_cast<int>(md.get_channel_status(idx))
+                            << ", channel eof: " << md.is_channel_eof(idx)
+                            << std::endl;
+                    if (md.get_channel_status(idx) == sail::DecoderStatus::CLOSED &&
+                        md.is_channel_eof(idx)) {
+                        std::cout << "channel " << idx << " reached EOF, total read "
+                                << cnt << " images, decode thread will stop"
+                                << std::endl;
+                        break;
+                    } else {
+                        std::cout << "channel " << idx << " meet an error, total" << cnt
+                                << " images, ret = " << ret << std::endl;
+                    }
+                } else {
+                    cnt += 1;
+                    std::cout << "channel " << idx << " read " << cnt << " images"
+                            << std::endl;
+                }
+            }
             return 0;
         }

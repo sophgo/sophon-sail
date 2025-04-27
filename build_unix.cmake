@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.10)
-project(sail VERSION 3.9.3)
+project(sail VERSION 3.10.2)
 
 option(ONLY_RUNTIME "OFF for USE OpenCV,BM-FFMPEG,BMCV"  OFF)
 option(BUILD_PYSAIL "ON for Build sail with python"      ON)
@@ -55,7 +55,11 @@ if (("${LOCAL_ARCH}" STREQUAL "riscv64") OR
     set(CMAKE_INSTALL_PREFIX /opt/sophon)
 elseif ("${BUILD_TYPE}" STREQUAL "pcie")
     set(BUILD_X86_PCIE ON)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native")
+    if ("${LOCAL_ARCH}" STREQUAL "x86_64")
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=x86-64 -msse4.1 -mtune=native")
+    elseif ("${LOCAL_ARCH}" STREQUAL "aarch64")
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=armv8-a -mtune=native")
+    endif()
     set(CMAKE_INSTALL_PREFIX /opt/sophon)
 # cross compile
 elseif("${BUILD_TYPE}" STREQUAL "soc")
