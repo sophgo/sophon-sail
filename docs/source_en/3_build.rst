@@ -1,7 +1,7 @@
 Compilation and Installation Guide
 ======================================
 
-.. |ver| replace:: 3.9.3
+.. |ver| replace:: 3.10.1
 
 The Directory Structure of the Source Code
 ____________________________________________________

@@ -406,4 +406,31 @@ get_pts_dts
                 print("dts:",dts)
             else:
                 print("Failed to read frame into bm_image")
-            
+
+is_eof
+>>>>>>>>>>>>>>>>>>
+
+查询解码器是否到达文件结尾。
+
+**接口形式:**
+    .. code-block:: python
+
+        def is_eof(self) -> bool
+
+**返回值说明:**
+
+    如果已经到达文件结尾（EOF, end of file），则返回True，否则返回False。
+
+**示例代码:**
+    .. code-block:: python
+
+        import sophon.sail as sail
+
+        if __name__ == '__main__':
+            file_path = 'your_video_file_path.mp4'
+            dev_id = 0
+            decoder = sail.Decoder(file_path, True, dev_id)
+            # read and do something
+            ret = decoder.is_eof()
+            if (ret):
+                print("Decoder reached end of file, and decoding is finished")

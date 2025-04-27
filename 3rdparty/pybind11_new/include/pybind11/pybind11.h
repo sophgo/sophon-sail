@@ -9,12 +9,14 @@
 */
 
 #pragma once
-
 #include "detail/class.h"
+#include "detail/exception_translation.h"
 #include "detail/init.h"
 #include "attr.h"
 #include "gil.h"
+#include "gil_safe_call_once.h"
 #include "options.h"
+#include "typing.h"
 
 #include <cstdlib>
 #include <cstring>
@@ -57,11 +59,13 @@ inline std::string replace_newlines_and_squash(const char *text) {
     std::string result(text);
     bool previous_is_whitespace = false;
 
-    // Do not modify string representations
-    char first_char = result[0];
-    char last_char = result[result.size() - 1];
-    if (first_char == last_char && first_char == '\'') {
-        return result;
+    if (result.size() >= 2) {
+        // Do not modify string representations
+        char first_char = result[0];
+        char last_char = result[result.size() - 1];
+        if (first_char == last_char && first_char == '\'') {
+            return result;
+        }
     }
     result.clear();
 
@@ -89,24 +93,6 @@ inline std::string replace_newlines_and_squash(const char *text) {
     const size_t str_range = str_end - str_begin + 1;
 
     return result.substr(str_begin, str_range);
-}
-
-// Apply all the extensions translators from a list
-// Return true if one of the translators completed without raising an exception
-// itself. Return of false indicates that if there are other translators
-// available, they should be tried.
-inline bool apply_exception_translators(std::forward_list<ExceptionTranslator> &translators) {
-    auto last_exception = std::current_exception();
-
-    for (auto &translator : translators) {
-        try {
-            translator(last_exception);
-            return true;
-        } catch (...) {
-            last_exception = std::current_exception();
-        }
-    }
-    return false;
 }
 
 #if defined(_MSC_VER)
@@ -488,9 +474,7 @@ protected:
                     signature += rec->scope.attr("__module__").cast<std::string>() + "."
                                  + rec->scope.attr("__qualname__").cast<std::string>();
                 } else {
-                    std::string tname(t->name());
-                    detail::clean_type_id(tname);
-                    signature += tname;
+                    signature += detail::quote_cpp_type_name(detail::clean_type_id(t->name()));
                 }
             } else {
                 signature += c;
@@ -608,7 +592,8 @@ protected:
         int index = 0;
         /* Create a nice pydoc rec including all signatures and
            docstrings of the functions in the overload chain */
-        if (chain && options::show_function_signatures()) {
+        if (chain && options::show_function_signatures()
+            && std::strcmp(rec->name, "_pybind11_conduit_v1_") != 0) {
             // First a generic signature
             signatures += rec->name;
             signatures += "(*args, **kwargs)\n";
@@ -617,7 +602,8 @@ protected:
         // Then specific overload signatures
         bool first_user_def = true;
         for (auto *it = chain_start; it != nullptr; it = it->next) {
-            if (options::show_function_signatures()) {
+            if (options::show_function_signatures()
+                && std::strcmp(rec->name, "_pybind11_conduit_v1_") != 0) {
                 if (index > 0) {
                     signatures += '\n';
                 }
@@ -1036,33 +1022,7 @@ protected:
             throw;
 #endif
         } catch (...) {
-            /* When an exception is caught, give each registered exception
-               translator a chance to translate it to a Python exception. First
-               all module-local translators will be tried in reverse order of
-               registration. If none of the module-locale translators handle
-               the exception (or there are no module-locale translators) then
-               the global translators will be tried, also in reverse order of
-               registration.
-
-               A translator may choose to do one of the following:
-
-                - catch the exception and call py::set_error()
-                  to set a standard (or custom) Python exception, or
-                - do nothing and let the exception fall through to the next translator, or
-                - delegate translation to the next translator by throwing a new type of exception.
-             */
-
-            auto &local_exception_translators
-                = get_local_internals().registered_exception_translators;
-            if (detail::apply_exception_translators(local_exception_translators)) {
-                return nullptr;
-            }
-            auto &exception_translators = get_internals().registered_exception_translators;
-            if (detail::apply_exception_translators(exception_translators)) {
-                return nullptr;
-            }
-
-            set_error(PyExc_SystemError, "Exception escaped from default exception translator!");
+            try_translate_exceptions();
             return nullptr;
         }
 
@@ -1140,7 +1100,7 @@ protected:
                     }
                     msg += "kwargs: ";
                     bool first = true;
-                    for (auto kwarg : kwargs) {
+                    for (const auto &kwarg : kwargs) {
                         if (first) {
                             first = false;
                         } else {
@@ -1186,6 +1146,25 @@ protected:
         }
         return result.ptr();
     }
+};
+
+PYBIND11_NAMESPACE_BEGIN(detail)
+
+template <>
+struct handle_type_name<cpp_function> {
+    static constexpr auto name = const_name("Callable");
+};
+
+PYBIND11_NAMESPACE_END(detail)
+
+// Use to activate Py_MOD_GIL_NOT_USED.
+class mod_gil_not_used {
+public:
+    explicit mod_gil_not_used(bool flag = true) : flag_(flag) {}
+    bool flag() const { return flag_; }
+
+private:
+    bool flag_;
 };
 
 /// Wrapper for Python extension modules
@@ -1288,7 +1267,11 @@ public:
 
         ``def`` should point to a statically allocated module_def.
     \endrst */
-    static module_ create_extension_module(const char *name, const char *doc, module_def *def) {
+    static module_ create_extension_module(const char *name,
+                                           const char *doc,
+                                           module_def *def,
+                                           mod_gil_not_used gil_not_used
+                                           = mod_gil_not_used(false)) {
         // module_def is PyModuleDef
         // Placement new (not an allocation).
         def = new (def)
@@ -1308,12 +1291,26 @@ public:
             }
             pybind11_fail("Internal error in module_::create_extension_module()");
         }
+        if (gil_not_used.flag()) {
+#ifdef Py_GIL_DISABLED
+            PyUnstable_Module_SetGIL(m, Py_MOD_GIL_NOT_USED);
+#endif
+        }
         // TODO: Should be reinterpret_steal for Python 3, but Python also steals it again when
         //       returned from PyInit_...
         //       For Python 2, reinterpret_borrow was correct.
         return reinterpret_borrow<module_>(m);
     }
 };
+
+PYBIND11_NAMESPACE_BEGIN(detail)
+
+template <>
+struct handle_type_name<module_> {
+    static constexpr auto name = const_name("module");
+};
+
+PYBIND11_NAMESPACE_END(detail)
 
 // When inside a namespace (or anywhere as long as it's not the first item on a line),
 // C++20 allows "module" to be used. This is provided for backward compatibility, and for
@@ -1324,8 +1321,14 @@ using module = module_;
 /// Return a dictionary representing the global variables in the current execution frame,
 /// or ``__main__.__dict__`` if there is no frame (usually when the interpreter is embedded).
 inline dict globals() {
+#if PY_VERSION_HEX >= 0x030d0000
+    PyObject *p = PyEval_GetFrameGlobals();
+    return p ? reinterpret_steal<dict>(p)
+             : reinterpret_borrow<dict>(module_::import("__main__").attr("__dict__").ptr());
+#else
     PyObject *p = PyEval_GetGlobals();
     return reinterpret_borrow<dict>(p ? p : module_::import("__main__").attr("__dict__").ptr());
+#endif
 }
 
 template <typename... Args, typename = detail::enable_if_t<args_are_all_keyword_or_ds<Args...>()>>
@@ -1371,15 +1374,16 @@ protected:
         tinfo->default_holder = rec.default_holder;
         tinfo->module_local = rec.module_local;
 
-        auto &internals = get_internals();
-        auto tindex = std::type_index(*rec.type);
-        tinfo->direct_conversions = &internals.direct_conversions[tindex];
-        if (rec.module_local) {
-            get_local_internals().registered_types_cpp[tindex] = tinfo;
-        } else {
-            internals.registered_types_cpp[tindex] = tinfo;
-        }
-        internals.registered_types_py[(PyTypeObject *) m_ptr] = {tinfo};
+        with_internals([&](internals &internals) {
+            auto tindex = std::type_index(*rec.type);
+            tinfo->direct_conversions = &internals.direct_conversions[tindex];
+            if (rec.module_local) {
+                get_local_internals().registered_types_cpp[tindex] = tinfo;
+            } else {
+                internals.registered_types_cpp[tindex] = tinfo;
+            }
+            internals.registered_types_py[(PyTypeObject *) m_ptr] = {tinfo};
+        });
 
         if (rec.bases.size() > 1 || rec.multiple_inheritance) {
             mark_parents_nonsimple(tinfo->type);
@@ -1592,11 +1596,14 @@ public:
         generic_type::initialize(record);
 
         if (has_alias) {
-            auto &instances = record.module_local ? get_local_internals().registered_types_cpp
-                                                  : get_internals().registered_types_cpp;
-            instances[std::type_index(typeid(type_alias))]
-                = instances[std::type_index(typeid(type))];
+            with_internals([&](internals &internals) {
+                auto &instances = record.module_local ? get_local_internals().registered_types_cpp
+                                                      : internals.registered_types_cpp;
+                instances[std::type_index(typeid(type_alias))]
+                    = instances[std::type_index(typeid(type))];
+            });
         }
+        def("_pybind11_conduit_v1_", cpp_conduit_method);
     }
 
     template <typename Base, detail::enable_if_t<is_base<Base>::value, int> = 0>
@@ -2310,28 +2317,32 @@ keep_alive_impl(size_t Nurse, size_t Patient, function_call &call, handle ret) {
 
 inline std::pair<decltype(internals::registered_types_py)::iterator, bool>
 all_type_info_get_cache(PyTypeObject *type) {
-    auto res = get_internals()
-                   .registered_types_py
+    auto res = with_internals([type](internals &internals) {
+        return internals
+            .registered_types_py
 #ifdef __cpp_lib_unordered_map_try_emplace
-                   .try_emplace(type);
+            .try_emplace(type);
 #else
-                   .emplace(type, std::vector<detail::type_info *>());
+            .emplace(type, std::vector<detail::type_info *>());
 #endif
+    });
     if (res.second) {
         // New cache entry created; set up a weak reference to automatically remove it if the type
         // gets destroyed:
         weakref((PyObject *) type, cpp_function([type](handle wr) {
-                    get_internals().registered_types_py.erase(type);
+                    with_internals([type](internals &internals) {
+                        internals.registered_types_py.erase(type);
 
-                    // TODO consolidate the erasure code in pybind11_meta_dealloc() in class.h
-                    auto &cache = get_internals().inactive_override_cache;
-                    for (auto it = cache.begin(), last = cache.end(); it != last;) {
-                        if (it->first == reinterpret_cast<PyObject *>(type)) {
-                            it = cache.erase(it);
-                        } else {
-                            ++it;
+                        // TODO consolidate the erasure code in pybind11_meta_dealloc() in class.h
+                        auto &cache = internals.inactive_override_cache;
+                        for (auto it = cache.begin(), last = cache.end(); it != last;) {
+                            if (it->first == reinterpret_cast<PyObject *>(type)) {
+                                it = cache.erase(it);
+                            } else {
+                                ++it;
+                            }
                         }
-                    }
+                    });
 
                     wr.dec_ref();
                 }))
@@ -2445,7 +2456,7 @@ template <return_value_policy Policy = return_value_policy::reference_internal,
           typename Sentinel,
           typename ValueType = typename detail::iterator_access<Iterator>::result_type,
           typename... Extra>
-iterator make_iterator(Iterator first, Sentinel last, Extra &&...extra) {
+typing::Iterator<ValueType> make_iterator(Iterator first, Sentinel last, Extra &&...extra) {
     return detail::make_iterator_impl<detail::iterator_access<Iterator>,
                                       Policy,
                                       Iterator,
@@ -2463,7 +2474,7 @@ template <return_value_policy Policy = return_value_policy::reference_internal,
           typename Sentinel,
           typename KeyType = typename detail::iterator_key_access<Iterator>::result_type,
           typename... Extra>
-iterator make_key_iterator(Iterator first, Sentinel last, Extra &&...extra) {
+typing::Iterator<KeyType> make_key_iterator(Iterator first, Sentinel last, Extra &&...extra) {
     return detail::make_iterator_impl<detail::iterator_key_access<Iterator>,
                                       Policy,
                                       Iterator,
@@ -2481,7 +2492,7 @@ template <return_value_policy Policy = return_value_policy::reference_internal,
           typename Sentinel,
           typename ValueType = typename detail::iterator_value_access<Iterator>::result_type,
           typename... Extra>
-iterator make_value_iterator(Iterator first, Sentinel last, Extra &&...extra) {
+typing::Iterator<ValueType> make_value_iterator(Iterator first, Sentinel last, Extra &&...extra) {
     return detail::make_iterator_impl<detail::iterator_value_access<Iterator>,
                                       Policy,
                                       Iterator,
@@ -2496,8 +2507,10 @@ iterator make_value_iterator(Iterator first, Sentinel last, Extra &&...extra) {
 /// `std::begin()`/`std::end()`
 template <return_value_policy Policy = return_value_policy::reference_internal,
           typename Type,
+          typename ValueType = typename detail::iterator_access<
+              decltype(std::begin(std::declval<Type &>()))>::result_type,
           typename... Extra>
-iterator make_iterator(Type &value, Extra &&...extra) {
+typing::Iterator<ValueType> make_iterator(Type &value, Extra &&...extra) {
     return make_iterator<Policy>(
         std::begin(value), std::end(value), std::forward<Extra>(extra)...);
 }
@@ -2506,8 +2519,10 @@ iterator make_iterator(Type &value, Extra &&...extra) {
 /// `std::begin()`/`std::end()`
 template <return_value_policy Policy = return_value_policy::reference_internal,
           typename Type,
+          typename KeyType = typename detail::iterator_key_access<
+              decltype(std::begin(std::declval<Type &>()))>::result_type,
           typename... Extra>
-iterator make_key_iterator(Type &value, Extra &&...extra) {
+typing::Iterator<KeyType> make_key_iterator(Type &value, Extra &&...extra) {
     return make_key_iterator<Policy>(
         std::begin(value), std::end(value), std::forward<Extra>(extra)...);
 }
@@ -2516,8 +2531,10 @@ iterator make_key_iterator(Type &value, Extra &&...extra) {
 /// `std::begin()`/`std::end()`
 template <return_value_policy Policy = return_value_policy::reference_internal,
           typename Type,
+          typename ValueType = typename detail::iterator_value_access<
+              decltype(std::begin(std::declval<Type &>()))>::result_type,
           typename... Extra>
-iterator make_value_iterator(Type &value, Extra &&...extra) {
+typing::Iterator<ValueType> make_value_iterator(Type &value, Extra &&...extra) {
     return make_value_iterator<Policy>(
         std::begin(value), std::end(value), std::forward<Extra>(extra)...);
 }
@@ -2530,7 +2547,11 @@ void implicitly_convertible() {
         ~set_flag() { flag = false; }
     };
     auto implicit_caster = [](PyObject *obj, PyTypeObject *type) -> PyObject * {
+#ifdef Py_GIL_DISABLED
+        thread_local bool currently_used = false;
+#else
         static bool currently_used = false;
+#endif
         if (currently_used) { // implicit conversions are non-reentrant
             return nullptr;
         }
@@ -2555,8 +2576,10 @@ void implicitly_convertible() {
 }
 
 inline void register_exception_translator(ExceptionTranslator &&translator) {
-    detail::get_internals().registered_exception_translators.push_front(
-        std::forward<ExceptionTranslator>(translator));
+    detail::with_internals([&](detail::internals &internals) {
+        internals.registered_exception_translators.push_front(
+            std::forward<ExceptionTranslator>(translator));
+    });
 }
 
 /**
@@ -2566,8 +2589,11 @@ inline void register_exception_translator(ExceptionTranslator &&translator) {
  * the exception.
  */
 inline void register_local_exception_translator(ExceptionTranslator &&translator) {
-    detail::get_local_internals().registered_exception_translators.push_front(
-        std::forward<ExceptionTranslator>(translator));
+    detail::with_internals([&](detail::internals &internals) {
+        (void) internals;
+        detail::get_local_internals().registered_exception_translators.push_front(
+            std::forward<ExceptionTranslator>(translator));
+    });
 }
 
 /**
@@ -2600,23 +2626,19 @@ public:
 };
 
 PYBIND11_NAMESPACE_BEGIN(detail)
-// Returns a reference to a function-local static exception object used in the simple
-// register_exception approach below.  (It would be simpler to have the static local variable
-// directly in register_exception, but that makes clang <3.5 segfault - issue #1349).
-template <typename CppException>
-exception<CppException> &get_exception_object() {
-    static exception<CppException> ex;
-    return ex;
-}
+
+template <>
+struct handle_type_name<exception<void>> {
+    static constexpr auto name = const_name("Exception");
+};
 
 // Helper function for register_exception and register_local_exception
 template <typename CppException>
 exception<CppException> &
 register_exception_impl(handle scope, const char *name, handle base, bool isLocal) {
-    auto &ex = detail::get_exception_object<CppException>();
-    if (!ex) {
-        ex = exception<CppException>(scope, name, base);
-    }
+    PYBIND11_CONSTINIT static gil_safe_call_once_and_store<exception<CppException>> exc_storage;
+    exc_storage.call_once_and_store_result(
+        [&]() { return exception<CppException>(scope, name, base); });
 
     auto register_func
         = isLocal ? &register_local_exception_translator : &register_exception_translator;
@@ -2628,10 +2650,10 @@ register_exception_impl(handle scope, const char *name, handle base, bool isLoca
         try {
             std::rethrow_exception(p);
         } catch (const CppException &e) {
-            set_error(detail::get_exception_object<CppException>(), e.what());
+            set_error(exc_storage.get_stored(), e.what());
         }
     });
-    return ex;
+    return exc_storage.get_stored();
 }
 
 PYBIND11_NAMESPACE_END(detail)
@@ -2728,14 +2750,19 @@ get_type_override(const void *this_ptr, const type_info *this_type, const char *
 
     /* Cache functions that aren't overridden in Python to avoid
        many costly Python dictionary lookups below */
-    auto &cache = get_internals().inactive_override_cache;
-    if (cache.find(key) != cache.end()) {
+    bool not_overridden = with_internals([&key](internals &internals) {
+        auto &cache = internals.inactive_override_cache;
+        return cache.find(key) != cache.end();
+    });
+    if (not_overridden) {
         return function();
     }
 
     function override = getattr(self, name, function());
     if (override.is_cpp_function()) {
-        cache.insert(std::move(key));
+        with_internals([&](internals &internals) {
+            internals.inactive_override_cache.insert(std::move(key));
+        });
         return function();
     }
 
@@ -2748,12 +2775,22 @@ get_type_override(const void *this_ptr, const type_info *this_type, const char *
         PyCodeObject *f_code = PyFrame_GetCode(frame);
         // f_code is guaranteed to not be NULL
         if ((std::string) str(f_code->co_name) == name && f_code->co_argcount > 0) {
+#        if PY_VERSION_HEX >= 0x030d0000
+            PyObject *locals = PyEval_GetFrameLocals();
+#        else
             PyObject *locals = PyEval_GetLocals();
+            Py_XINCREF(locals);
+#        endif
             if (locals != nullptr) {
+#        if PY_VERSION_HEX >= 0x030b0000
+                PyObject *co_varnames = PyCode_GetVarnames(f_code);
+#        else
                 PyObject *co_varnames = PyObject_GetAttrString((PyObject *) f_code, "co_varnames");
+#        endif
                 PyObject *self_arg = PyTuple_GET_ITEM(co_varnames, 0);
                 Py_DECREF(co_varnames);
                 PyObject *self_caller = dict_getitem(locals, self_arg);
+                Py_DECREF(locals);
                 if (self_caller == self.ptr()) {
                     Py_DECREF(f_code);
                     Py_DECREF(frame);
@@ -2830,10 +2867,14 @@ function get_override(const T *this_ptr, const char *name) {
             = pybind11::get_override(static_cast<const cname *>(this), name);                     \
         if (override) {                                                                           \
             auto o = override(__VA_ARGS__);                                                       \
-            if (pybind11::detail::cast_is_temporary_value_reference<ret_type>::value) {           \
+            PYBIND11_WARNING_PUSH                                                                 \
+            PYBIND11_WARNING_DISABLE_MSVC(4127)                                                   \
+            if (pybind11::detail::cast_is_temporary_value_reference<ret_type>::value              \
+                && !pybind11::detail::is_same_ignoring_cvref<ret_type, PyObject *>::value) {      \
                 static pybind11::detail::override_caster_t<ret_type> caster;                      \
                 return pybind11::detail::cast_ref<ret_type>(std::move(o), caster);                \
             }                                                                                     \
+            PYBIND11_WARNING_POP                                                                  \
             return pybind11::detail::cast_safe<ret_type>(std::move(o));                           \
         }                                                                                         \
     } while (false)

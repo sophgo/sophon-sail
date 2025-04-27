@@ -78,7 +78,53 @@
    V3.7.0     2023.10.01  V3.7.0版本发布。
    ---------- ---------- -------------------
    V3.8.0     2024.04.10  V3.8.0版本发布。
+   ---------- ---------- -------------------
+   V3.9.0     2024.09.14  V3.9.0版本发布。
+   ---------- ---------- -------------------
+   V3.10.0    2024.03.11  V3.10.0版本发布。
    ========== ========== ===================
+
+| **V3.10.0 更新内容**
+
+* Tensor添加查询单个元素占用的字节数接口element_size
+
+* Tensor添加查询所有元素占用的总字节数接口nbytes
+
+* BMImag添加获取裸数据接口asnumpy
+
+* BMImage添加获取解码时间戳接口get_pts_dts
+
+* Bmcv添加向量查询接口：faiss_indexflatL2 faiss_indexflatIP faiss_indexPQ_encode faiss_indexPQ_ADC faiss_indexPQ_SDC
+
+* Bmcv添加傅里叶变换接口：stft istft
+
+* Bmcv添加水印图片叠加接口bmcv_overlay
+
+* yolov5后处理接口push_data添加对多类别置信度的支持
+
+* 添加yolov8 seg后处理接口algo_yolov8_seg_post_tpu_opt
+
+* EngineLLM添加支持bmrt flag的构造函数
+
+* 优化Encoder推流兼容性
+
+* 添加对Python 3.12版本的适配
+
+| **V3.9.0 更新内容**
+
+* BMImage添加基于bytes、numpy.ndarray等裸数据的构造接口
+
+* 添加支持大模型推理的EngineLLM
+
+* 添加图片拼接Blend模块
+
+* Bmcv添加图片解码imread接口
+
+* MultiDecoder添加查询状态接口get_channel_status
+
+* Tensor添加获取设备号的接口device_id
+
+* Tensor添加支持设置stride的d2d接口sync_d2d_stride
 
 | **V3.8.0 更新内容**
 

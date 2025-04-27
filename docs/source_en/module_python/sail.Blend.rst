@@ -1,7 +1,7 @@
 sail.Blend
 ____________
 
-Picture stitching. Multiple pictures can be stitched together. Only BM1688 and CV186AH support this interface.
+Picture stitching. Multiple pictures can be stitched together. Only BM1688 and CV186AH SoC mode support this interface.
 
 
 \_\_init\_\_

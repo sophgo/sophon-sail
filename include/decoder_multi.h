@@ -61,7 +61,7 @@ namespace sail{
         void set_read_timeout(int time_second);
 
         /**
-         * @brief Add a channel to decode
+         * @brief Add a channel to decode. Endless loop until del_channel.
          * 
          * @param file_path         Path or rtsp url to the video/image file.
          * @param frame_skip_num    Frame skip number.
@@ -70,6 +70,19 @@ namespace sail{
         int add_channel(
             const std::string&  file_path, 
             int                 frame_skip_num=0);
+
+        /**
+         * @brief Add a channel to decode, supporting frame_skip_num and loopnum
+         * 
+         * @param file_path         Path or rtsp url to the video/image file.
+         * @param frame_skip_num    Frame skip number.
+         * @param loopnum           Loop number. 0 means no loop, -1 means endless loop.
+         * @return  Return channel index number.
+         */
+        int add_channel(
+            const std::string&  file_path, 
+            int                 frame_skip_num,
+            int                 loop_num);
 
         /**
          * @brief Delete channel
@@ -181,7 +194,15 @@ namespace sail{
          * @param channel_idx Channel index.
          * @return status of this channel. 0 for open and else for close 
          */
-        DecoderStatus get_channel_status(int channel_idx);
+        DecoderStatus get_channel_status(int channel_idx) const;
+
+        /**
+         * @brief Get whether end of file is reached in the specific channel.
+         * 
+         * @param channel_idx Channel index.
+         * @return Return true if EOF is reached else false
+         */
+        bool is_channel_eof(int channel_idx) const;
 
     private:
         class MultiDecoder_CC;

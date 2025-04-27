@@ -186,7 +186,8 @@ namespace sail {
             int                 channel_idx = 0,
             int                 timeout_sec = 10, 
             int                 discard_mode = 0, 
-            bool                local_video_flag = false);
+            bool                local_video_flag = false,
+            int                 loop_num_ = -1);
 
         /**
          * @brief Destructor.
@@ -212,6 +213,8 @@ namespace sail {
         void reset_drop_num();
 
         DecoderStatus get_decoder_status();
+
+        bool is_eof() const;
 
     private:
         int tpu_id_;
@@ -239,6 +242,8 @@ namespace sail {
         std::mutex mutex_exit_;             //线程已经退出互斥锁
         bool exit_thread_flag;      //线程已经退出的标志位
         size_t drop_num;
+        int loop_num_;
+        int cur_loop_;
         DecoderStatus decoder_status;
 
     private:
@@ -267,11 +272,12 @@ namespace sail {
             int                 channel_idx,
             int                 timeout_sec, 
             int                 discard_mode,
-            bool                local_video_flag):
+            bool                local_video_flag,
+            int                 loop_num):
     tpu_id_(tpu_id),queue_size_(queue_size),skip_number_(frame_skip_num),
     timeout_sec_(timeout_sec), discard_mode_(discard_mode),stop_thread_flag(false),
     exit_thread_flag(true),decoder_(NULL),local_video_flag_(local_video_flag),
-    channel_idx_(channel_idx),pframes_queue(NULL),drop_num(0),
+    channel_idx_(channel_idx),pframes_queue(NULL),drop_num(0),loop_num_(loop_num),cur_loop_(0),
     decoder_status(sail::DecoderStatus::NONE)
     {
         pframes_queue = new BMImageQueue(queue_size);
@@ -386,8 +392,18 @@ namespace sail {
                 std::lock_guard<std::mutex> lock(mutex_decoder_c);
                 ret = decoder_->read(handle, image_temp);
             }
-            if (ret != 0)    {
-                SPDLOG_INFO("Decoder read end or err={}", ret);
+            if (ret != 0) {
+                if (decoder_->is_eof() && cur_loop_ == loop_num_) {
+                    auto status_ret = set_decoder_status(sail::DecoderStatus::CLOSED);
+                    SPDLOG_INFO("Channel {} reached EOF, stopping decoder thread", channel_idx_);
+                    set_stop_flag(true);
+                    continue;
+                } else if (decoder_->is_eof()) {
+                    cur_loop_++;
+                } else {
+                    SPDLOG_INFO("Channel {} read meet an error, ret = {}", channel_idx_, ret);
+                }
+
                 drop_num = 0;
                 try
                 {
@@ -511,6 +527,11 @@ namespace sail {
         return decoder_status;
     }
 
+    bool ChannelDecoder::is_eof() const
+    {
+        return decoder_->is_eof();
+    }
+
     class MultiDecoder::MultiDecoder_CC{
     public:
         MultiDecoder_CC(
@@ -555,6 +576,25 @@ namespace sail {
                 return -1;
             }
             insert_channel_decoder(decoder);  
+            SPDLOG_INFO("Add video: {}, channel index: {}", file_path, channel_count_);
+            return channel_count_;
+        }
+
+        int add_channel(const std::string& file_path, int frame_skip_num, int loop_num)
+        {
+            ChannelDecoder* decoder = new ChannelDecoder(file_path, 
+                                                tpu_id_,
+                                                queue_size_,
+                                                frame_skip_num,
+                                                channel_count_+1,
+                                                timeout_sec_,
+                                                discard_mode_,
+                                                local_video_flag_,
+                                                loop_num);
+            if (decoder == NULL){
+                return -1;
+            }
+            insert_channel_decoder(decoder);
             SPDLOG_INFO("Add video: {}, channel index: {}", file_path, channel_count_);
             return channel_count_;
         }
@@ -663,15 +703,16 @@ namespace sail {
             return ;
         }
 
-        DecoderStatus get_channel_status(int channel_idx)
+        DecoderStatus get_channel_status(int channel_idx) const
         {
-            ChannelDecoder* decoder_idx = get_decoder(channel_idx);
-            if (decoder_idx == nullptr)
-            {
-                SPDLOG_ERROR("Can not get status of channel {}", channel_idx);
-                return sail::DecoderStatus::NONE;
-            }
-            return decoder_idx->get_decoder_status();
+            std::lock_guard<std::mutex> lock(mutex_decoder);
+            return decoder_map_.at(channel_idx)->get_decoder_status();
+        }
+
+        bool is_channel_eof(int channel_idx) const
+        {
+            std::lock_guard<std::mutex> lock(mutex_decoder);
+            return decoder_map_.at(channel_idx)->is_eof();
         }
 
     private:
@@ -682,7 +723,7 @@ namespace sail {
         int channel_count_;     // number of channels
 
         std::map<int, ChannelDecoder*> decoder_map_;    // 通道号对应的解码器
-        std::mutex mutex_decoder;                       // decoder_map_对应的互斥锁
+        mutable std::mutex mutex_decoder;                       // decoder_map_对应的互斥锁
 
         bool local_video_flag_;     // 本地视频测试标志位
 
@@ -724,6 +765,11 @@ namespace sail {
     int MultiDecoder::add_channel(const std::string& file_path, int frame_skip_num)
     {
         return _impl->add_channel(file_path,frame_skip_num);
+    }
+
+    int MultiDecoder::add_channel(const std::string& file_path, int frame_skip_num, int loop_num)
+    {
+        return _impl->add_channel(file_path,frame_skip_num, loop_num);
     }
 
     int MultiDecoder::del_channel(int channel_idx)
@@ -787,9 +833,14 @@ namespace sail {
         return ;
     }
 
-    DecoderStatus MultiDecoder::get_channel_status(int channel_idx)
+    DecoderStatus MultiDecoder::get_channel_status(int channel_idx) const
     {
         return _impl->get_channel_status(channel_idx);
+    }
+
+    bool MultiDecoder::is_channel_eof(int channel_idx) const
+    {
+        return _impl->is_channel_eof(channel_idx);
     }
 
     class Mutex_Flag{

@@ -358,7 +358,7 @@ py::register_exception<ExceptionName>(m, #ExceptionName);
               return py::cast(ptr[i]);
             }
             throw py::type_error();
-         }, py::call_guard<py::gil_scoped_release>())
+         }/*, py::call_guard<py::gil_scoped_release>()*/)
     .def("__len__",             &Tensor::size)
     .def("dump_data",           &Tensor::dump_data,"dump tensor to file",py::arg("file_name"),py::arg("bin") = false);
 
@@ -483,6 +483,7 @@ py::register_exception<ExceptionName>(m, #ExceptionName);
     .def("enable_dump",          (void     (Decoder::*)(int)) &Decoder::enable_dump)
     .def("disable_dump",         &Decoder::disable_dump)
     .def("dump",                 (int (Decoder::*)(int, int, std::string&)) &Decoder::dump)
+    .def("is_eof",               &Decoder::is_eof)
     .def("release",              &Decoder::release)
     .def("reconnect",            &Decoder::reconnect);
   py::class_<Encoder>(m, "Encoder")
@@ -811,7 +812,7 @@ auto byte_size = input_arr.dtype().itemsize();
             .def("release",              &Decoder_RawStream::release);
     #endif
 
-#if BMCV_VERSION_MAJOR > 1
+#if BMCV_VERSION_MAJOR > 1 && defined(IS_SOC_MODE)  // Blend is only supported on SoC
   py::enum_<bm_stitch_wgt_mode>(m, "blend_wgt_mode")
     .value("BM_STITCH_WGT_YUV_SHARE", bm_stitch_wgt_mode::BM_STITCH_WGT_YUV_SHARE)
     .value("BM_STITCH_WGT_UV_SHARE", bm_stitch_wgt_mode::BM_STITCH_WGT_UV_SHARE)
@@ -822,7 +823,7 @@ auto byte_size = input_arr.dtype().itemsize();
     .def(py::init<int, std::vector<std::vector<short>>, std::vector<std::vector<short>>, std::vector<std::vector<string>>, bm_stitch_wgt_mode>())
     .def("process", (int     (Blend::*)(std::vector<BMImage*>&, BMImage&)) &Blend::process)
     .def("process", (BMImage (Blend::*)(std::vector<BMImage*>&)) &Blend::process);
-#endif
+#endif  // Blend is only supported on SoC
 
 #endif
     py::class_<MultiEngine>(m, "MultiEngine")
@@ -853,7 +854,10 @@ auto byte_size = input_arr.dtype().itemsize();
     .def("reset_drop_num",           &MultiDecoder::reset_drop_num)
     .def("add_channel",       (int  (MultiDecoder::*)(const std::string&, int))   &MultiDecoder::add_channel,
       py::arg("file_path"), py::arg("frame_skip_num")=0)
+    .def("add_channel",       (int  (MultiDecoder::*)(const std::string&, int, int))   &MultiDecoder::add_channel,
+      py::arg("file_path"), py::arg("frame_skip_num"), py::arg("loop_num"))
     .def("get_channel_status",      &MultiDecoder::get_channel_status)
+    .def("is_channel_eof",          &MultiDecoder::is_channel_eof)
     .def("read",              (int  (MultiDecoder::*)(int,BMImage&,int))          &MultiDecoder::read,
       py::arg("channel_idx"), py::arg("image"), py::arg("read_mode")=0, py::call_guard<py::gil_scoped_release>())
     .def("read",              (BMImage  (MultiDecoder::*)(int))                   &MultiDecoder::read, py::call_guard<py::gil_scoped_release>())

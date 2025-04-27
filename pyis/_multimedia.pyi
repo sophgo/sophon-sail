@@ -1368,6 +1368,21 @@ class MultiDecoder:
         """
         pass
 
+    def is_channel_eof(self, channel_idx: int) -> bool:
+        """
+        Get whether end of file is reached in the specific channel.
+
+        Parameters
+        ----------
+        channel_idx : int
+            channel index
+
+        Returns
+        -------
+        out : bool
+            Return True if EOF is reached else False
+        """
+
 class sail_resize_type(enum.Enum):
     BM_RESIZE_VPP_NEAREST = 0
     BM_RESIZE_TPU_NEAREST = 1

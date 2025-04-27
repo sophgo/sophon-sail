@@ -357,6 +357,8 @@ namespace sail {
 
         int dump(int dump_pre_seconds, int dump_post_seconds, std::string& file_path);
 
+        bool is_eof() const;
+
     private:
         friend class Decoder;
 
@@ -1193,6 +1195,9 @@ namespace sail {
 
         int ret = grab(frame_);
         if (!ret) {
+            if (end_of_file_ && !need_flush_) {
+                return SAIL_ERR_DEC_EOF;
+            }
             errcnt_++;
             return SAIL_ERR_DEC_READ;
         }
@@ -1460,6 +1465,10 @@ namespace sail {
             return -1;
     }
 
+    bool Decoder::Decoder_CC::is_eof() const {
+        return end_of_file_ && !need_flush_;
+    }
+
 // ref: https://ffmpeg.org/doxygen/trunk/demuxing_8c-source.html
     Decoder::Decoder(
             const std::string &file_path,
@@ -1587,6 +1596,10 @@ namespace sail {
     int Decoder::dump(int dump_pre_seconds, int dump_post_seconds, std::string& file_path)
     {
         return _impl->dump(dump_pre_seconds, dump_post_seconds, file_path);
+    }
+
+    bool Decoder::is_eof() const {
+        return _impl->is_eof();
     }
 
     class Decoder_RawStream::Decoder_RawStream_CC{
@@ -4964,6 +4977,7 @@ namespace sail {
         if(image.format() != FORMAT_GRAY &&
             image.format() != FORMAT_YUV420P &&
             image.format() != FORMAT_YUV422P &&
+            image.format() != FORMAT_YUV444P &&
             image.format() != FORMAT_NV12 &&
             image.format() != FORMAT_NV21 &&
             image.format() != FORMAT_NV16 &&
@@ -5017,6 +5031,7 @@ namespace sail {
         if(image.image_format != FORMAT_GRAY &&
             image.image_format != FORMAT_YUV420P &&
             image.image_format != FORMAT_YUV422P &&
+            image.image_format != FORMAT_YUV444P &&
             image.image_format != FORMAT_NV12 &&
             image.image_format != FORMAT_NV21 &&
             image.image_format != FORMAT_NV16 &&
@@ -5471,6 +5486,7 @@ namespace sail {
         return output_proposal;
     }
 #if BMCV_VERSION_MAJOR > 1
+    #if defined(IS_SOC_MODE)  // Blend is only supported on SoC
     static int bm_dmem_read_bin(bm_handle_t handle, bm_device_mem_t* dmem, const char *input_name, unsigned int size){
         if (access(input_name, F_OK) != 0 || strlen(input_name) == 0 || 0 >= size){
             SPDLOG_ERROR("file is not exist or wrong size");
@@ -5682,6 +5698,7 @@ namespace sail {
     Blend::~Blend(){
         delete _impl;
     }
+    #endif  // Blend is only supported on SoC
 
     int Bmcv::bmcv_overlay(BMImage& image, std::vector<std::vector<int>> overlay_info, std::vector<const BMImage *> overlay_image){
         if (overlay_info.size() != overlay_image.size()){
@@ -5785,6 +5802,7 @@ namespace sail {
         if(image.format() != FORMAT_GRAY &&
             image.format() != FORMAT_YUV420P &&
             image.format() != FORMAT_YUV422P &&
+            image.format() != FORMAT_YUV444P &&
             image.format() != FORMAT_NV12 &&
             image.format() != FORMAT_NV21 &&
             image.format() != FORMAT_NV16 &&
@@ -5857,6 +5875,7 @@ namespace sail {
         if(image.image_format != FORMAT_GRAY &&
             image.image_format != FORMAT_YUV420P &&
             image.image_format != FORMAT_YUV422P &&
+            image.image_format != FORMAT_YUV444P &&
             image.image_format != FORMAT_NV12 &&
             image.image_format != FORMAT_NV21 &&
             image.image_format != FORMAT_NV16 &&
@@ -8822,7 +8841,7 @@ extern "C" {
             }   
 #endif
             if(mem_flags == USEING_MEM_HEAP1 && bm_image_alloc_dev_mem_heap_mask(out,USEING_MEM_HEAP1) != BM_SUCCESS){
-                printf("bmcv allocate mem failed!!!");
+                SPDLOG_ERROR("bmcv allocate mem failed!");
             }
 
             bmcv_rect_t crop_rect = {0, 0, in.width, in.height};
@@ -8848,7 +8867,7 @@ extern "C" {
 
                 stride[0] = in.linesize[4];
                 stride[1] = in.linesize[5];
-                printf("====stride[0][1]=%d %d width=%d \n", stride[0], stride[1], in.width);
+                spdlog::debug("====stride[0][1]={} {} width={}", stride[0], stride[1], in.width);
             }
             else if(plane == 3){
                 if ((0 == in.height) || (0 == in.width) || \
@@ -8873,15 +8892,15 @@ extern "C" {
 
             int size = in.height * stride[0];
             input_addr[0] = bm_mem_from_device((unsigned long long)in.data[4], size);
-            printf("==== size1=%d addr[0]=%d \n", size, input_addr[0].size);
+            spdlog::debug("==== size1={} addr[0]={}", size, input_addr[0].size);
             if(data_five_denominator != -1 ){
                 size = in.height * stride[1] / data_five_denominator;
                 input_addr[1] = bm_mem_from_device((unsigned long long)in.data[5], size);
-                printf("==== size2=%d addr[1]=%d \n", size, input_addr[1].size);
+                spdlog::debug("==== size2={} addr[1]={}", size, input_addr[1].size);
             }
             if(data_six_denominator != -1){
                 size = in.height * stride[2] / data_six_denominator;
-                printf("==== size3=%d \n", size);
+                spdlog::debug("==== size3={}", size);
                 input_addr[2] = bm_mem_from_device((unsigned long long)in.data[6], size);
             }
             bm_image_attach(out, input_addr);
