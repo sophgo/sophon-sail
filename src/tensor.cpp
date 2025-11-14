@@ -35,19 +35,37 @@ namespace sail {
 
     int get_board_temp(int dev_id){
         bm_handle_t handle;
-        bm_dev_request(&handle, dev_id);
+        int ret = bm_dev_request(&handle, dev_id);
+        if (ret != BM_SUCCESS) {
+            SPDLOG_ERROR("bm_dev_request failed, ret={}", ret);
+            throw SailDeviceError("bm_dev_request failed");
+        }
         unsigned int board_temp=0;
-        bm_get_board_temp(handle, &board_temp);
+        ret = bm_get_board_temp(handle, &board_temp);
+        if (ret != BM_SUCCESS) {
+            bm_dev_free(handle);
+            SPDLOG_ERROR("bm_get_board_temp failed, ret={}", ret);
+            throw SailDeviceError("bm_get_board_temp failed");
+        }
         bm_dev_free(handle);
         return board_temp;
     }
 
     int get_chip_temp(int dev_id){
         bm_handle_t handle;
-        bm_dev_request(&handle, dev_id);
+        int ret = bm_dev_request(&handle, dev_id);
+        if (ret != BM_SUCCESS) {
+            SPDLOG_ERROR("bm_dev_request failed, ret={}", ret);
+            throw SailDeviceError("bm_dev_request failed");
+        }
 
         unsigned int chip_temp=0;
-        bm_get_chip_temp(handle, &chip_temp);
+        ret = bm_get_chip_temp(handle, &chip_temp);
+        if (ret != BM_SUCCESS) {
+            bm_dev_free(handle);
+            SPDLOG_ERROR("bm_get_chip_temp failed, ret={}", ret);
+            throw SailDeviceError("bm_get_chip_temp failed");
+        }
         bm_dev_free(handle);
         return chip_temp;
     }
@@ -56,8 +74,17 @@ namespace sail {
         bm_dev_stat_t stat;
         bm_handle_t handle;
         
-        bm_dev_request(&handle, dev_id);
-        bm_get_stat(handle, &stat);
+        int ret = bm_dev_request(&handle, dev_id);
+        if (ret != BM_SUCCESS) {
+            SPDLOG_ERROR("bm_dev_request failed, ret={}", ret);
+            throw SailDeviceError("bm_dev_request failed");
+        }
+        ret = bm_get_stat(handle, &stat);
+        if (ret != BM_SUCCESS) {
+            bm_dev_free(handle);
+            SPDLOG_ERROR("bm_get_stat failed, ret={}", ret);
+            throw SailDeviceError("bm_get_stat failed");
+        }
         std::vector<int> res={stat.mem_total, stat.mem_used,stat.tpu_util};
         bm_dev_free(handle);
         return res;
@@ -65,7 +92,11 @@ namespace sail {
 
     int get_available_tpu_num() {
         int count = 0;
-        bm_dev_getcount(&count);
+        int ret = bm_dev_getcount(&count);
+        if (ret != BM_SUCCESS) {
+            SPDLOG_ERROR("bm_dev_getcount failed, ret={}", ret);
+            throw SailDeviceError("bm_dev_getcount failed");
+        }
         return count;
     }
 
@@ -73,8 +104,17 @@ namespace sail {
         bm_dev_stat_t stat;
         bm_handle_t handle;
 
-        bm_dev_request(&handle, dev_id);
-        bm_get_stat(handle, &stat);
+        int ret = bm_dev_request(&handle, dev_id);
+        if (ret != BM_SUCCESS) {
+            SPDLOG_ERROR("bm_dev_request failed, ret={}", ret);
+            throw SailDeviceError("bm_dev_request failed");
+        }
+        ret = bm_get_stat(handle, &stat);
+        if (ret != BM_SUCCESS) {
+            bm_dev_free(handle);
+            SPDLOG_ERROR("bm_get_stat failed, ret={}", ret);
+            throw SailDeviceError("bm_get_stat failed");
+        }
         bm_dev_free(handle);
         return stat.tpu_util;
     }
@@ -89,10 +129,19 @@ namespace sail {
         bm_handle_t handle;
         int vpu_usage[5];
 
-        bm_dev_request(&handle, dev_id);
+        int ret = bm_dev_request(&handle, dev_id);
+        if (ret != BM_SUCCESS) {
+            SPDLOG_ERROR("bm_dev_request failed, ret={}", ret);
+            throw SailDeviceError("bm_dev_request failed");
+        }
 
         unsigned int chipid = 0;
-        bm_get_chipid(handle, &chipid);
+        ret = bm_get_chipid(handle, &chipid);
+        if (ret != BM_SUCCESS) {
+            bm_dev_free(handle);
+            SPDLOG_ERROR("bm_get_chipid failed, ret={}", ret);
+            throw SailDeviceError("bm_get_chipid failed");
+        }
         if(chipid == 0x1684){
             res_len = 5;
         }else{
@@ -107,7 +156,12 @@ namespace sail {
             }
             return res;
         }
-        bm_get_vpu_instant_usage(handle, vpu_usage);
+        ret = bm_get_vpu_instant_usage(handle, vpu_usage);
+        if (ret != BM_SUCCESS) {
+            bm_dev_free(handle);
+            SPDLOG_ERROR("bm_get_vpu_instant_usage failed, ret={}", ret);
+            throw SailDeviceError("bm_get_vpu_instant_usage failed");
+        }
         for(int i = 0; i < res_len; i++){
             res.push_back(vpu_usage[i]);
         }
@@ -141,17 +195,25 @@ namespace sail {
         bm_handle_t handle;
         int vpp_usage[2];
 
-        bm_dev_request(&handle, dev_id);
+        int ret = bm_dev_request(&handle, dev_id);
+        if (ret != BM_SUCCESS) {
+            SPDLOG_ERROR("bm_dev_request failed, ret={}", ret);
+            throw SailDeviceError("bm_dev_request failed");
+        }
 
 #ifndef IS_SOC_MODE
         if(bm_get_vpp_instant_usage==nullptr){
-            for(int i = 0; i < 2; +i++){
-                res.push_back(-1);
-            }
-            return res;
+            bm_dev_free(handle);
+            SPDLOG_ERROR("bm_get_vpp_instant_usage is not available");
+            throw SailRuntimeError("bm_get_vpp_instant_usage is not supported in this SDK version");
         }
-        bm_get_vpp_instant_usage(handle, vpp_usage);
-        for(int i = 0; i < 2; +i++){
+        ret = bm_get_vpp_instant_usage(handle, vpp_usage);
+        if (ret != BM_SUCCESS) {
+            bm_dev_free(handle);
+            SPDLOG_ERROR("bm_get_vpp_instant_usage failed, ret={}", ret);
+            throw SailDeviceError("bm_get_vpp_instant_usage failed");
+        }
+        for(int i = 0; i < 2; ++i){
             res.push_back(vpp_usage[i]);
         }
 #else
@@ -160,7 +222,7 @@ namespace sail {
 
         if(r_value != BM_SUCCESS){
             spdlog::error("Failed to retrieve chip ID: bm_get_chipid failed");
-            return res;
+            throw SailDeviceError("bm_get_chipid failed");
         }
 
         std::string file_path =  (chipid == 0x1686A200) ? "/proc/soph/vppinfo" : "/proc/vppinfo";
@@ -169,7 +231,7 @@ namespace sail {
 
         if (!file.is_open()) {
             spdlog::error("File open failed: {} ", file_path);
-            return res;
+            throw SailDeviceError("get_vpp_util failed");
         }
 
         std::string line;
@@ -276,11 +338,11 @@ namespace sail {
         // SPDLOG_INFO("Start delete_shaptr_bm_handle_t_allocated!");
         {
             std::lock_guard<std::mutex> lock(Handle::map_mutex);
-            if(Handle::handle_map.find(handle_ptr[0]) != Handle::handle_map.end()){
-                Handle::handle_map.erase(handle_ptr[0]);
+            if(Handle::handle_map.find(*handle_ptr) != Handle::handle_map.end()){
+                Handle::handle_map.erase(*handle_ptr);
             }
         }
-        bm_dev_free(handle_ptr[0]);
+        bm_dev_free(*handle_ptr);
         delete handle_ptr;
         // SPDLOG_INFO("End delete_shaptr_bm_handle_t_allocated!");
     }
@@ -288,19 +350,19 @@ namespace sail {
     std::shared_ptr<bm_handle_t> make_shaptr_bm_handle_t(int dev_id){
         if (bm_dev_query(dev_id)) {
             SPDLOG_ERROR("bm_dev_query failed. "
-                         "Maybe the limit for open files (ulimit) has been reached, or "
-                         "the given TPU id '{}' is invalid!", dev_id);
+                        "Maybe the limit for open files (ulimit) has been reached, or "
+                        "the given TPU id '{}' is invalid!", dev_id);
             throw SailDeviceError("init device failure");
         }
-        std::shared_ptr<bm_handle_t> ptr_temp = std::shared_ptr<bm_handle_t>(new bm_handle_t[1],delete_shaptr_bm_handle_t_allocated);
-        bm_dev_request(&ptr_temp.get()[0], dev_id);
-        return std::move(ptr_temp);
+        bm_handle_t* raw_ptr = new bm_handle_t;
+        bm_dev_request(raw_ptr, dev_id);
+        return std::shared_ptr<bm_handle_t>(raw_ptr, delete_shaptr_bm_handle_t_allocated);
     }
 
     std::shared_ptr<bm_handle_t> make_shaptr_bm_handle_t(bm_handle_t handle){
-        std::shared_ptr<bm_handle_t> ptr_temp = std::shared_ptr<bm_handle_t>(new bm_handle_t[1],delete_shaptr_bm_handle_t);
-        ptr_temp.get()[0] = handle;
-        return std::move(ptr_temp);
+        bm_handle_t* raw_ptr = new bm_handle_t;
+        *raw_ptr = handle;
+        return std::shared_ptr<bm_handle_t>(raw_ptr, delete_shaptr_bm_handle_t);
     }
 
     void get_sail_version(char* sail_version){
@@ -644,7 +706,13 @@ namespace sail {
 
                 int c = 0;
                 void* value = (void*)&c;
-                ret = bm_memset_device_ext(handle_.data(), value, 1, dev_data_);
+                // bm_memset_device_ext may cause error if (mode != 4 && data_size_%32768 == 0) in SE5, SP4
+                // the performance of mode=4 is equal to mode=1, better than mode=3 (and mode=2 in SE5)
+                int mode = 4;
+                if (data_size_ % mode != 0) {
+                    mode = 1;
+                }
+                ret = bm_memset_device_ext(handle_.data(), value, mode, dev_data_);
                 if (BM_SUCCESS != ret) {
                     SPDLOG_ERROR("bm_memset_device failed, return={}", ret);
                     throw SailRuntimeError("bmlib api fail");
@@ -735,7 +803,7 @@ namespace sail {
         else
         {
             // TODO
-            SPDLOG_ERROR("no_copy=true is not supported yet.");
+            SPDLOG_ERROR("no_copy=false is not supported yet.");
             throw SailTensorError("not supported");
             // set own flag
             // d2d
@@ -1419,7 +1487,11 @@ namespace sail {
         }
         int c = 0;
         void* value = (void*)&c;
-        ret = bm_memset_device_ext(handle_.data(), value, 1, new_dev_data);
+        int mode = 4;
+        if (new_data_size % mode != 0) {
+            mode = 1;
+        }
+        ret = bm_memset_device_ext(handle_.data(), value, mode, new_dev_data);
         if (BM_SUCCESS != ret) {
             SPDLOG_ERROR("bm_memset_device failed, return={}", ret);
             throw SailRuntimeError("bmlib api fail");
@@ -1592,25 +1664,38 @@ namespace sail {
             }
         }
         size_t type_size_tmep = 1;
+        bool dtype_check = true;
         if (dtype_ == BM_FLOAT32) {
             type_size_tmep = sizeof(float);
+            dtype_check = (buf.format == pybind11::format_descriptor<float>::format());
         } else if (dtype_ == BM_INT8) {
             type_size_tmep = sizeof(int8_t);
+            dtype_check = (buf.format == pybind11::format_descriptor<int8_t>::format());
         } else if (dtype_ == BM_UINT8) {
             type_size_tmep = sizeof(uint8_t);
+            dtype_check = (buf.format == pybind11::format_descriptor<uint8_t>::format());
         } else if (dtype_ == BM_INT32) {
             type_size_tmep = sizeof(int32_t);
+            dtype_check = (buf.format == pybind11::format_descriptor<int32_t>::format());
         } else if (dtype_ == BM_FLOAT16) {
             type_size_tmep = sizeof(float)/2;
         } else if (dtype_ == BM_BFLOAT16) {
             type_size_tmep = sizeof(float)/2;
         } else if (dtype_ == BM_UINT32) {
             type_size_tmep = sizeof(uint32_t);
+            dtype_check = (buf.format == pybind11::format_descriptor<uint32_t>::format());
         } else if (dtype_ == BM_UINT16) {
             type_size_tmep = sizeof(uint16_t);
+            dtype_check = (buf.format == pybind11::format_descriptor<uint16_t>::format());
         } else if (dtype_ == BM_INT16) {
             type_size_tmep = sizeof(int16_t);
+            dtype_check = (buf.format == pybind11::format_descriptor<int16_t>::format());
         } 
+        dtype_check &= (buf.itemsize == type_size_tmep);
+        if (!dtype_check){
+            SPDLOG_ERROR("The dtype of the input array does not match the Tensor!");
+            throw SailTensorError("Wrong dtype of input array!");
+        }
 
         int old_size = std::accumulate(shape_.begin(), shape_.end(),
             type_size_tmep, std::multiplies<int>());
@@ -1681,16 +1766,7 @@ namespace sail {
         }
 
         if (is_sys_data_valid()){
-#ifndef IS_SOC_MODE
-    //    if (own_sys_data_) {
-    //      std::free(sys_data_);
-    //      own_sys_data_ = false;
-    //    }
-    //    sys_data_ = buf.ptr;
             memcpy(sys_data_, numpy_ptr, new_size);
-#else
-            memcpy(sys_data_, numpy_ptr, new_size);
-#endif
         } else if(is_dev_data_valid()){
             double process_start_time = get_current_time_us();
             // bm_memcpy_s2d(handle_.data(), dev_data_, buf.ptr);
@@ -2112,38 +2188,46 @@ namespace sail {
     }
     
     void Tensor::memory_set(float c){
-        void* value;
-        if(_impl->dtype_ == BM_FLOAT32){
-            float f32_c = c;
-            value = (void*)&f32_c;
-        } else if (_impl->dtype_ == BM_INT32){
-            int32_t i32_c = static_cast<int32_t>(c);
-            value = (void*)&i32_c;
-        } else if (_impl->dtype_ == BM_INT16){
-            int16_t i16_c = static_cast<int16_t>(c);
-            value = (void*)&i16_c;
-        } else if (_impl->dtype_ == BM_INT8){
-            int8_t i8_c = static_cast<int8_t>(c);
-            value = (void*)&i8_c;
-        } else if (_impl->dtype_ == BM_UINT32){
-            uint32_t ui32_c = static_cast<uint32_t>(c);
-            value = (void*)&ui32_c;
-        } else if (_impl->dtype_ == BM_UINT16){
-            uint16_t ui16_c = static_cast<uint16_t>(c);
-            value = (void*)&ui16_c;
-        } else if (_impl->dtype_ == BM_UINT8){
-            uint8_t ui8_c = static_cast<uint8_t>(c);
-            value = (void*)&ui8_c;
-        } else if (_impl->dtype_ == BM_FLOAT16){
-            uint16_t f16_c = fp32_to_fp16(c);
-            value = (void*)&f16_c;
-        } else if (_impl->dtype_ == BM_BFLOAT16){
-            uint16_t bf16_c = fp32_to_bf16(c);
-            value = (void*)&bf16_c;
-        } else {
-            SPDLOG_ERROR("memory_set: Unsupport dtype {}.", _impl->dtype_);
+        alignas(4) uint8_t buf[4] = {0};
+
+        switch (_impl->dtype_) {
+            case BM_FLOAT32:
+            *reinterpret_cast<float*>(buf) = c;
+            break;
+            case BM_INT32:
+            *reinterpret_cast<int32_t*>(buf) = static_cast<int32_t>(c);
+            break;
+            case BM_UINT32:
+            *reinterpret_cast<uint32_t*>(buf) = static_cast<uint32_t>(c);
+            break;
+            case BM_INT16:
+            *reinterpret_cast<int16_t*>(buf) = static_cast<int16_t>(c);
+            break;
+            case BM_UINT16:
+            *reinterpret_cast<uint16_t*>(buf) = static_cast<uint16_t>(c);
+            break;
+            case BM_INT8:
+            *reinterpret_cast<int8_t*>(buf) = static_cast<int8_t>(c);
+            break;
+            case BM_UINT8:
+            *reinterpret_cast<uint8_t*>(buf) = static_cast<uint8_t>(c);
+            break;
+            case BM_FLOAT16: {
+            uint16_t v = fp32_to_fp16(c);
+            *reinterpret_cast<uint16_t*>(buf) = v;
+            break;
+            }
+            case BM_BFLOAT16: {
+            uint16_t v = fp32_to_bf16(c);
+            *reinterpret_cast<uint16_t*>(buf) = v;
+            break;
+            }
+            default:
+            SPDLOG_ERROR("memory_set: Unsupported dtype {}.", _impl->dtype_);
+            return;
         }
-        memory_set(value);
+
+        memory_set(static_cast<void*>(buf));
     }
 
 #ifdef PYTHON

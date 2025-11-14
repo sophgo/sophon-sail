@@ -1617,6 +1617,11 @@ imwrite
         
         int imwrite(
            const std::string &filename,
+           BMImage           &image,
+           const std::vector<int> &params = {});
+
+        int imwrite(
+           const std::string &filename,
            const bm_image     &image);
 
 **参数说明:**
@@ -1629,6 +1634,10 @@ imwrite
 
 需要保存的图像。
 
+* params : vector<int>
+
+保存图像时的格式参数。以键值对形式传入，需自行确保参数有效。
+
 **返回值说明:**
 
 * process_status : int
@@ -1639,6 +1648,7 @@ imwrite
     .. code-block:: c
 
         #include <sail/cvwrapper.h>
+        #include "opencv2/opencv.hpp"
         using namespace std;
         int main() {
             int tpu_id = 0;
@@ -1647,12 +1657,14 @@ imwrite
             sail::Decoder decoder(image_name, true, tpu_id);
             sail::BMImage BMimg = decoder.read(handle); 
             sail::Bmcv bmcv(handle);
-            int ret = bmcv.imwrite("new_3.jpg", BMimg);
+            int ret = bmcv.imwrite("new_0.jpg", BMimg);
+            std::vector<int> params = { cv::IMWRITE_JPEG_QUALITY, 95 };
+            ret = bmcv.imwrite("new_1.jpg", BMimg, params);
             return 0;
         }
 
 
-imwrite
+imread
 >>>>>>>>>>>>>>>>>
      
 读取和解码图片文件，仅支持 JPEG baseline 格式的硬解码。对于其他格式，如 PNG 和 BMP，则采用软解码。
@@ -2013,13 +2025,15 @@ vpp_convert_format
         }
 
 putText
->>>>>>>>>>
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
-在图像上添加text。只支持英文文字。
+在图像上添加text。支持指定字体大小、颜色、粗细。
 
-输入的BMImage支持的像素格式为：
-FORMAT_GRAY、FORMAT_YUV420P、FORMAT_YUV422P、FORMAT_YUV444P、FORMAT_NV12、
-FORMAT_NV21、FORMAT_NV16、FORMAT_NV61。
+**实现硬件**
+
+* BM1684: thickness大于0时为处理器，thickness等于0时为VPP
+
+* BM1684X: thickness大于0时为处理器，thickness等于0时为VPP
 
 **接口形式:**
     .. code-block:: c
@@ -2079,6 +2093,12 @@ FORMAT_NV21、FORMAT_NV16、FORMAT_NV61。
 * process_status : int
 
 如果处理成功返回0，否则返回非0值。
+
+**注意：**
+
+当参数thickness大于0时，仅支持英文，输入的BMImage支持的像素格式请参考《BMCV开发参考手册》的 ``bmcv_image_put_text`` 。
+
+当参数thickness等于0时，支持中英文，输入的BMImage支持的像素格式请参考《BMCV开发参考手册》的 ``bmcv_image_watermark_superpose`` 。
 
 **示例代码:**
     .. code-block:: c++
@@ -2967,7 +2987,7 @@ polylines
 
 * color : std::tuple<unsigned char, unsigned char, unsigned char>
 
-画线的颜色，分别为RGB三个通道的值。
+画线的颜色，分别为BGR三个通道的值。
 
 * thickness : int 
 
@@ -3429,7 +3449,7 @@ drawLines
 
 * color : std::tuple<unsigned char, unsigned char, unsigned char> 
 
-线段的颜色，分别为RGB三个通道的值。
+线段的颜色，分别为BGR三个通道的值。
 
 * thickness : int
 

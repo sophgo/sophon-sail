@@ -219,3 +219,37 @@ release
             abort_policy = 0                             
             encoder = sail.Encoder(out_path, handle, enc_fmt, pix_fmt, enc_params, cache_buffer_length, abort_policy)
             encoder.release()
+
+reconnect
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+重新连接编码器。
+
+**接口形式:**
+    .. code-block:: python
+
+        def reconnect(self)->int
+
+**返回值说明:**
+
+* judge_ret: int
+
+成功返回0，失败返回其他值。
+
+**示例代码:**
+
+    .. code-block:: python
+
+        import sophon.sail as sail
+        if __name__ == '__main__':
+            dev_id = 0
+            handle = sail.Handle(dev_id)
+            out_path = "path/to/your/output/file"            
+            enc_fmt = "h264_bm"                           
+            pix_fmt = "I420"                              
+            enc_params = "width=1920:height=1080:bitrate=2000:gop=32:gop_preset=2:framerate=25"  
+            cache_buffer_length = 5                      
+            abort_policy = 0                             
+            encoder = sail.Encoder(out_path, handle, enc_fmt, pix_fmt, enc_params, cache_buffer_length, abort_policy)
+            ret = encoder.reconnect()
+            print(ret)

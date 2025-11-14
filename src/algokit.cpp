@@ -3021,6 +3021,7 @@ private:
 
     std::vector<std::vector<std::vector<int>>> anchors;
     int anchor_num;
+    int output_head_num;
 
     bool use_multiclass_nms;
 };
@@ -3034,10 +3035,7 @@ algo_yolov5_post_cpu_opt_async::algo_yolov5_post_cpu_opt_async_cc::algo_yolov5_p
 :max_queue_size_(max_queue_size),post_thread_run(false),stop_thread_flag(false),exit_thread_flag(true),
 network_width(network_w),network_height(network_h),use_multiclass_nms(use_multiclass_nms)
 {
-    if (shape.size() != 3){
-        SPDLOG_ERROR("ERROR outputs num, 3 vs. {}!",shape.size());
-        throw SailRuntimeError("invalid argument");
-    }
+    output_head_num = shape.size();
     if (shape[0].size() != 5){
         SPDLOG_ERROR("ERROR DIM, 5 vs. {}!",shape[0].size());
         throw SailRuntimeError("invalid argument");
@@ -3053,9 +3051,16 @@ network_width(network_w),network_height(network_h),use_multiclass_nms(use_multic
 
     classes_ = data_shape_[0][4]-5;
     batch_size = shape[0][0];
+    
+    if (output_head_num == 3) {
+        anchors = {{{10, 13}, {16, 30}, {33, 23}}, {{30, 61}, {62, 45}, {59, 119}}, {{116, 90}, {156, 198}, {373, 326}}};
+        anchor_num = anchors[0].size();
+    } else {
+        anchor_num = 0;
+        SPDLOG_INFO("Using {} output heads. Users should set the anchor size (using reset_anchors function) before calling!!!.", output_head_num);
+    }
 
-    anchors = {{{10, 13}, {16, 30}, {33, 23}}, {{30, 61}, {62, 45}, {59, 119}}, {{116, 90}, {156, 198}, {373, 326}}};
-    anchor_num = anchors[0].size();
+    
 }
 
 algo_yolov5_post_cpu_opt_async::algo_yolov5_post_cpu_opt_async_cc::~algo_yolov5_post_cpu_opt_async_cc()
@@ -3072,6 +3077,11 @@ int algo_yolov5_post_cpu_opt_async::algo_yolov5_post_cpu_opt_async_cc::reset_anc
     pybind11::gil_scoped_release release;
 #endif
     anchors.clear();
+    if(anchors_new.size() != output_head_num){
+        SPDLOG_ERROR("Error anchor size!");
+        return SAIL_ALGO_ERROR_SHAPES;
+    }
+
     for(int i=0;i<anchors_new.size();++i){
         std::vector<std::vector<int>> anchor_;
         for (int j=0;j<anchors_new[0].size();++j){
@@ -3080,7 +3090,7 @@ int algo_yolov5_post_cpu_opt_async::algo_yolov5_post_cpu_opt_async_cc::reset_anc
         anchors.push_back(anchor_);
     }
     anchor_num = anchors[0].size();
-    SPDLOG_INFO("Reset Anchors, anchor_num:{} .", anchor_num);
+    SPDLOG_INFO("Reset Anchors, output head num:{}, anchor_num:{} .",output_head_num, anchor_num);
     return 0;
 }
 
@@ -3093,9 +3103,16 @@ int algo_yolov5_post_cpu_opt_async::algo_yolov5_post_cpu_opt_async_cc::push_data
         std::vector<int> ost_w,
         std::vector<int> ost_h,
         std::vector<std::vector<int>> padding_attr){
- #ifdef PYTHON
+#ifdef PYTHON
     pybind11::gil_scoped_release release;
 #endif
+
+    // check anchor size
+    if(anchor_num == 0 || anchors.empty()) {
+        SPDLOG_ERROR("Anchor size is 0, please reset anchors before push data!");
+        return SAIL_ALGO_ERROR_PARAMS;
+    }
+
     if(channel_idx.size() != batch_size ||
         image_idx.size() != batch_size ||
         input_data[0]->shape()[0] != batch_size ||
@@ -3149,6 +3166,13 @@ int algo_yolov5_post_cpu_opt_async::algo_yolov5_post_cpu_opt_async_cc::push_data
  #ifdef PYTHON
     pybind11::gil_scoped_release release;
 #endif
+
+    // check anchor size
+    if(anchor_num == 0 || anchors.empty()) {
+        SPDLOG_ERROR("Anchor size is 0, please reset anchors before push data!");
+        return SAIL_ALGO_ERROR_PARAMS;
+    }
+
     if(channel_idx.size() != batch_size ||
         image_idx.size() != batch_size ||
         input_data[0]->shape()[0] != batch_size ||
@@ -3179,6 +3203,8 @@ int algo_yolov5_post_cpu_opt_async::algo_yolov5_post_cpu_opt_async_cc::push_data
         padding_width_queue.push(padding_attr[i][2]);    //
         padding_height_queue.push(padding_attr[i][3]);  //
     }
+
+
     tensor_in_queue_.push(std::move(input_data));
 
     if(!post_thread_run){
@@ -4389,9 +4415,13 @@ algo_yolov5_post_cpu_opt::algo_yolov5_post_cpu_opt_cc::algo_yolov5_post_cpu_opt_
         SPDLOG_ERROR("ERROR Shapes size: {}!", shapes.size());
         throw SailRuntimeError("invalid argument");
     }
+    if (input_num == 3) {
+        anchors = {{{10, 13}, {16, 30}, {33, 23}}, {{30, 61}, {62, 45}, {59, 119}}, {{116, 90}, {156, 198}, {373, 326}}};
+        anchor_num = 3;
+    } else {
+        SPDLOG_INFO("Using {} output heads. Users should set the anchor size (using reset_anchors function) before calling!!!.", input_num);
+    }
 
-    anchors = {{{10, 13}, {16, 30}, {33, 23}}, {{30, 61}, {62, 45}, {59, 119}}, {{116, 90}, {156, 198}, {373, 326}}};
-    anchor_num = 3;
     nout = input_shapes[min_idx][min_dim - 1];
 }
 
@@ -4413,7 +4443,7 @@ int algo_yolov5_post_cpu_opt::algo_yolov5_post_cpu_opt_cc::reset_anchors(std::ve
         anchors.push_back(anchor_);
     }
     anchor_num = anchors[0].size();
-    SPDLOG_INFO("Reset Anchors, anchor_num:{} .", anchor_num);
+    SPDLOG_INFO("Reset Anchors, output head num:{}, anchor_num:{} .",input_num, anchor_num);
     return SAIL_ALGO_SUCCESS;
 }
 
@@ -4489,6 +4519,10 @@ int algo_yolov5_post_cpu_opt::algo_yolov5_post_cpu_opt_cc::process(std::vector<s
                                                                 bool input_keep_aspect_ratio,
                                                                 bool input_use_multiclass_nms)
 {
+    if (anchor_num == 0 || anchors.size() != input_num) {
+        SPDLOG_ERROR("Anchor size: {} vs input num: {}. anchors size Mismatch!", anchors.size(), input_num);
+        return SAIL_ALGO_ERROR_PARAMS;
+    }
     if(input_num != input_data.size()){
         SPDLOG_ERROR("input_data count Mismatch!");
         return SAIL_ALGO_ERROR_SHAPES;
@@ -5763,7 +5797,7 @@ int deepsort_tracker_controller::process(const vector<DeteObjRect>& detected_obj
 }
 
 int deepsort_tracker_controller::process(const vector<DeteObjRect>& detected_objects, vector<vector<float>>& feature, vector<TrackObjRect>& tracked_objects) {
-    _impl->process(detected_objects, feature, tracked_objects);
+    return _impl->process(detected_objects, feature, tracked_objects);
 }
 
 // extractor feature输入为tensor
@@ -5947,7 +5981,7 @@ int deepsort_tracker_controller_async::deepsort_tracker_controller_async_cc::pus
     }
 
     {
-        unique_lock<mutex> input_mutex;
+        unique_lock<mutex> lock(input_mutex);
         detected_objects_queue.push(detected_objects);
         feature_float_queue.push(feature);
         task_empty.notify_one();

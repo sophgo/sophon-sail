@@ -363,7 +363,7 @@ Query whether the Tensor has a data pointer in system memory.
 
 * judge_ret: bool
 
-Returns True if it owns the data pointer of system memory, otherwise False.
+Returns true if it owns the data pointer of system memory, otherwise false.
 
 **Sample:**
     .. code-block:: c
@@ -400,7 +400,7 @@ Query whether the Tensor has data in the device memory.
 
 * judge_ret : bool
 
-Returns True if the Tensor owns the data in device memory, False otherwise.
+Returns true if the Tensor owns the data in device memory, false otherwise.
 
 **Sample:**
     .. code-block:: c

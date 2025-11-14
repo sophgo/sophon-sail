@@ -55,6 +55,7 @@ extern "C" {
 #include <vector>
 #include "tensor.h"
 #include <iostream>
+#include "decoder_rawstream.h"
 using namespace std;
 
 namespace cv { class Mat; }
@@ -666,39 +667,6 @@ class DECL_EXPORT Decoder {
  private:
   class Decoder_CC;
   class Decoder_CC* const _impl;
-};
-
-
-class DECL_EXPORT Decoder_RawStream {
- public:
-  /**
-   * @brief Constructor.
-   *
-   * @param tpu_id     ID of TPU, there may be more than one TPU for PCIE mode.
-   * @param decformt  decformt:h264 or h265.
-   */
-  Decoder_RawStream(
-      int tpu_id,
-      string  decformt);
-  /**
-   * @brief Destructor.
-   */
-  ~Decoder_RawStream();
-  void release();
-
-  int read_(uint8_t* data, int data_size, bm_image &image,bool continueFrame = false);
-  int read(uint8_t* data, int data_size, sail::BMImage &image,bool continueFrame = false);
-
-  #ifdef PYTHON
-      int read_(pybind11::bytes data_bytes, bm_image& image, bool continueFrame = false);
-      int read(pybind11::bytes data_bytes, BMImage& image, bool continueFrame = false);
-  #endif
-
-
-private:
-    class Decoder_RawStream_CC;
-    class Decoder_RawStream_CC* const _impl;
-
 };
 
 
@@ -1573,6 +1541,7 @@ class DECL_EXPORT Bmcv {
    *
    * @param filename   Name of the file
    * @param image      Image to be saved
+   * @param params     Format parameters for saving the image
    * @return 0 for success and other for failure
    */
   int imwrite(
@@ -1581,10 +1550,20 @@ class DECL_EXPORT Bmcv {
   );
   int imwrite(
       const std::string &filename,
+      const BMImage     &image,
+      const std::vector<int> &params
+  );
+  int imwrite(
+      const std::string &filename,
       const bm_image     &image);
   int imwrite_(
       const std::string &filename,
       const bm_image     &image);
+  int imwrite_(
+      const std::string &filename,
+      const bm_image     &image,
+      const std::vector<int> &params
+  );
   /**
    * @brief Get Handle instance.
    *
@@ -1981,7 +1960,6 @@ class DECL_EXPORT Bmcv {
       float                        sigmaX,
       float                        sigmaY = 0.0f);
 
-#if BMCV_VERSION_MAJOR > 1
   /**
    * @brief Add a watermark with a transparent channel to the image.
    * 
@@ -1994,8 +1972,7 @@ class DECL_EXPORT Bmcv {
   int bmcv_overlay(
       BMImage&                      image, 
       std::vector<std::vector<int>> overlay_info, 
-      std::vector<const BMImage *>        overlay_image);
-#endif
+      std::vector<const BMImage *>  overlay_image);
 
 // faiss series
   /**

@@ -149,3 +149,40 @@ release
             av_free(bs_buffer);
             return 0;
         }
+
+
+read_single_frame
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+从data中读取一帧图像。需要自行确保输入data只包含完整的单帧数据。
+
+**接口形式:**
+    .. code-block:: c
+
+        int read_single_frame(uint8_t* data, int data_size, sail::BMImage &image, bool continue_frame = false, bool need_flush = false);
+
+**参数说明:**
+
+* data: bytes
+
+输入参数。裸流的二进制数据。
+
+* image: sail.BMImage
+
+输出参数。将数据读取到image中。
+
+* continue_frame: bool
+
+输入参数。是否连续读帧, 默认为false。设置为True时，会重启解码器。
+
+* need_flush: bool
+
+输入参数。是否需要冲刷缓存帧, 默认为false。设置为true时，data可输入空数据。
+
+**返回值说明:**
+
+* judge_ret: int
+
+读取成功返回0，需要继续输入数据返回1，失败返回其他值。
+
+首帧返回1是正常情况，请继续输入下一帧数据。

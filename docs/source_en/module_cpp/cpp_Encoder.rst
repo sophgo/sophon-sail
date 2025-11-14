@@ -86,7 +86,7 @@ Determine whether the encoder is turned on.
 
 * judge_ret: bool
 
-Returns True if the encoder is turned on and False if it fails.
+Returns true if the encoder is turned on and false if it fails.
 
 **Sample:**
     .. code-block:: c
@@ -261,4 +261,44 @@ Release the encoder.
             sail::Encoder encoder(out_path, handle, enc_fmt, pix_fmt, enc_params, cache_buffer_length, abort_policy);
             encoder.release();
             return 0;  
+        }
+
+reconnect
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+Reconnect the encoder.
+
+**Interface:**
+    .. code-block:: c
+
+        int reconnect();
+
+**Return:**
+
+* judge_ret: int
+
+Successfully returned 0, failed to reconnect returned other values.
+
+**Sample:**
+    .. code-block:: c
+
+        #include <sail/encoder.h>
+        
+        using namespace std;  
+        int main() {  
+            int dev_id = 0;
+            sail::Handle handle(dev_id); 
+            string out_path = "path/to/your/output/file";           
+            string enc_fmt = "h264_bm";                         
+            string pix_fmt = "I420";                              
+            string enc_params = "width=1920:height=1080:bitrate=2000:gop=32:gop_preset=2:framerate=25";  
+            int cache_buffer_length = 5;                      
+            int abort_policy = 0;                        
+            sail::Encoder encoder(out_path, handle, enc_fmt, pix_fmt, enc_params, cache_buffer_length, abort_policy);
+            int ret = encoder.reconnect();
+            if (ret != 0) {
+                cout << "Reconnect failed!" << endl;
+                return ret;
+            }
+            return 0;
         }

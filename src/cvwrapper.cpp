@@ -25,6 +25,7 @@ You may obtain a copy of the License at
 #include <fstream>
 #include "internal.h"
 #include "tensor.h"
+#include "decoder_rawstream.h"
 
 #ifdef USE_OPENCV
 
@@ -54,6 +55,16 @@ static int IMAGE_W = 1920;
 
 #define AUTO_PTR(name, type, size) std::unique_ptr<type[]> up##name(new type[size]);\
                                    type *name=up##name.get();
+
+#ifdef av_err2str
+#undef av_err2str
+av_always_inline std::string av_err2string(int errnum) {
+    char str[AV_ERROR_MAX_STRING_SIZE];
+    return av_make_error_string(str, AV_ERROR_MAX_STRING_SIZE, errnum);
+}
+#define av_err2str(err) av_err2string(err).c_str()
+#endif  // av_err2str
+
 namespace sail {
     inline bool string_start_with(const std::string &s, const std::string &head) {
         return s.compare(0, head.size(), head) == 0;
@@ -95,8 +106,6 @@ namespace sail {
         }
         return format;
     }
-    // Function to AVFrame  to bm_image
-    int avframe_to_bm_image(Handle& handle_,AVFrame &in, bm_image &out);
 
     bm_data_type_t get_bm_data_type_sail(bm_image_data_format_ext fmt) {
         std::string sfmt;
@@ -1602,337 +1611,569 @@ namespace sail {
         return _impl->is_eof();
     }
 
-    class Decoder_RawStream::Decoder_RawStream_CC{
-    public:
-        explicit Decoder_RawStream_CC(int tpu_id,
-            string  decformt);
-        ~Decoder_RawStream_CC();
+// Decoder_RawStream
+class Decoder_RawStream::Decoder_RawStream_CC {
+   public:
+    Decoder_RawStream_CC(int tpu_id, std::string decformt);
+    ~Decoder_RawStream_CC();
+    void release();
+    int read(uint8_t* data, int data_size, BMImage& image,
+             bool continueFrame = false);
+    int read_(uint8_t* data, int data_size, bm_image& image,
+              bool continueFrame = false);
+    int read_single_frame(uint8_t* data, int data_size, BMImage& image,
+                         bool continueFrame = false, bool need_flush = false);
+#ifdef PYTHON
+    int read(pybind11::bytes data_bytes, BMImage& image, bool continueFrame);
+    int read_(pybind11::bytes data_bytes, bm_image& image, bool continueFrame);
+    int read_single_frame(pybind11::bytes data_bytes, BMImage& image,
+                         bool continueFrame, bool need_flush);
+#endif
+   private:
+    int tpu_id_ = -1;
+    const AVCodec* dec_ = nullptr;
+    AVCodecContext* dec_ctx_ = nullptr;
+    AVCodecParserContext* parser_ = nullptr;
+    // AVPixelFormat pix_fmt_ = AV_PIX_FMT_NONE;
+    int video_stream_index_ = -1;
+    std::string decoder_name_{""};
 
-        int read_(uint8_t* data, int data_size, bm_image &image,bool continueFrame);
-        int read(uint8_t* data, int data_size, sail::BMImage &image,bool continueFrame);
-        void release();
+    AVFrame* frame_ = nullptr;
+    AVPacket pkt_ = {};
+    // int frame_idx = -1;
 
-        #ifdef PYTHON
-            int read_(pybind11::bytes data_bytes, bm_image& image, bool continueFrame);
-            int read(pybind11::bytes data_bytes, BMImage& image, bool continueFrame);
-        #endif
+    // uint8_t *rawdata_cur_ptr = nullptr;
+    // uint8_t *buf_data = nullptr;
+    std::vector<uint8_t> rawdata_cache_{};
+    int rawdata_offset_ = 0;
+    int rawdata_size_ = 0;
 
-        typedef struct {
-        uint8_t* start;
-        int      size;
-        int      pos;
-        } bs_buffer_t;
+    bool is_eof_ = false;
+    bool is_need_flush_ = false;
 
-        //控制流向
-        static int read_buffer(void *opaque, uint8_t *buf, int buf_size)
-        {
-            bs_buffer_t* bs = (bs_buffer_t*)opaque;
+    sail::Handle handle_;
+    bm_image_format_ext out_format_ = FORMAT_NV12;
 
-            int r = bs->size - bs->pos;
-            if (r <= 0) {
-                SPDLOG_INFO("EOF of AVIO.");
-                return AVERROR_EOF;
-            }
+    int reset_dec_ctx();
+    int flush_decoder();
+    bool get_one_frame(uint8_t *data, int data_size, bool continueFrame);
+    int fbc_to_bm_image(Handle& handle, AVFrame& in, bm_image& out);
+};
 
-            uint8_t* p = bs->start + bs->pos;
-            int len = (r >= buf_size) ? buf_size : r;
-            memcpy(buf, p, len);
-            //cout << "read " << len << endl;
-            bs->pos += len;
-            return len;
+Decoder_RawStream::Decoder_RawStream_CC::Decoder_RawStream_CC(
+    int tpu_id, std::string decformt) {
+    tpu_id_ = tpu_id;
+    handle_ = sail::Handle(tpu_id_);
+    if (decformt == "h264" || decformt == "h264_bm" || decformt == "H264" ||
+        decformt == "H264_BM" || decformt == "H264_bm" || decformt == "avc" ||
+        decformt == "AVC") {
+        decoder_name_ = "h264_bm";
+    } else if (decformt == "h265" || decformt == "h265_bm" ||
+               decformt == "H265" || decformt == "H265_BM" ||
+               decformt == "H265_bm" || decformt == "hevc" ||
+               decformt == "HEVC" || decformt == "HEVC_bm" ||
+               decformt == "hevc_bm") {
+        decoder_name_ = "hevc_bm";
+    } else {
+        SPDLOG_ERROR("Unsupported decoder format: {}", decformt);
+        throw std::runtime_error("Unsupported decoder format");
+    }
+    dec_ = avcodec_find_decoder_by_name(decoder_name_.c_str());
+    if (!dec_) {
+        SPDLOG_ERROR("Failed to find decoder: {}", decoder_name_);
+        throw std::runtime_error("Failed to find decoder");
+    }
+    parser_ = av_parser_init(dec_->id);
+    if (!parser_) {
+        SPDLOG_ERROR("Failed to initialize parser for decoder: {}",
+                     decoder_name_);
+        throw std::runtime_error("Failed to initialize parser");
+    }
+    int ret = 0;
+    ret = reset_dec_ctx();
+    if (ret != 0) {
+        throw std::runtime_error("Failed to init decoder context");
+    }
+    frame_ = av_frame_alloc();
+    if (!frame_) {
+        throw std::runtime_error("Failed to allocate AVFrame");
+    }
+    av_init_packet(&pkt_);
+    pkt_.data = nullptr;
+    pkt_.size = 0;
+    SPDLOG_INFO("Decoder initialized successfully");
+}
+
+int Decoder_RawStream::Decoder_RawStream_CC::reset_dec_ctx() {
+    // reset codec context
+    // will be called in ctor or at beginning of a new decoding sequence
+    spdlog::debug("Starting to reset decoder context");
+    int ret = 0;
+    if (dec_ctx_) {
+        avcodec_free_context(&dec_ctx_);
+        dec_ctx_ = nullptr;
+    }
+    // input data is ensure to be raw h264 data
+    // so AVInputFormat is not needed
+    dec_ctx_ = avcodec_alloc_context3(dec_);
+    if (!dec_ctx_) {
+        throw std::runtime_error("Failed to allocate codec context");
+    }
+    AVDictionary* opts = nullptr;
+    av_dict_set(&opts, "refcounted_frames", "1", 0);
+    av_dict_set_int(&opts, "zero_copy", 1, 0);
+    av_dict_set_int(&opts, "sophon_idx", this->tpu_id_, 0);
+    // av_dict_set_int(&opts, "output_format", 101, 18);
+    av_dict_set_int(&opts, "output_format", 101, 0);
+    // av_dict_set_int(&opts, "output_format", 0, 0);
+    av_dict_set_int(&opts, "cbcr_interleave", 1, 0);
+    av_dict_set_int(&opts, "extra_frame_buffer_num", 1, 0);
+    ret = avcodec_open2(dec_ctx_, dec_, &opts);
+    av_dict_free(&opts);
+    if (ret < 0) {
+        SPDLOG_ERROR("Failed to open codec, ret: {}", ret);
+        return ret;
+    }
+    spdlog::debug("Successfully reset decoder context for {}",
+                 decoder_name_);
+    return ret;
+}
+
+Decoder_RawStream::Decoder_RawStream_CC::~Decoder_RawStream_CC() { release(); }
+
+void Decoder_RawStream::Decoder_RawStream_CC::release() {
+    av_packet_unref(&pkt_);
+    if (frame_) {
+        av_frame_free(&frame_);
+        frame_ = nullptr;
+    }
+    if (parser_) {
+        av_parser_close(parser_);
+        parser_ = nullptr;
+    }
+    if (dec_ctx_) {
+        avcodec_free_context(&dec_ctx_);
+        dec_ctx_ = nullptr;
+    }
+}
+
+int Decoder_RawStream::Decoder_RawStream_CC::fbc_to_bm_image(Handle& handle,
+                                                             AVFrame& in,
+                                                             bm_image& out) {
+    // Convert compressed NV12 AVFrame to bm_image
+    if (in.format != AV_PIX_FMT_NV12 || in.channel_layout != 101) {
+        SPDLOG_ERROR(
+            "Unsupported AVFrame format: pixel format {}, channel_layout {}",
+            av_get_pix_fmt_name(static_cast<AVPixelFormat>(in.format)), in.channel_layout);
+        return -1;
+    }
+    int ret = BM_SUCCESS;
+    bm_image fbc_bmimg;
+    int fbc_height = dec_ctx_->coded_height;
+    int fbc_width = dec_ctx_->coded_width;
+    ret = bm_image_create(handle_.data(), fbc_height, fbc_width,
+                          FORMAT_COMPRESSED, DATA_TYPE_EXT_1N_BYTE, &fbc_bmimg);
+    using ull = unsigned long long;
+    bm_device_mem_t fbc_addr[4];
+    ull device_addr[4] = {0};
+    int plane_nbytes[4] = {0};
+    device_addr[0] = static_cast<ull>(reinterpret_cast<uintptr_t>(in.data[6]));
+    device_addr[1] = static_cast<ull>(reinterpret_cast<uintptr_t>(in.data[4]));
+    device_addr[2] = static_cast<ull>(reinterpret_cast<uintptr_t>(in.data[7]));
+    device_addr[3] = static_cast<ull>(reinterpret_cast<uintptr_t>(in.data[5]));
+    plane_nbytes[0] = in.height * in.linesize[4];
+    plane_nbytes[1] = static_cast<int>(in.height * in.linesize[5] / 2);
+    plane_nbytes[2] = in.linesize[6];
+    plane_nbytes[3] = in.linesize[7];
+    fbc_addr[0] = bm_mem_from_device(device_addr[0], plane_nbytes[0]);
+    fbc_addr[1] = bm_mem_from_device(device_addr[1], plane_nbytes[1]);
+    fbc_addr[2] = bm_mem_from_device(device_addr[2], plane_nbytes[2]);
+    fbc_addr[3] = bm_mem_from_device(device_addr[3], plane_nbytes[3]);
+    bm_image_attach(fbc_bmimg, fbc_addr);
+    if (ret != BM_SUCCESS) {
+        SPDLOG_ERROR("Failed to attach device memory to bm_image, ret: {}",
+                     ret);
+        bm_image_destroy(fbc_bmimg);
+        return ret;
+    }
+    if (out.image_private == nullptr) {
+        ret = bm_image_create(handle_.data(), in.height, in.width, out_format_,
+                              DATA_TYPE_EXT_1N_BYTE, &out);
+        if (ret != BM_SUCCESS) {
+            SPDLOG_ERROR("Failed to create bm_image, ret: {}", ret);
+            bm_image_destroy(fbc_bmimg);
+            return ret;
         }
+    }
+    if (!bm_image_is_attached(out)) {
+        unsigned int chip_id = -1;
+        ret = bm_get_chipid(handle_.data(), &chip_id);
+        if (ret != BM_SUCCESS) {
+            SPDLOG_ERROR("Failed to get chip ID, ret: {}", ret);
+            bm_image_destroy(fbc_bmimg);
+            return ret;
+        }
+        int heap_mask = chip_id == 0x1686A200 ? 2 : 6;
+        ret = bm_image_alloc_dev_mem_heap_mask(out, heap_mask);
+        if (ret != BM_SUCCESS) {
+            SPDLOG_ERROR(
+                "Failed to allocate device memory for bm_image, ret: {}", ret);
+            bm_image_destroy(fbc_bmimg);
+            return ret;
+        }
+    }
+    bmcv_rect_t rect = {0, 0, in.width, in.height};
+    ret = bmcv_image_vpp_convert(handle_.data(), 1, fbc_bmimg, &out, &rect);
+    if (ret != BM_SUCCESS) {
+        SPDLOG_ERROR(
+            "Failed to convert FBC bm_image to output bm_image, ret: {}", ret);
+        bm_image_destroy(fbc_bmimg);
+        return ret;
+    }
+    return 0;
+}
 
-    private:
-    
-    AVFormatContext *pFormatCtx = nullptr;
-    AVCodecContext  *dec_ctx = nullptr;
-    AVFrame         *pFrame = nullptr;
-    AVPacket        *pkt;
-    AVDictionary    *dict = nullptr;
-    AVIOContext     *avio_ctx = nullptr;
-    AVCodec         *pCodec = nullptr;
-    AVInputFormat   *iformat = nullptr;
+int Decoder_RawStream::Decoder_RawStream_CC::flush_decoder() {
+    // Flush decoder implementation
+    int ret = 0;
+    av_frame_unref(frame_);
+    ret = avcodec_send_packet(dec_ctx_, NULL);
+    if (ret < 0) {
+        spdlog::debug(
+            "Error sending a packet for flushing, maybe no data left: {}",
+            av_err2str(ret));
+        is_need_flush_ = false;
+        return -1;
+    }
+    ret = avcodec_receive_frame(dec_ctx_, frame_);
+    if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF || ret < 0) {
+        is_need_flush_ = false;
+        spdlog::debug("All cached frames in decoder are flushed: {}", av_err2str(ret));
+        return -1;
+    }
+    return 0;
+}
 
-    int got_picture;
-    int ret;
-    sail::Handle handle;
-
-    uint8_t* bs_buffer = nullptr;
-
-    bs_buffer_t bs_obj = {0, 0, 0};
-
-    int      aviobuf_size = 32*1024; // 32K
-    uint8_t *aviobuffer = nullptr;
-
-    // Select the correct decoder based on the input format
-    const char* iformat_name;
-    const char* decoder_input;    
-
-    };
-
-    Decoder_RawStream::Decoder_RawStream(
-            int tpu_id,
-            string  decformt)
-            : _impl(new Decoder_RawStream_CC(tpu_id,decformt)){
+bool Decoder_RawStream::Decoder_RawStream_CC::get_one_frame(
+    uint8_t *data, int data_size, bool continueFrame) {
+    bool is_got_frame = false;
+    if (data == nullptr || data_size <= 0) {
+        SPDLOG_ERROR("Invalid data or data size");
+        return false;
     }
 
-    Decoder_RawStream::~Decoder_RawStream() {
-        delete _impl;
-    }
-
-    Decoder_RawStream::Decoder_RawStream_CC::~Decoder_RawStream_CC() {
-        release();
-    }
-
-    void Decoder_RawStream::Decoder_RawStream_CC::release() {
-        if (pFrame) {
-            av_frame_free(&pFrame);
-            pFrame = nullptr; 
+    if (!continueFrame) {
+        if (parser_) {
+            av_parser_close(parser_);
+            parser_ = nullptr;
         }
-        
-        if (pkt) {
-            av_packet_free(&pkt); // 释放 AVPacket
-            pkt = nullptr;
+        parser_ = av_parser_init(dec_->id);
+        if (!parser_) {
+            SPDLOG_ERROR("Failed to initialize parser");
+            return false;
         }
-
-        if (pFormatCtx) {
-            avformat_close_input(&pFormatCtx); // 关闭输入流，如果 pFormatCtx 非空
-            avformat_free_context(pFormatCtx); // 释放格式上下文
-            pFormatCtx = nullptr; // 确保指针设置为 nullptr 避免野指针
-        }
-
-        if (dec_ctx) {
-            avcodec_close(dec_ctx);
-            dec_ctx = nullptr; 
-        }
-        if (dict) {
-            av_dict_free(&dict);
-            dict = nullptr; 
-        }
-
-        if (avio_ctx) {
-            av_freep(&avio_ctx->buffer); // 释放 AVIO 上下文的缓冲区
-            av_freep(&avio_ctx); // 释放 AVIO 上下文本身
-            avio_ctx = nullptr;
+        rawdata_offset_ = 0;
+        rawdata_size_ = 0;
+        is_need_flush_ = false;
+        is_eof_ = false;
+        int ret = reset_dec_ctx();
+        if (ret != 0) {
+            SPDLOG_ERROR("Failed to reset decoder context: {}", ret);
+            return false;
         }
     }
 
-    void Decoder_RawStream::release() {
-        return _impl->release();
+    if (rawdata_size_ != data_size) {
+        rawdata_size_ = data_size;
+        // padding 64 bytes for read safety
+        rawdata_cache_.resize(data_size + AV_INPUT_BUFFER_PADDING_SIZE);
+        spdlog::trace("before memset");
+        std::memset(rawdata_cache_.data() + data_size, 0,
+                    AV_INPUT_BUFFER_PADDING_SIZE);
+        spdlog::trace("after memset, before memcpy");
+        std::memcpy(rawdata_cache_.data(), data, data_size);
+        spdlog::trace("after memcpy");
     }
-    int Decoder_RawStream::read_(uint8_t* data, int data_size, bm_image &image, bool continueFrame){
-        return _impl->read_(data, data_size, image, continueFrame);
+
+    int ret = 0;
+    if (is_eof_ && !is_need_flush_) {
+        SPDLOG_ERROR("EOF reached, no more data to read");
+        return false;
     }
-
-    int Decoder_RawStream::read(uint8_t* data, int data_size, sail::BMImage &image,bool continueFrame){
-        return _impl->read(data, data_size, image, continueFrame);
-    }
-
-    Decoder_RawStream::Decoder_RawStream_CC::Decoder_RawStream_CC(int tpu_id,string  decformt){
-        
-        handle=sail::Handle(tpu_id);
-        if (decformt == "h264") {
-            // If the input format is h264, set the format name and decoder input accordingly
-            iformat_name = "h264";
-            decoder_input = "h264_bm";
-        } else if (decformt == "h265") {
-            // If the input format is h265, set the format name and decoder input accordingly
-            iformat_name = "hevc";
-            decoder_input = "hevc_bm";
-        } else {
-            // If the input format is neither h264 nor h265, throw an exception
-            throw std::invalid_argument("Invalid decoder_input");
+    while (!is_need_flush_) {
+        int remaining_size = data_size - rawdata_offset_;
+        if (remaining_size <= 0) {
+            is_eof_ = true;
+            is_need_flush_ = true;
+            spdlog::trace("No more data to read");
+        }
+        av_packet_unref(&pkt_);
+        int len =
+            av_parser_parse2(parser_, dec_ctx_, &pkt_.data, &pkt_.size,
+                             rawdata_cache_.data() + rawdata_offset_,
+                             remaining_size, AV_NOPTS_VALUE, AV_NOPTS_VALUE, 0);
+        spdlog::debug("av_parser_parse2: remaining_size={}, len={}, pkt.size={}",
+                     remaining_size, len, pkt_.size);
+        if (len < 0) {
+            SPDLOG_ERROR("Error while parsing data: {}", av_err2str(len));
+            return false;
         }
 
-        /* h264/h265 */
-        iformat = av_find_input_format(iformat_name);
-        if (iformat == NULL) {
-            throw std::runtime_error("Failed to find input format."); 
+        rawdata_offset_ += len;
+        if (pkt_.size == 0 || pkt_.data == nullptr) {
+            continue;
         }
-
-        pCodec = avcodec_find_decoder_by_name(decoder_input);
-        if (pCodec == NULL) {
-            throw std::runtime_error("Codec not found."); 
+        if (parser_->key_frame == 1 ||
+            (parser_->key_frame == -1 &&
+             parser_->pict_type == AV_PICTURE_TYPE_I)) {
+            pkt_.flags |= AV_PKT_FLAG_KEY;
         }
-
-        dec_ctx = avcodec_alloc_context3(pCodec);
-        if (dec_ctx == NULL) {
-            throw std::bad_alloc(); 
+        if (frame_ == nullptr) {
+            SPDLOG_ERROR("Internal AVFrame is not initialized, cannot decode!");
+            return false;
         }
-
-        ret = avcodec_open2(dec_ctx, pCodec, &dict);
+        av_frame_unref(frame_);
+        spdlog::trace("before avcodec_send_packet");
+        ret = avcodec_send_packet(dec_ctx_, &pkt_);
         if (ret < 0) {
-            throw std::runtime_error("Could not open codec.");
+            SPDLOG_ERROR("Error sending packet to decoder: {}",
+                         av_err2str(ret));
+            return false;
+        }
+        spdlog::trace("before avcodec_receive_frame");
+        while (true) {
+            ret = avcodec_receive_frame(dec_ctx_, frame_);
+            if (ret == AVERROR(EAGAIN)) {
+                spdlog::debug("EAGAIN, need more data to decode");
+                break;
+            } else if (ret == AVERROR_EOF) {
+                spdlog::debug("EOF, no more data to decode");
+                is_need_flush_ = true;
+                break;
+            } else if (ret < 0) {
+                SPDLOG_ERROR("Error receiving frame from decoder: {}",
+                             av_err2str(ret));
+                return false;
+            }
+            if (frame_->width <= 0 || frame_->height <= 0) {
+                SPDLOG_ERROR("Invalid frame dimensions: {}x{}", frame_->width,
+                             frame_->height);
+                return false;
+            }
+
+            is_got_frame = true;
+            return is_got_frame;
+        }
+    }
+    if (!is_got_frame && is_need_flush_) {
+        spdlog::trace("before flush_decoder");
+        ret = flush_decoder();
+        spdlog::trace("after flush_decoder");
+        if (ret != 0) {
+            SPDLOG_ERROR("Error flushing decoder: {}", ret);
+            return false;
+        }
+        is_got_frame = true;
+    }
+    return is_got_frame;
+}
+
+int Decoder_RawStream::Decoder_RawStream_CC::read_(uint8_t* data, int data_size,
+                                                   bm_image& image,
+                                                   bool continueFrame) {
+    bool is_got_frame = get_one_frame(data, data_size, continueFrame);
+    if (!is_got_frame) {
+        SPDLOG_ERROR("Failed to get one frame");
+        return -1;
+    }
+    int ret = fbc_to_bm_image(handle_, *frame_, image);
+    if (ret != 0) {
+        SPDLOG_ERROR("Failed to convert AVFrame to bm_image: {}", ret);
+        return ret;
+    }
+    return ret;
+}
+
+int Decoder_RawStream::Decoder_RawStream_CC::read(uint8_t* data, int data_size,
+                                                  sail::BMImage& image,
+                                                  bool continueFrame) {
+    bool is_got_frame = get_one_frame(data, data_size, continueFrame);
+    if (!is_got_frame) {
+        SPDLOG_ERROR("Failed to get one frame");
+        return -1;
+    }
+    spdlog::trace("before initialize sail::BMImage");
+    image = sail::BMImage(handle_, frame_->height, frame_->width, out_format_,
+                          DATA_TYPE_EXT_1N_BYTE);
+    spdlog::trace("after initialize sail::BMImage");
+    spdlog::trace("before fbc_to_bm_image");
+    int ret = fbc_to_bm_image(handle_, *frame_, image.data());
+    spdlog::trace("after fbc_to_bm_image");
+    if (ret != 0) {
+        SPDLOG_ERROR("Failed to convert AVFrame to bm_image: {}", ret);
+        return ret;
+    }
+    return ret;
+}
+
+int Decoder_RawStream::Decoder_RawStream_CC::read_single_frame(uint8_t* data, int data_size,
+                                                  BMImage& image,
+                                                  bool continueFrame, bool need_flush) {
+    int ret = 0;
+    if (!continueFrame) {
+        if (parser_) {
+            av_parser_close(parser_);
+            parser_ = nullptr;
+        }
+        parser_ = av_parser_init(dec_->id);
+        if (!parser_) {
+            SPDLOG_ERROR("Failed to initialize parser");
+            return -1;
+        }
+        ret = reset_dec_ctx();
+        if (ret != 0) {
+            SPDLOG_ERROR("Failed to reset decoder context: {}", ret);
+            return ret;
+        }
+    }
+    if (frame_ == nullptr) {
+        SPDLOG_ERROR("Internal AVFrame is not initialized, cannot decode!");
+        return -1;
+    }    
+    if (!need_flush) {
+        av_packet_unref(&pkt_);
+        pkt_.data = data;
+        pkt_.size = data_size;
+        // memcpy(pkt_.data, data, data_size);
+        spdlog::debug("av_packet: data_size={}, pkt.size={}",
+                        data_size, pkt_.size);
+
+        if (pkt_.size == 0 || pkt_.data == nullptr) {
+            SPDLOG_INFO("No packet data to decode");
+            return 1;
+        }
+        if (parser_->key_frame == 1 ||
+            (parser_->key_frame == -1 &&
+                parser_->pict_type == AV_PICTURE_TYPE_I)) {
+            pkt_.flags |= AV_PKT_FLAG_KEY;
         }
 
-        pFormatCtx = avformat_alloc_context();
-        if (pFormatCtx == nullptr) {
-            throw std::bad_alloc(); 
+        av_frame_unref(frame_);
+        ret = avcodec_send_packet(dec_ctx_, &pkt_);
+        if (ret < 0) {
+            SPDLOG_ERROR("Error sending packet to decoder: {}",
+                        av_err2str(ret));
+            return ret;
         }
-
-        pFrame = av_frame_alloc();
-        if (pFrame == nullptr) {
-            throw std::bad_alloc(); 
+        ret = avcodec_receive_frame(dec_ctx_, frame_);
+        if (ret == AVERROR(EAGAIN)) {
+            SPDLOG_INFO("EAGAIN, need more data to decode");
+            return 1;
+        } else if (ret == AVERROR_EOF) {
+            SPDLOG_ERROR("EOF, no more data to decode");
+            return 2;
+        } else if (ret < 0) {
+            SPDLOG_ERROR("Error receiving frame from decoder: {}",
+                        av_err2str(ret));
+            return ret;
         }
-
-        pkt = av_packet_alloc();
-        if (pkt == nullptr) {
-            throw std::bad_alloc(); 
+    } else {
+        ret = flush_decoder();
+        if (ret != 0) {
+            SPDLOG_ERROR("Error flushing decoder: {}", ret);
+            return ret;
         }
-
     }
 
-
-     // Function to read from the decoder
-    int  Decoder_RawStream::Decoder_RawStream_CC::read_(uint8_t* data, int data_size, bm_image &image, bool continueFrame) {
-
-        bs_buffer = data;
-        if (bs_buffer == nullptr) {
-            throw std::runtime_error("Invalid h264 data");
-        }
-        
-        bs_obj.start = bs_buffer;
-        bs_obj.size  = data_size;
-
-        //读取一帧
-        if (continueFrame==false)
-        {
-            bs_obj.pos =0;
-        }
-            
-        if (bs_obj.pos == 0) {
-            // 每次从头开始时关闭并重新打开流
-            if (avio_ctx) {
-                avformat_close_input(&pFormatCtx); // 关闭输入流，同时会释放 pFormatCtx->pb
-                av_freep(&avio_ctx->buffer); // 释放 AVIO 上下文的缓冲区
-                av_freep(&avio_ctx); // 释放 AVIO 上下文本身
-                avio_ctx = nullptr;
-                avformat_free_context(pFormatCtx);
-            }
-
-            // 创建新的 AVIO 上下文
-            avio_ctx = avio_alloc_context(aviobuffer, aviobuf_size, 0, (void*)(&bs_obj), read_buffer, NULL, NULL);
-            if (!avio_ctx) {
-                av_free(aviobuffer);
-                throw std::runtime_error("avio_alloc_context failed");
-            }
-
-            // 确保 AVFormatContext 已正确分配
-            if (!pFormatCtx) {
-                pFormatCtx = avformat_alloc_context();
-                if (!pFormatCtx) {
-                    throw std::runtime_error("Failed to allocate AVFormatContext");
-                }
-            }
-            pFormatCtx->pb = avio_ctx;
-
-            // 打开输入流
-            if (avformat_open_input(&pFormatCtx, NULL, iformat, NULL) < 0) {
-                throw std::runtime_error("Couldn't open input stream.");
-            }
-        }
-        
-        av_packet_unref(pkt);
-        if (av_read_frame(pFormatCtx, pkt) >= 0) {
-            while (true)
-            {
-                avcodec_decode_video2(dec_ctx, pFrame, &got_picture, pkt);
-                if(got_picture==0){
-                    continue;   
-                }else if(got_picture==1){
-                    ret=avframe_to_bm_image(handle,*pFrame, image);
-                    if (BM_SUCCESS!=ret)
-                    {   
-                        SPDLOG_ERROR("avframe_to_bm_image err={}", ret);
-                        return ret;
-                    }
-                    return 0;
-                }else{
-                    SPDLOG_ERROR("Decode Error");
-                    return ret;
-                }
-            }  
-        }
-        SPDLOG_INFO("Decode End.");
-        return -1; // Or return other values as needed
+    if (frame_->width <= 0 || frame_->height <= 0) {
+        SPDLOG_ERROR("Invalid frame dimensions: {}x{}", frame_->width,
+                    frame_->height);
+        return -1;
     }
 
-    // Function to read from the decoder
-    int  Decoder_RawStream::Decoder_RawStream_CC::read(uint8_t* data, int data_size, sail::BMImage &image,bool continueFrame) {
-
-        bs_buffer = data;
-        if (bs_buffer == nullptr) {
-            throw std::invalid_argument("Invalid h264 data");
-        }
-        
-        bs_obj.start = bs_buffer;
-        bs_obj.size  = data_size;
-
-        //读取一帧
-        if (continueFrame==false)
-        {
-            bs_obj.pos =0;
-        }
-            
-        if (bs_obj.pos == 0) {
-            // 每次从头开始时关闭并重新打开流
-            if (avio_ctx) {
-                avformat_close_input(&pFormatCtx); // 关闭输入流，同时会释放 pFormatCtx->pb
-                av_freep(&avio_ctx->buffer); // 释放 AVIO 上下文的缓冲区
-                av_freep(&avio_ctx); // 释放 AVIO 上下文本身
-                avio_ctx = nullptr;
-                avformat_free_context(pFormatCtx);
-            }
-
-            // 创建新的 AVIO 上下文
-            avio_ctx = avio_alloc_context(aviobuffer, aviobuf_size, 0, (void*)(&bs_obj), read_buffer, NULL, NULL);
-            if (!avio_ctx) {
-                av_free(aviobuffer);
-                throw std::runtime_error("avio_alloc_context failed");
-            }
-
-            // 确保 AVFormatContext 已正确分配
-            if (!pFormatCtx) {
-                pFormatCtx = avformat_alloc_context();
-                if (!pFormatCtx) {
-                    throw std::runtime_error("Failed to allocate AVFormatContext");
-                }
-            }
-            pFormatCtx->pb = avio_ctx;
-
-            // 打开输入流
-            if (avformat_open_input(&pFormatCtx, NULL, iformat, NULL) < 0) {
-                throw std::runtime_error("Couldn't open input stream.");
-            }
-        }
-        av_packet_unref(pkt);
-        if (av_read_frame(pFormatCtx, pkt) >= 0) {
-            while (true)
-            {
-                ret = avcodec_decode_video2(dec_ctx, pFrame, &got_picture, pkt);
-                if (ret == AVERROR_EXTERNAL) {
-                    throw std::runtime_error("VPU is hung. VPU requires a reset!");
-                }
-                if(got_picture==0){
-                    continue;   
-                }else if(got_picture==1){
-                    ret=avframe_to_bm_image(handle,*pFrame, image.data());
-                    if (BM_SUCCESS!=ret)
-                    {
-                        SPDLOG_ERROR("avframe_to_bm_image err={}", ret);
-                        return ret;
-                    }
-                    return 0;
-                }else{
-                    SPDLOG_ERROR("Decode Error");
-                    return ret;
-                }
-            }
-        }
-        SPDLOG_INFO("Decode End.");
-        return -1; // Or return other values as needed
+    image = sail::BMImage(handle_, frame_->height, frame_->width, out_format_,
+                          DATA_TYPE_EXT_1N_BYTE);
+    ret = fbc_to_bm_image(handle_, *frame_, image.data());
+    if (ret != 0) {
+        SPDLOG_ERROR("Failed to convert AVFrame to bm_image: {}", ret);
+        return ret;
     }
+    return ret;
+}
 
+#ifdef PYTHON
+int Decoder_RawStream::Decoder_RawStream_CC::read(pybind11::bytes data_bytes,
+                                                  BMImage& image,
+                                                  bool continueFrame) {
+    pybind11::buffer buf = data_bytes;
+    pybind11::buffer_info info = buf.request();
+    uint8_t* data = static_cast<uint8_t*>(info.ptr);
+    int data_size = info.size * info.itemsize;
+    return read(data, data_size, image, continueFrame);
+}
+
+int Decoder_RawStream::Decoder_RawStream_CC::read_(pybind11::bytes data_bytes,
+                                                   bm_image& image,
+                                                   bool continueFrame) {
+    pybind11::buffer buf = data_bytes;
+    pybind11::buffer_info info = buf.request();
+    uint8_t* data = static_cast<uint8_t*>(info.ptr);
+    int data_size = info.size * info.itemsize;
+    return read_(data, data_size, image, continueFrame);
+}
+
+int Decoder_RawStream::Decoder_RawStream_CC::read_single_frame(pybind11::bytes data_bytes,
+                                                   BMImage& image,
+                                                   bool continueFrame, bool need_flush) {
+    pybind11::buffer buf = data_bytes;
+    pybind11::buffer_info info = buf.request();
+    uint8_t* data = static_cast<uint8_t*>(info.ptr);
+    int data_size = info.size * info.itemsize;
+    return read_single_frame(data, data_size, image, continueFrame, need_flush);
+}
+#endif  // PYTHON
+
+// Decoder_RawStream
+Decoder_RawStream::Decoder_RawStream(int tpu_id, std::string decformt)
+    : _impl(new Decoder_RawStream_CC(tpu_id, decformt)) {}
+
+Decoder_RawStream::~Decoder_RawStream() { delete _impl; }
+
+void Decoder_RawStream::release() { return _impl->release(); }
+
+int Decoder_RawStream::read_(uint8_t* data, int data_size, bm_image& image,
+                             bool continueFrame) {
+    return _impl->read_(data, data_size, image, continueFrame);
+}
+
+int Decoder_RawStream::read(uint8_t* data, int data_size, sail::BMImage& image,
+                            bool continueFrame) {
+    return _impl->read(data, data_size, image, continueFrame);
+}
+
+int Decoder_RawStream::read_single_frame(uint8_t* data, int data_size,
+                                         BMImage& image,
+                                         bool continueFrame, bool need_flush) {
+    return _impl->read_single_frame(data, data_size, image, continueFrame, need_flush);
+}
+
+#ifdef PYTHON
+int Decoder_RawStream::read_(pybind11::bytes data_bytes, bm_image& image,
+                             bool continueFrame) {
+    return _impl->read_(data_bytes, image, continueFrame);
+}
+
+int Decoder_RawStream::read(pybind11::bytes data_bytes, BMImage& image,
+                            bool continueFrame) {
+    return _impl->read(data_bytes, image, continueFrame);
+}
+
+int Decoder_RawStream::read_single_frame(pybind11::bytes data_bytes,
+                                         BMImage& image,
+                                         bool continueFrame, bool need_flush) {
+    return _impl->read_single_frame(data_bytes, image, continueFrame, need_flush);
+}
+#endif  // PYTHON
 
 #endif //USE_FFMPEG
 
@@ -2056,6 +2297,7 @@ namespace sail {
         int align();
         int check_align() const;
         int unalign();
+        int unalign(bm_image &out_img) const;
         int check_contiguous_memory() const;
 #ifdef PYTHON
         pybind11::array asnumpy() const;
@@ -2514,7 +2756,7 @@ namespace sail {
                 }
                 ret = bmcv_width_align(bmHandle, img_, temp_img);
                 if (BM_SUCCESS != ret) {
-                    SPDLOG_ERROR("align failed, bm_image_alloc_contiguous_mem_heap_mask() ret {}", ret);
+                    SPDLOG_ERROR("align failed, bmcv_width_align() ret {}", ret);
                     return ret;
                 }
                 destroy();
@@ -2605,15 +2847,25 @@ namespace sail {
 
         return if_aligned;
     }
+
     int BMImage::BMImage_CC::unalign() {
         int ret = check_align();
-            if (ret != 1) {
+        if (ret != 1) {
             return ret;
         }
-        // if (!need_to_free_) {
-            //     SPDLOG_ERROR("bm_image is not attach memory,can't align!");
-            //     exit(1);
-        // }
+        bm_image temp_img;
+        ret = unalign(temp_img);
+        if (BM_SUCCESS != ret) {
+            SPDLOG_ERROR("bmimg unalign err={}", ret);
+            return ret;
+        }
+        destroy();
+        img_ = temp_img;
+        need_to_free_=true;
+        return ret;
+    }
+
+    int BMImage::BMImage_CC::unalign(bm_image &out_img) const {
         int data_size = 1;
         switch (img_.data_type) {
             case DATA_TYPE_EXT_FLOAT32:
@@ -2669,10 +2921,6 @@ namespace sail {
                     default_stride[0] = w * data_size;
                     break;
                 }
-                // case FORMAT_COMPRESSED: {
-                //     image_private->plane_num = 4;
-                //     break;
-                // }
                 case FORMAT_BGR_PACKED:
                 case FORMAT_RGB_PACKED: {
                     default_stride[0] = w * 3 * data_size;
@@ -2694,40 +2942,37 @@ namespace sail {
         }
 
         {
-            bm_handle_t bmHandle = bm_image_get_handle(&img_);
+            bm_handle_t bmHandle = bm_image_get_handle(const_cast<bm_image *>(&img_));
             if (!bmHandle) {
                 SPDLOG_INFO("BMImage is empty, not in any device!");
                 return -1;
             }
 
             int ret=-1;
-            bm_image temp_img;
             ret=bm_image_create(bmHandle, h, w, img_.image_format, img_.data_type,
-                            &temp_img, default_stride);
+                            &out_img, default_stride);
             if (ret != BM_SUCCESS){
                 SPDLOG_ERROR("bm_image_create err={}", ret);
                 return ret;
             }
 #if (BMCV_VERSION_MAJOR == 2) && !defined(BMCV_VERSION_MINOR)
-            ret = bm_image_alloc_contiguous_mem_heap_mask(1, &temp_img, 2);
+            ret = bm_image_alloc_contiguous_mem_heap_mask(1, &out_img, 2);
 #else
-            ret = bm_image_alloc_contiguous_mem_heap_mask(1, &temp_img, 6);
+            ret = bm_image_alloc_contiguous_mem_heap_mask(1, &out_img, 6);
 #endif
             if (BM_SUCCESS != ret) {
                 SPDLOG_ERROR("bm_image_alloc_contiguous_mem_heap_mask err={}", ret);
                 return ret;
             }
-            ret = bmcv_width_align(bmHandle, img_, temp_img);
+            ret = bmcv_width_align(bmHandle, img_, out_img);
             if (BM_SUCCESS != ret) {
                 SPDLOG_ERROR("bmcv_width_align err={}", ret);
                 return ret;
             }
-            destroy();
-            img_ = temp_img;
-            need_to_free_=true;
             return ret;
         }
     }
+
     int BMImage::BMImage_CC::check_contiguous_memory() const {
         if (!is_created()) {
             SPDLOG_ERROR("bm_image is not created!");
@@ -2822,7 +3067,7 @@ namespace sail {
     }
 
 #ifdef PYTHON  // asnumpy Python
-    pybind11::array BMImage::BMImage_CC::asnumpy() const {
+    pybind11::array BMImage::BMImage_CC::asnumpy() const{
         if (is_created() == false) {
             SPDLOG_ERROR("This BMImage is empty!");
             throw SailBMImageError("Empty BMImage");
@@ -2830,7 +3075,6 @@ namespace sail {
         int plane_num = bm_image_get_plane_num(img_);
         std::vector<bm_device_mem_t> mem(plane_num);
         int ret = 0;
-        ret = bm_image_get_device_mem(img_, mem.data());
         std::vector<int> bytesizes(plane_num);
         ret = bm_image_get_byte_size(img_, bytesizes.data());
         int total_bytesize = 0;
@@ -2849,11 +3093,75 @@ namespace sail {
                 break;
             case DATA_TYPE_EXT_1N_BYTE_SIGNED:
                 out_dtype = pybind11::dtype("int8");
+                break;
             default:
                 SPDLOG_ERROR("This BMImage's data type {} is not supported!",
                              img_.data_type);
                 throw SailBMImageError("Not Support");
         }
+        // ajust shape
+        std::vector<int> out_shape;
+        int out_chn = 3;
+        int out_h = img_.height;
+        int out_w = img_.width;
+        int mem_w = static_cast<int>(out_numel) / out_h / out_chn;
+        switch (img_.image_format) {
+            case FORMAT_BGR_PACKED:
+            case FORMAT_RGB_PACKED:
+                // RGB/BGR is 3 channel
+                out_shape = {out_h, out_w, out_chn};
+                break;
+            case FORMAT_ARGB_PACKED:
+            case FORMAT_ABGR_PACKED:
+                // ARGB/ABGR is 4 channel
+                out_chn = 4;
+                mem_w = static_cast<int>(out_numel) / out_h / out_chn;
+                out_shape = {out_h, out_w, out_chn};
+                break;
+            case FORMAT_BGR_PLANAR:
+            case FORMAT_RGB_PLANAR:
+            case FORMAT_YUV444P:
+                out_shape = {out_chn, out_h, out_w};
+                break;
+            case FORMAT_GRAY:
+                out_chn = 1;
+                mem_w = static_cast<int>(out_numel) / out_h / out_chn;
+                out_shape = {out_chn, out_h, out_w};
+                break;
+            default:
+                break;
+        }
+
+        if (out_w != mem_w) {
+            bm_image temp_img;
+            ret = unalign(temp_img);
+            if (ret != BM_SUCCESS) {
+                SPDLOG_ERROR("unalign failed with error code {}", ret);
+                throw SailBMImageError("unalign failed");
+            }
+            if (temp_img.image_private == nullptr) {
+                SPDLOG_ERROR("unalign failed, get empty bm_image");
+                throw SailBMImageError("unalign failed");
+            }
+            ret = bm_image_get_device_mem(temp_img, mem.data());
+            if (ret != BM_SUCCESS) {
+                SPDLOG_ERROR("bm_image_get_device_mem failed with error code {}", ret);
+                throw SailBMImageError("bm_image_get_device_mem failed");
+            }
+            ret = bm_image_get_byte_size(temp_img, bytesizes.data());
+            if (ret != BM_SUCCESS) {
+                SPDLOG_ERROR("bm_image_get_byte_size failed with error code {}", ret);
+                throw SailBMImageError("bm_image_get_byte_size failed");
+            }
+            total_bytesize = 0;
+            for (int i = 0; i < plane_num; ++i) {
+                total_bytesize += bytesizes.at(i);
+            }
+            out_numel = total_bytesize;
+        } else {
+            ret = bm_image_get_device_mem(img_, mem.data());
+        }
+
         pybind11::array out_array(out_dtype, out_numel);
         void *ptr = out_array.request().ptr;
         pybind11::gil_scoped_release release;
@@ -2869,37 +3177,6 @@ namespace sail {
                 throw SailBMImageError("Empty BMImage");
             }
             dst_offset += bytesizes[i];
-        }
-        // ajust shape
-        std::vector<int> out_shape;
-        int out_chn = 3;
-        int out_h = img_.height;
-        int out_w = static_cast<int>(out_numel) / out_h / out_chn;
-        switch (img_.image_format) {
-            case FORMAT_BGR_PACKED:
-            case FORMAT_RGB_PACKED:
-                // RGB/BGR is 3 channel
-                out_shape = {out_h, out_w, out_chn};
-                break;
-            case FORMAT_ARGB_PACKED:
-            case FORMAT_ABGR_PACKED:
-                // ARGB/ABGR is 4 channel
-                out_chn = 4;
-                out_w = static_cast<int>(out_numel) / out_h / out_chn;
-                out_shape = {out_h, out_w, out_chn};
-                break;
-            case FORMAT_BGR_PLANAR:
-            case FORMAT_RGB_PLANAR:
-            case FORMAT_YUV444P:
-                out_shape = {out_chn, out_h, out_w};
-                break;
-            case FORMAT_GRAY:
-                out_chn = 1;
-                out_w = static_cast<int>(out_numel) / out_h / out_chn;
-                out_shape = {out_chn, out_h, out_w};
-                break;
-            default:
-                break;
         }
         pybind11::gil_scoped_acquire gil;
         if (!out_shape.empty()) {
@@ -3650,6 +3927,8 @@ namespace sail {
             tensor.reset({1, 3, h, w}, dtype);
         }else if(img.data().image_format == FORMAT_RGB_PACKED || img.data().image_format == FORMAT_BGR_PACKED){
             tensor.reset({1, h, w, 3}, dtype);
+        }else if(img.data().image_format == FORMAT_GRAY){
+            tensor.reset({1, 1, h, w}, dtype);
         }else{
             SPDLOG_ERROR("Image format not supported, Please convert it first.");
             throw SailBMImageError("not supported");
@@ -3730,7 +4009,7 @@ namespace sail {
     void Bmcv::tensor_to_bm_image(Tensor &tensor, BMImage &img, bm_image_format_ext format) {
         auto shape = tensor.shape();
         int h, w;
-        if(format == FORMAT_RGB_PLANAR || format == FORMAT_BGR_PLANAR) { //nchw
+        if(format == FORMAT_RGB_PLANAR || format == FORMAT_BGR_PLANAR || format == FORMAT_GRAY) { //nchw
             h = shape[2];
             w = shape[3];
         } else if (format == FORMAT_RGB_PACKED ||format == FORMAT_BGR_PACKED) { //nhwc
@@ -3856,10 +4135,9 @@ namespace sail {
             int dtype_size = bm_image_data_type_size(input.dtype());
             
             bm_image_format_ext temp_format = input.format();
-            if(temp_format != FORMAT_BGR_PLANAR && temp_format != FORMAT_RGB_PLANAR){
+            if(temp_format != FORMAT_BGR_PLANAR && temp_format != FORMAT_RGB_PLANAR && temp_format != FORMAT_GRAY){
                 temp_format = FORMAT_BGR_PLANAR;
             }
-
             int stride = FFALIGN(resize_w * dtype_size, SAIL_ALIGN); // ceiling to 64 * N
             output.create(
                     handle_,
@@ -4081,7 +4359,7 @@ namespace sail {
             /* vpp limitation: 64-aligned */
             int dtype_size = bm_image_data_type_size(input.dtype());
             bm_image_format_ext temp_format = input.format();
-            if(temp_format != FORMAT_BGR_PLANAR && temp_format != FORMAT_RGB_PLANAR){
+            if(temp_format != FORMAT_BGR_PLANAR && temp_format != FORMAT_RGB_PLANAR && temp_format != FORMAT_GRAY){
                 temp_format = FORMAT_BGR_PLANAR;
             }
             int stride = FFALIGN(resize_w * dtype_size, SAIL_ALIGN); // ceiling to 64 * N
@@ -4198,7 +4476,7 @@ namespace sail {
             /* vpp limitation: 64-aligned */
             int dtype_size = bm_image_data_type_size(input.dtype());
             bm_image_format_ext temp_format = input.format();
-            if(temp_format != FORMAT_BGR_PLANAR && temp_format != FORMAT_RGB_PLANAR){
+            if(temp_format != FORMAT_BGR_PLANAR && temp_format != FORMAT_RGB_PLANAR && temp_format != FORMAT_GRAY){
                 temp_format = FORMAT_BGR_PLANAR;
             }
             int stride = FFALIGN(resize_w * dtype_size, SAIL_ALIGN); // ceiling to 64 * N
@@ -4905,7 +5183,7 @@ namespace sail {
         top = top < input.height()-1 ? top : input.height()-1;
         right = right < input.width()-1 ? right : input.width()-1;
         bottom = bottom < input.height()-1 ? bottom : input.height()-1;
-        bmcv_rect rect = {left, top, right-left, bottom-top};
+        bmcv_rect rect = {left, top, right - left + 1, bottom - top + 1};
         int ret = bmcv_image_fill_rectangle(
                 handle_.data(),
                 input.data(),
@@ -4974,7 +5252,8 @@ namespace sail {
         float                           fontScale,
         int                             thickness
     ){
-        if(image.format() != FORMAT_GRAY &&
+        if(thickness > 0 &&
+            image.format() != FORMAT_GRAY &&
             image.format() != FORMAT_YUV420P &&
             image.format() != FORMAT_YUV422P &&
             image.format() != FORMAT_YUV444P &&
@@ -5028,7 +5307,8 @@ namespace sail {
         float                           fontScale,
         int                             thickness
     ){
-        if(image.image_format != FORMAT_GRAY &&
+        if(thickness > 0 &&
+            image.image_format != FORMAT_GRAY &&
             image.image_format != FORMAT_YUV420P &&
             image.image_format != FORMAT_YUV422P &&
             image.image_format != FORMAT_YUV444P &&
@@ -5148,49 +5428,15 @@ namespace sail {
             const std::string &filename,
             const BMImage &input
     ) {
-        int ret;
- #if defined USE_OPENCV && defined USE_BMCV
-        // bm_image_write_to_bmp(input.data(), "./imwrite.jpg");
-        cv::Mat cv_img;
-        bm_image input_image = input.data();
-        bm_image bgr_image;
-        ret = bm_image_create(handle_.data(), input_image.height, input_image.width, FORMAT_BGR_PLANAR, input_image.data_type, &bgr_image);
-        if (BM_SUCCESS != ret) {
-            SPDLOG_ERROR("imwrite error: call bm_image_create failed!");
-            return ret;
-        }
+        return imwrite_(filename, input.data());
+    }
 
-        ret = bmcv_image_storage_convert(handle_.data(), 1, &input_image, &bgr_image);
-        if (BM_SUCCESS != ret) {
-            SPDLOG_ERROR("imwrite error: call bmcv_image_storage_convert failed!");
-            return ret;
-        }
-
-        ret = cv::bmcv::toMAT((bm_image *) &bgr_image, cv_img, true);
-        if (ret != 0) {
-            SPDLOG_ERROR("cv::bmcv::toMat() err={}, filename={}", ret, filename);
-            return ret;
-        }
-
-        if (!cv::imwrite(filename, cv_img)) {
-            SPDLOG_ERROR("cv::imwrite failed");
-            bm_image_destroy(bgr_image);
-            return BM_ERR_FAILURE;
-        }
-
-        ret = bm_image_destroy(bgr_image);
-        if (BM_SUCCESS != ret) {
-            SPDLOG_ERROR("imwrite error: call bm_image_destroy failed!");
-            return ret;
-        }
-#else
-        ret = bm_image_write_to_bmp(input.data(), filename.c_str());
-        if (BM_SUCCESS != ret) {
-            SPDLOG_ERROR("bm_image_write_to_bmp() err={}", ret);
-            return ret;
-        }
-#endif
-        return BM_SUCCESS;
+    int Bmcv::imwrite(
+            const std::string &filename,
+            const BMImage &input,
+            const std::vector<int> &params
+    ) {
+        return imwrite_(filename, input.data(), params);
     }
 
     int Bmcv::imwrite(
@@ -5203,9 +5449,22 @@ namespace sail {
     int Bmcv::imwrite_(
             const std::string &filename,
             const bm_image &input
+    ) { 
+        const std::vector<int> params = {};
+        return imwrite_(filename, input, params);
+    }
+
+    int Bmcv::imwrite_(
+            const std::string &filename,
+            const bm_image &input, 
+            const std::vector<int> &params
     ) {
 #if defined USE_OPENCV && defined USE_BMCV
         // bm_image_write_to_bmp(input, "./imwrite_.jpg");
+        if ((params.size() & 1) != 0) {
+            SPDLOG_ERROR("imwrite error: params must be key-value pairs");
+            return BM_ERR_PARAM;
+        }
         int ret;
         cv::Mat cv_img;
         bm_image bgr_image;
@@ -5227,7 +5486,7 @@ namespace sail {
             return ret;
         }
 
-        if (!cv::imwrite(filename, cv_img)) {
+        if (!cv::imwrite(filename, cv_img, params)) {
             SPDLOG_ERROR("cv::imwrite failed");
             bm_image_destroy(bgr_image);
             return BM_ERR_FAILURE;
@@ -5239,6 +5498,10 @@ namespace sail {
             return ret;
         }
 #else
+        if (params.size() != 0) {
+            SPDLOG_ERROR("imwrite error: invalid params");
+            return BM_ERR_PARAM;
+        }
         ret = bm_image_write_to_bmp(input, filename.c_str());
         if (BM_SUCCESS != ret) {
             SPDLOG_ERROR("imwrite error: call bm_image_write_to_bmp failed!");
@@ -5289,12 +5552,8 @@ namespace sail {
             image_format, DATA_TYPE_EXT_1N_BYTE,
             &bm_image_result);
 
-        float scale_w = (float)padding_in.dst_crop_w/crop_w;
-        float scale_h = (float)padding_in.dst_crop_h/crop_h;
-        int temp_image_w = padding_in.dst_crop_w;
-        int temp_image_h = padding_in.dst_crop_h;
-        if(scale_w < scale_h) temp_image_h = crop_h*scale_w;
-        else temp_image_w = crop_w*scale_h;
+        int temp_image_w = static_cast<int>(padding_in.dst_crop_w);
+        int temp_image_h = static_cast<int>(padding_in.dst_crop_h);
         bm_image bm_image_temp;
         ret = bm_image_create(
             handle_.data(),
@@ -5349,7 +5608,7 @@ namespace sail {
                 bm_image_temp,
                 bm_image_result);
             if (BM_SUCCESS != ret){
-                SPDLOG_ERROR("bmcv_image_resize err={}", ret);
+                SPDLOG_ERROR("bmcv_image_copy_to err={}", ret);
                 throw SailBMImageError("bmcv api fail");
             }
         }
@@ -5699,6 +5958,12 @@ namespace sail {
         delete _impl;
     }
     #endif  // Blend is only supported on SoC
+#endif
+
+extern "C" {
+    bm_status_t bmcv_image_overlay(bm_handle_t handle, bm_image input_base_img, int overlay_num,
+                                bmcv_rect_t* overlay_info, bm_image* input_overlay_img) __attribute__((weak));
+}
 
     int Bmcv::bmcv_overlay(BMImage& image, std::vector<std::vector<int>> overlay_info, std::vector<const BMImage *> overlay_image){
         if (overlay_info.size() != overlay_image.size()){
@@ -5712,11 +5977,61 @@ namespace sail {
         for (int i = 0; i < overlay_num; ++i){
             overlay_info_bmcv.emplace_back(bmcv_rect_t{overlay_info[i][0], overlay_info[i][1], overlay_info[i][2], overlay_info[i][3]});
             auto tmp = overlay_image[i]->data();
+#if BMCV_VERSION_MAJOR > 1
             if (tmp.image_format != FORMAT_ARGB_PACKED && tmp.image_format != FORMAT_ARGB4444_PACKED && tmp.image_format != FORMAT_ARGB1555_PACKED){
                 SPDLOG_ERROR("overlay_image Format Error, unsupport format {}", tmp.image_format);
                 throw SailBMImageError("parameter error"); 
             }
+            // align to 16 (plane=1)
+            int stride = 0;
+            auto ret = bm_image_get_stride(tmp, &stride);
+            int new_stride = FFALIGN(stride, 16);
+            if (new_stride != stride){
+                bm_image img_align;
+                ret = bm_image_create(handle_.data(), tmp.height, tmp.width, tmp.image_format, tmp.data_type, &img_align, &new_stride);
+                if (BM_SUCCESS != ret) {
+                    SPDLOG_ERROR("overlay error: create aligned image failed!");
+                    return ret;
+                }
+#if (BMCV_VERSION_MAJOR == 2) && !defined(BMCV_VERSION_MINOR)
+                ret = bm_image_alloc_contiguous_mem_heap_mask(1, &img_align, 2);
+#else
+                ret = bm_image_alloc_contiguous_mem_heap_mask(1, &img_align, 6);
+#endif
+                if (BM_SUCCESS != ret) {
+                    SPDLOG_ERROR("overlay error, bm_image_alloc_contiguous_mem_heap_mask() ret {}", ret);
+                    bm_image_destroy(img_align);
+                    return ret;
+                }
+                ret = bmcv_width_align(handle_.data(), tmp, img_align);
+                if (BM_SUCCESS != ret) {
+                    SPDLOG_ERROR("overlay error: overlay image width align failed!");
+                    bm_image_destroy(img_align);
+                    return ret;
+                }
+                overlay_image_bmcv.emplace_back(img_align);
+            } else {
+                overlay_image_bmcv.emplace_back(tmp);
+            }
+#else
+            if (!bmcv_image_overlay) {
+                SPDLOG_ERROR("bmcv_image_overlay is not available, please update your SDK");
+                throw SailRuntimeError("not supported in this SDK version");
+            }
+            if (tmp.image_format != FORMAT_ABGR_PACKED){
+                SPDLOG_ERROR("overlay_image Format Error, unsupport format {}", tmp.image_format);
+                throw SailBMImageError("parameter error"); 
+            }
+            if (image.format() != FORMAT_RGB_PACKED) {
+                SPDLOG_ERROR("image Format {} Error, only support FORMAT_RGB_PACKED", image.format());
+                throw SailBMImageError("parameter error"); 
+            }
+            if (tmp.width > 850 || tmp.height > 850) {
+                SPDLOG_ERROR("overlay_image size is too large, width={}, height={}", tmp.width, tmp.height);
+                throw SailBMImageError("parameter error"); 
+            }
             overlay_image_bmcv.emplace_back(tmp);
+#endif
         }
         auto ret = bmcv_image_overlay(handle_.data(), image.data(), overlay_num, overlay_info_bmcv.data(), overlay_image_bmcv.data());
         if (BM_SUCCESS != ret) {
@@ -5725,7 +6040,7 @@ namespace sail {
         }
         return ret;
     }
-#endif
+
     BMImage Bmcv::warp_perspective(
         BMImage                     &input,
         const std::tuple<
@@ -5794,68 +6109,17 @@ namespace sail {
         return output_image;
     }
 
+extern "C" {
+    bm_status_t bmcv_image_draw_point(bm_handle_t handle, bm_image image, int point_num, bmcv_point_t* coord,
+                                        int length, unsigned char r, unsigned char g, unsigned char b) __attribute__((weak));
+}
+
     int Bmcv::drawPoint(
         const BMImage &image,
         std::pair<int,int> center,
         std::tuple<unsigned char, unsigned char, unsigned char> color,
         int radius){
-        if(image.format() != FORMAT_GRAY &&
-            image.format() != FORMAT_YUV420P &&
-            image.format() != FORMAT_YUV422P &&
-            image.format() != FORMAT_YUV444P &&
-            image.format() != FORMAT_NV12 &&
-            image.format() != FORMAT_NV21 &&
-            image.format() != FORMAT_NV16 &&
-            image.format() != FORMAT_NV61){
-            SPDLOG_ERROR("input format not supported!");
-            print_image(image.data(),"input");
-            return BM_ERR_FAILURE;
-        }
-        if(center.first >= image.width() || center.second >= image.height()
-            || center.first < 0 || center.second < 0){
-            SPDLOG_ERROR("drawPoint failed, point is outside, center({},{}) vs. image width:{}, image height:{}",
-                center.first, center.second, image.width(), image.height());
-            return BM_ERR_FAILURE;
-        }
-       
-        bmcv_point_t org_center = {center.first, center.second};
-        bmcv_point_t point_start[2];
-        bmcv_point_t point_end[2];
-        point_start[0].x = center.first - radius;
-        point_start[0].y = center.second;
-        point_start[0].x = point_start[0].x > 0 ? point_start[0].x : 0;
-
-        point_end[0].x = center.first + radius;
-        point_end[0].y = center.second;
-        point_end[0].x = point_end[0].x < image.width() - 1 ? point_end[0].x : image.width() - 1;
-
-        point_start[1].x = center.first ;
-        point_start[1].y = center.second - radius;
-        point_start[1].y = point_start[1].y > 0 ? point_start[1].y : 0;
-
-        point_end[1].x = center.first;
-        point_end[1].y = center.second + radius; 
-        point_end[1].y = point_end[1].y < image.height() - 1 ? point_end[1].y : image.height() - 1;
-
-        bmcv_color_t color_put = {std::get<2>(color), std::get<1>(color), std::get<0>(color)};
-
-        int thickness = radius / 2 + 1; 
-
-        int ret = bmcv_image_draw_lines(
-            handle_.data(),
-            image.data(),
-            point_start,
-            point_end,
-            2,
-            color_put,
-            thickness);
-
-         if (BM_SUCCESS != ret) {
-            print_image(image.data(),"input");
-            SPDLOG_ERROR("bmcv_image_draw_lines() err={}", ret);
-            return ret;
-        }
-        return BM_SUCCESS;
+        return drawPoint_(image.data(), center, color, radius);
     }
 
     int Bmcv::drawPoint(
@@ -5872,61 +6136,77 @@ namespace sail {
         std::tuple<unsigned char, unsigned char, unsigned char> color,
         int radius){
 
-        if(image.image_format != FORMAT_GRAY &&
-            image.image_format != FORMAT_YUV420P &&
-            image.image_format != FORMAT_YUV422P &&
-            image.image_format != FORMAT_YUV444P &&
-            image.image_format != FORMAT_NV12 &&
-            image.image_format != FORMAT_NV21 &&
-            image.image_format != FORMAT_NV16 &&
-            image.image_format != FORMAT_NV61){
-            SPDLOG_ERROR("input format not supported!");
-            print_image(image,"input");
-            return BM_ERR_FAILURE;
-        }
         if(center.first >= image.width || center.second >= image.height
             || center.first < 0 || center.second < 0){
             SPDLOG_ERROR("drawPoint failed, point is outside, center({},{}) vs. image width:{}, image height:{}",
                 center.first, center.second, image.width, image.height);
-            return BM_ERR_FAILURE;
+            return BM_ERR_PARAM;
         }
-       
-        bmcv_point_t org_center = {center.first, center.second};
-        bmcv_point_t point_start[2];
-        bmcv_point_t point_end[2];
-        point_start[0].x = center.first - radius;
-        point_start[0].y = center.second;
-        point_start[0].x = point_start[0].x > 0 ? point_start[0].x : 0;
 
-        point_end[0].x = center.first + radius;
-        point_end[0].y = center.second;
-        point_end[0].x = point_end[0].x < image.width - 1 ? point_end[0].x : image.width - 1;
+        if (bmcv_image_draw_point) {
+            bmcv_point_t org_center = {center.first, center.second};
+            int length = radius * 2 + 1;
+            int ret = bmcv_image_draw_point(
+                handle_.data(), image, 1, &org_center,
+                length, std::get<2>(color), std::get<1>(color), std::get<0>(color));
+            if (BM_SUCCESS != ret) {
+                print_image(image,"input");
+                SPDLOG_ERROR("bmcv_image_draw_point() err={}", ret);
+                return ret;
+            }
+        } else { 
+            SPDLOG_INFO("bmcv_image_draw_point is not available, please update your SDK. Otherwise, bmcv_image_draw_lines will be used instead.");
 
-        point_start[1].x = center.first ;
-        point_start[1].y = center.second - radius;
-        point_start[1].y = point_start[1].y > 0 ? point_start[1].y : 0;
+            if(image.image_format != FORMAT_GRAY &&
+                image.image_format != FORMAT_YUV420P &&
+                image.image_format != FORMAT_YUV422P &&
+                image.image_format != FORMAT_YUV444P &&
+                image.image_format != FORMAT_NV12 &&
+                image.image_format != FORMAT_NV21 &&
+                image.image_format != FORMAT_NV16 &&
+                image.image_format != FORMAT_NV61){
+                SPDLOG_ERROR("input format not supported!");
+                print_image(image,"input");
+                return BM_ERR_FAILURE;
+            }
 
-        point_end[1].x = center.first;
-        point_end[1].y = center.second + radius; 
-        point_end[1].y = point_end[1].y < image.height - 1 ? point_end[1].y : image.height - 1;
+            bmcv_point_t org_center = {center.first, center.second};
+            bmcv_point_t point_start[2];
+            bmcv_point_t point_end[2];
+            point_start[0].x = center.first - radius;
+            point_start[0].y = center.second;
+            point_start[0].x = point_start[0].x > 0 ? point_start[0].x : 0;
 
-        bmcv_color_t color_put = {std::get<2>(color), std::get<1>(color), std::get<0>(color)};
+            point_end[0].x = center.first + radius;
+            point_end[0].y = center.second;
+            point_end[0].x = point_end[0].x < image.width - 1 ? point_end[0].x : image.width - 1;
 
-        int thickness = radius / 2 + 1; 
+            point_start[1].x = center.first ;
+            point_start[1].y = center.second - radius;
+            point_start[1].y = point_start[1].y > 0 ? point_start[1].y : 0;
 
-        int ret = bmcv_image_draw_lines(
-            handle_.data(),
-            image,
-            point_start,
-            point_end,
-            2,
-            color_put,
-            thickness);
+            point_end[1].x = center.first;
+            point_end[1].y = center.second + radius; 
+            point_end[1].y = point_end[1].y < image.height - 1 ? point_end[1].y : image.height - 1;
 
-         if (BM_SUCCESS != ret) {
-            print_image(image,"input");
-            SPDLOG_ERROR("bmcv_image_draw_lines() err={}", ret);
-            return ret;
+            bmcv_color_t color_put = {std::get<2>(color), std::get<1>(color), std::get<0>(color)};
+
+            int thickness = radius / 2 + 1; 
+
+            int ret = bmcv_image_draw_lines(
+                handle_.data(),
+                image,
+                point_start,
+                point_end,
+                2,
+                color_put,
+                thickness);
+
+            if (BM_SUCCESS != ret) {
+                print_image(image,"input");
+                SPDLOG_ERROR("bmcv_image_draw_lines() err={}", ret);
+                return ret;
+            }
         }
         return BM_SUCCESS;
     }
@@ -8756,158 +9036,6 @@ extern "C" {
         return std::move(output);
     }
 
-    // Function to convert AVFrame to bm_image
-    int avframe_to_bm_image(Handle& handle_,AVFrame &in, bm_image &out) {
-
-        int plane                 = 0;
-        int data_five_denominator = -1;
-        int data_six_denominator  = -1;
-        static int mem_flags = USEING_MEM_HEAP1;
-
-        // Switch case to handle different formats
-        switch(in.format){
-            case AV_PIX_FMT_GRAY8:
-                plane = 1;
-                data_five_denominator = -1;
-                data_six_denominator = -1;
-                break;
-            case AV_PIX_FMT_YUV420P:
-                plane = 3;
-                data_five_denominator = 4;
-                data_six_denominator = 4;
-                break;
-            case AV_PIX_FMT_NV12:
-                plane = 2;
-                data_five_denominator = 2;
-                data_six_denominator = -1;
-                break;
-            case AV_PIX_FMT_YUV422P:
-                plane = 3;
-                data_five_denominator = 2;
-                data_six_denominator = 2;
-                break;
-            case AV_PIX_FMT_NV16:
-                plane = 2;
-                data_five_denominator = 2;
-                data_six_denominator = -1;
-                break;
-            case AV_PIX_FMT_YUV444P:
-            case AV_PIX_FMT_GBRP:
-                plane = 3;
-                data_five_denominator = 1;
-                data_six_denominator = 1;
-                break;
-            default:
-                printf("unsupported format, only gray,nv12,yuv420p,nv16,yuv422p horizontal,yuv444p,rgbp supported\n");
-                break;
-        }
-
-        // Handle compressed NV12 format
-        if (in.channel_layout == 101) {/* COMPRESSED NV12 FORMAT */
-            if ((0 == in.height) || (0 == in.width) || \
-                (0 == in.linesize[4]) || (0 == in.linesize[5]) || (0 == in.linesize[6]) || (0 == in.linesize[7]) || \
-                (0 == in.data[4]) || (0 == in.data[5]) || (0 == in.data[6]) || (0 == in.data[7])) {
-                printf("bm_image_from_frame: get yuv failed!!");
-                return BM_ERR_PARAM;
-            }
-            bm_image cmp_bmimg;
-            bm_image_create (handle_.data(),
-                            in.height,
-                            in.width,
-                            FORMAT_COMPRESSED,
-                            DATA_TYPE_EXT_1N_BYTE,
-                            &cmp_bmimg);
-
-            bm_device_mem_t input_addr[4];
-            int size = in.height * in.linesize[4];
-            input_addr[0] = bm_mem_from_device((unsigned long long)in.data[6], size);
-            size = (in.height / 2) * in.linesize[5];
-            input_addr[1] = bm_mem_from_device((unsigned long long)in.data[4], size);
-            size = in.linesize[6];
-            input_addr[2] = bm_mem_from_device((unsigned long long)in.data[7], size);
-            size = in.linesize[7];
-            input_addr[3] = bm_mem_from_device((unsigned long long)in.data[5], size);
-            bm_image_attach(cmp_bmimg, input_addr);
-            bm_image_create (handle_.data(),
-                            in.height,
-                            in.width,
-                            FORMAT_YUV420P,
-                            DATA_TYPE_EXT_1N_BYTE,
-                            &out);
-            //bm_image_dev_mem_alloc(out);
-#if (BMCV_VERSION_MAJOR == 2) && !defined(BMCV_VERSION_MINOR)
-            if(mem_flags == USEING_MEM_HEAP2 && bm_image_alloc_dev_mem_heap_mask(out,USEING_MEM_HEAP2) != BM_SUCCESS){
-                mem_flags = USEING_MEM_HEAP1;
-            }   
-#endif
-            if(mem_flags == USEING_MEM_HEAP1 && bm_image_alloc_dev_mem_heap_mask(out,USEING_MEM_HEAP1) != BM_SUCCESS){
-                SPDLOG_ERROR("bmcv allocate mem failed!");
-            }
-
-            bmcv_rect_t crop_rect = {0, 0, in.width, in.height};
-            bmcv_image_vpp_convert(handle_.data(), 1, cmp_bmimg, &out, &crop_rect);
-            bm_image_destroy(cmp_bmimg);
-        }
-        else {
-            int stride[3];
-            bm_image_format_ext bm_format;
-            bm_device_mem_t input_addr[3] = {0};
-            if(plane == 1){
-                if ((0 == in.height) || (0 == in.width) ||(0 == in.linesize[4]) || (0 == in.data[4])) {
-                    return BM_ERR_PARAM;
-                }
-                stride[0] = in.linesize[4];
-            }
-            else if (plane == 2){
-                if ((0 == in.height) || (0 == in.width) || \
-                (0 == in.linesize[4]) || (0 == in.linesize[5]) || \
-                (0 == in.data[4]) || (0 == in.data[5])) {
-                    return BM_ERR_PARAM;
-                }
-
-                stride[0] = in.linesize[4];
-                stride[1] = in.linesize[5];
-                spdlog::debug("====stride[0][1]={} {} width={}", stride[0], stride[1], in.width);
-            }
-            else if(plane == 3){
-                if ((0 == in.height) || (0 == in.width) || \
-                (0 == in.linesize[4]) || (0 == in.linesize[5]) || (0 == in.linesize[6]) || \
-                (0 == in.data[4]) || (0 == in.data[5]) || (0 == in.data[6])) {
-                    return BM_ERR_PARAM;
-                }
-
-                stride[0] = in.linesize[4];
-                stride[1] = in.linesize[5];
-                stride[2] = in.linesize[6];
-            }
-
-            bm_format = (bm_image_format_ext)map_avformat_to_bmformat(in.format);
-            bm_image_create (handle_.data(),
-                            in.height,
-                            in.width,
-                            bm_format,
-                            DATA_TYPE_EXT_1N_BYTE,
-                            &out,
-                            stride);
-
-            int size = in.height * stride[0];
-            input_addr[0] = bm_mem_from_device((unsigned long long)in.data[4], size);
-            spdlog::debug("==== size1={} addr[0]={}", size, input_addr[0].size);
-            if(data_five_denominator != -1 ){
-                size = in.height * stride[1] / data_five_denominator;
-                input_addr[1] = bm_mem_from_device((unsigned long long)in.data[5], size);
-                spdlog::debug("==== size2={} addr[1]={}", size, input_addr[1].size);
-            }
-            if(data_six_denominator != -1){
-                size = in.height * stride[2] / data_six_denominator;
-                spdlog::debug("==== size3={}", size);
-                input_addr[2] = bm_mem_from_device((unsigned long long)in.data[6], size);
-            }
-            bm_image_attach(out, input_addr);
-        }
-        return BM_SUCCESS;
-    }
-
 #ifdef PYTHON
 
     BMImage Bmcv::imdecode(pybind11::bytes jpeg_data){
@@ -8975,30 +9103,6 @@ extern "C" {
         delete output_proposal;
 
         return std::move(arr);
-    }
-    
-    int Decoder_RawStream::read_(pybind11::bytes data_bytes, bm_image& image, bool continueFrame){
-        return _impl->read_(data_bytes, image, continueFrame);
-    }
-
-    int Decoder_RawStream::read(pybind11::bytes data_bytes, BMImage& image, bool continueFrame){
-        return _impl->read(data_bytes, image, continueFrame);
-    }
-    
-    int Decoder_RawStream::Decoder_RawStream_CC::read_(pybind11::bytes data_bytes, bm_image& image, bool continueFrame) {
-    
-        std::string data_str = pybind11::cast<std::string>(data_bytes);
-        uint8_t* data_ptr = reinterpret_cast<uint8_t*>(const_cast<char*>(data_str.data()));
-        int data_size = data_str.size();
-        return read_(data_ptr, data_size, image, continueFrame);
-    }
-
-    int Decoder_RawStream::Decoder_RawStream_CC::read(pybind11::bytes data_bytes, BMImage& image, bool continueFrame) {
-    
-        std::string data_str = pybind11::cast<std::string>(data_bytes);
-        uint8_t* data_ptr = reinterpret_cast<uint8_t*>(const_cast<char*>(data_str.data()));
-        int data_size = data_str.size();
-        return read(data_ptr, data_size, image, continueFrame);
     }
 
 #endif // ! USE_BMCV

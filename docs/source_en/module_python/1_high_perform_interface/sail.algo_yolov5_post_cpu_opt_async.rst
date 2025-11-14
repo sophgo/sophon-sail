@@ -38,7 +38,7 @@ Maximum length of cached data.
 
 * use_multiclass_nms: bool
 
-Whether to use multi-class NMS, which defaults to true.
+Whether to use multi-class NMS, which defaults to True.
 
 
 push_data

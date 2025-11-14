@@ -72,6 +72,8 @@ public:
 
     int video_write(bm_image &image);
 
+    int reconnect();
+
     void release();
 
 private:
@@ -202,6 +204,11 @@ int Encoder::video_write(BMImage &image)
 int Encoder::video_write(bm_image &image)
 {
     return _impl->video_write(image);
+}
+
+int Encoder::reconnect()
+{
+    return _impl->reconnect();
 }
 
 void Encoder::release()
@@ -825,6 +832,7 @@ int Encoder::Encoder_CC::video_write(bm_image &image)
         {
             case RETURN_NOW:
                 frame_process_lock.unlock();
+                spdlog::error("sail.Encoder: cache queue is full, return now");
                 return -CACHE_OVERFLOW;
             case POP_FRONT:
             {
@@ -928,6 +936,145 @@ int Encoder::Encoder_CC::flush_encoder()
         if (ret < 0)
             break;
     }
+    return ret;
+}
+
+int Encoder::Encoder_CC::reconnect()
+{
+    spdlog::info("sail.Encoder: reconnecting encoder.");
+
+    if (opened_)
+    {
+        release();
+    }
+    int ret = 0;
+    ret = bm_dev_request(&handle_, tpu_id_);
+    if (BM_SUCCESS != ret)
+    {
+        SPDLOG_ERROR("Encoder bm_dev_request fail, device_id: {}", tpu_id_);
+        return ret;
+    }
+
+    // get output format
+    int output_type = get_output_type(output_path_);
+    switch(output_type)
+    {
+        case RTSP_STREAM:
+            spdlog::info("sail.Encoder: you are pushing a rtsp stream.");
+            avformat_alloc_output_context2(&enc_format_ctx_, NULL, "rtsp", output_path_.c_str());
+            is_rtsp_ = true;
+            break;
+        case RTMP_STREAM:
+            spdlog::info("sail.Encoder: you are pushing a rtmp stream.");
+            avformat_alloc_output_context2(&enc_format_ctx_, NULL, "flv", output_path_.c_str());
+            is_rtmp_ = true;
+            break;
+        case BASE_STREAM:
+            spdlog::error("sail.Encoder: Not support tcp/udp stream yet.");
+            return -1;
+        case VIDEO_LOCAL_FILE:
+            spdlog::info("sail.Encoder: you are writing a local video file.");
+            avformat_alloc_output_context2(&enc_format_ctx_, NULL, NULL, output_path_.c_str());
+            break;
+        default:
+            spdlog::error("Failed to alloc output context.");
+            return -1;
+    }
+
+    if (!enc_format_ctx_) {
+        spdlog::error("sail.Encoder: Could not create output context\n");
+        return -1;
+    }
+
+    // find encoder & alloc encoder context
+    encoder_ = avcodec_find_encoder_by_name(enc_fmt_.c_str());
+    if (!encoder_)
+    {
+        spdlog::error("Failed to find encoder: {} \n", enc_fmt_);
+        return -1;
+    }
+    enc_ctx_ = avcodec_alloc_context3(encoder_);
+    if (!enc_ctx_)
+    {
+        spdlog::error("Failed to alloc context. \n");
+        return -1;
+    }
+
+    // SPS PPS do not be tied with IDR, global header.
+    if(enc_format_ctx_->oformat->flags & AVFMT_GLOBALHEADER)
+        enc_ctx_->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
+
+    enc_params_prase();
+
+    enc_ctx_->codec_id      =   encoder_->id;
+    enc_ctx_->pix_fmt       =   pix_fmt_;
+    enc_ctx_->width         =   params_map_["width"];
+    enc_ctx_->height        =   params_map_["height"];
+    enc_ctx_->gop_size      =   params_map_["gop"];
+    enc_ctx_->time_base     =   (AVRational){1, params_map_["framerate"]};
+    enc_ctx_->framerate     =   (AVRational){params_map_["framerate"], 1};
+    if(-1 == params_map_["qp"])
+    {
+        enc_ctx_->bit_rate_tolerance = params_map_["bitrate"]*1000;
+        enc_ctx_->bit_rate      =   (int64_t)params_map_["bitrate"]*1000;
+    }else{
+        av_dict_set_int(&enc_dict_, "qp", params_map_["qp"], 0);
+    }
+
+    av_dict_set_int(&enc_dict_, "sophon_idx", tpu_id_, 0);
+    av_dict_set_int(&enc_dict_, "gop_preset", params_map_["gop_preset"], 0);
+    av_dict_set_int(&enc_dict_, "is_dma_buffer", 1, 0);
+
+    // open encoder
+    ret = avcodec_open2(enc_ctx_, encoder_, &enc_dict_);
+    if(ret < 0){
+        spdlog::error("sail.Encoder: avcodec_open failed, return: {} \n.", ret);
+        return ret;
+    }
+    av_dict_free(&enc_dict_);
+
+    // new stream
+    out_stream_ = avformat_new_stream(enc_format_ctx_, encoder_);
+    out_stream_->time_base      = enc_ctx_->time_base;
+    out_stream_->avg_frame_rate = enc_ctx_->framerate;
+    out_stream_->r_frame_rate   = out_stream_->avg_frame_rate;
+
+    ret = avcodec_parameters_from_context(out_stream_->codecpar, enc_ctx_);
+    if(ret < 0)
+    {
+        spdlog::error("sail.Encoder: avcodec_parameters_from_context failed, return: {} \n.", ret);
+        return ret;
+    }
+
+    if (!(enc_format_ctx_->oformat->flags & AVFMT_NOFILE)) {
+        ret = avio_open(&enc_format_ctx_->pb, output_path_.c_str(), AVIO_FLAG_WRITE);
+        if (ret < 0) {
+            spdlog::error("sail.Encoder: avio_open failed, return: {} \n.", ret);
+            return ret;
+        }
+    }
+    AVDictionary *header_options = NULL;
+    if (output_type == RTSP_STREAM) {
+        av_dict_set(&header_options, "rtsp_flags", "prefer_tcp", 0);
+    }
+    ret = avformat_write_header(enc_format_ctx_, &header_options);
+    av_dict_free(&header_options);
+    if (ret < 0) {
+        spdlog::error("sail.Encoder: avformat_write_header failed, return: {} \n.", ret);
+        return ret;
+    }
+    opened_ = true;
+    quit_flag = false;
+    first_frame_flag = true;
+    frame_idx = 0;
+
+    if(!write_frame_start_)
+    {
+        write_frame_thread_ = std::thread(&Encoder_CC::write_frame, this);
+        write_frame_thread_.detach();
+        write_frame_start_ = true;
+    }
+    spdlog::info("sail.Encoder: encoder opened.");
     return ret;
 }
 

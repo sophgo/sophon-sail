@@ -15,6 +15,7 @@ You may obtain a copy of the License at
 ==============================================================================*/
 
 #include <spdlog/spdlog.h>
+#include "spdlog/fmt/ostr.h"
 #include <decoder_multi.h>
 #if defined(USE_BMCV) && defined(USE_OPENCV) && defined(USE_FFMPEG)
 #include <opencv2/opencv.hpp>
@@ -37,8 +38,7 @@ namespace sail {
     {
         // if(md_print_flag_){
             std::lock_guard<std::mutex> lock_print(md_print_flag_);
-            std::cout << "# File[" << file_name << ":" << line << "], ";
-            std::cout << "Thread[" << std::this_thread::get_id()<<"], "<< message << std::endl;
+            spdlog::info("# File[{}:{}], Thread[{}], {}", file_name, line, std::this_thread::get_id(), message);
         // }
     }
 
@@ -241,6 +241,7 @@ namespace sail {
         std::condition_variable exit_cond;  //线程已经退出的信号量
         std::mutex mutex_exit_;             //线程已经退出互斥锁
         bool exit_thread_flag;      //线程已经退出的标志位
+        bool has_notified_flag;  //信号量exit_cond是否已经通知的标志位
         size_t drop_num;
         int loop_num_;
         int cur_loop_;
@@ -278,7 +279,7 @@ namespace sail {
     timeout_sec_(timeout_sec), discard_mode_(discard_mode),stop_thread_flag(false),
     exit_thread_flag(true),decoder_(NULL),local_video_flag_(local_video_flag),
     channel_idx_(channel_idx),pframes_queue(NULL),drop_num(0),loop_num_(loop_num),cur_loop_(0),
-    decoder_status(sail::DecoderStatus::NONE)
+    decoder_status(sail::DecoderStatus::NONE),has_notified_flag(false)
     {
         pframes_queue = new BMImageQueue(queue_size);
         decoder_ = new sail::Decoder(file_path,true,tpu_id_);
@@ -499,6 +500,7 @@ namespace sail {
     void ChannelDecoder::set_thread_exit()
     {
         std::unique_lock<std::mutex> lck(mutex_exit_);
+        has_notified_flag = true;
         exit_cond.notify_all();
     }   
 
@@ -511,7 +513,7 @@ namespace sail {
             }
         }
         std::unique_lock<std::mutex> lck(mutex_exit_);
-        exit_cond.wait(lck);
+        exit_cond.wait(lck,[this]() { return has_notified_flag; });
     }
 
     size_t ChannelDecoder::get_drop_num(){

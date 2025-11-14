@@ -77,6 +77,7 @@ set(sail_install_path "${CMAKE_INSTALL_PREFIX}/sophon-sail")
 
 set(HEADERS ${CMAKE_SOURCE_DIR}/include/base64.h  
             ${CMAKE_SOURCE_DIR}/include/cvwrapper.h  
+            ${CMAKE_SOURCE_DIR}/include/decoder_rawstream.h  
             ${CMAKE_SOURCE_DIR}/include/engine.h  
             ${CMAKE_SOURCE_DIR}/include/engine_llm.h 
             ${CMAKE_SOURCE_DIR}/include/engine_multi.h 

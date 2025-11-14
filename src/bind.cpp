@@ -311,6 +311,8 @@ py::register_exception<ExceptionName>(m, #ExceptionName);
     .def("update_data",           (void (Tensor::*)(pybind11::array_t<int8_t>&)) &Tensor::update_data)
     .def("update_data",           (void (Tensor::*)(pybind11::array_t<uint8_t>&)) &Tensor::update_data)
     .def("update_data",           (void (Tensor::*)(pybind11::array_t<int32_t>&))   &Tensor::update_data)
+    .def("update_data",           (void (Tensor::*)(pybind11::array_t<uint32_t>&))   &Tensor::update_data)
+    .def("update_data",           (void (Tensor::*)(pybind11::array_t<int16_t>&))   &Tensor::update_data)
     .def("update_data",           (void (Tensor::*)(pybind11::array_t<uint16_t>&))   &Tensor::update_data)
     .def("scale_from",            (void (Tensor::*)(pybind11::array_t<float>&, float)) &Tensor::scale_from)
     //.def("scale_from",            (void (Tensor::*)(pybind11::array_t<int32_t>&, float)) &Tensor::scale_from)
@@ -394,9 +396,9 @@ py::register_exception<ExceptionName>(m, #ExceptionName);
   
 #ifdef BUILD_ENGINELLM
   py::class_<EngineLLM>(m, "EngineLLM")
-    .def(py::init<const std::string&, std::vector<int>>(), py::arg("bmodel_path"), py::arg("tpu_ids"))
+    .def(py::init<const std::string&, std::vector<int>>(), py::arg("bmodel_path"), py::arg("tpu_ids"), py::call_guard<py::gil_scoped_release>())
 #if SAIL_WITH_BMRT_FLAG
-    .def(py::init<const std::string&, uint32_t, std::vector<int>>(), py::arg("bmodel_path"), py::arg("flags"), py::arg("tpu_ids"))
+    .def(py::init<const std::string&, uint32_t, std::vector<int>>(), py::arg("bmodel_path"), py::arg("flags"), py::arg("tpu_ids"), py::call_guard<py::gil_scoped_release>())
 #endif  // SAIL_WITH_BMRT_FLAG
     .def(py::init<py::bytes&, size_t, std::vector<int>>(), py::arg("bmodel_bytes"), py::arg("bmodel_size"), py::arg("tpu_ids"))
 
@@ -503,6 +505,7 @@ py::register_exception<ExceptionName>(m, #ExceptionName);
 #endif
     .def("video_write",          (int  (Encoder::*)(BMImage&))                &Encoder::video_write)
     .def("video_write",          (int  (Encoder::*)(bm_image&))               &Encoder::video_write)
+    .def("reconnect",            &Encoder::reconnect)
     .def("release",              &Encoder::release);
 #endif
 
@@ -644,6 +647,7 @@ py::register_exception<ExceptionName>(m, #ExceptionName);
     .def("putText_",             (int (Bmcv::*)(const bm_image&, const std::string&, int, int, const std::tuple<int, int, int>&, float, int))     &Bmcv::putText_,
      py::arg("image"), py::arg("text"), py::arg("x"), py::arg("y"), py::arg("color"), py::arg("fontScale"), py::arg("thickness") = 1)
     .def("imwrite",             (int (Bmcv::*)(const std::string&, const BMImage&))       &Bmcv::imwrite)
+    .def("imwrite",             (int (Bmcv::*)(const std::string&, const BMImage&, const std::vector<int>&))       &Bmcv::imwrite)
     .def("imwrite",             (int (Bmcv::*)(const std::string&, const bm_image&))      &Bmcv::imwrite)
     .def("imwrite_",             (int (Bmcv::*)(const std::string&, const bm_image&))     &Bmcv::imwrite_)
     .def("get_handle",          &Bmcv::get_handle)
@@ -734,9 +738,7 @@ py::register_exception<ExceptionName>(m, #ExceptionName);
       py::arg("input"), py::arg("output"))
     .def("convert_yuv420p_to_gray_",     (int (Bmcv::*)(bm_image&, bm_image&))            &Bmcv::convert_yuv420p_to_gray_,
       py::arg("input"), py::arg("output"))
-#if BMCV_VERSION_MAJOR > 1
     .def("bmcv_overlay", &Bmcv::bmcv_overlay, py::arg("image"), py::arg("overlay_info"), py::arg("overlay_image"))
-#endif
 #if defined(USE_BMCV) && defined(USE_OPENCV) && defined(PYTHON)
     .def("mat_to_bm_image",     (BMImage (Bmcv::*)(pybind11::array_t<uint8_t>&)) &Bmcv::mat_to_bm_image, py::arg("input_array").noconvert())
     .def("mat_to_bm_image",     (int (Bmcv::*)(pybind11::array_t<uint8_t>&, BMImage&)) &Bmcv::mat_to_bm_image, py::arg("input_array").noconvert(), py::arg("img"));
@@ -809,6 +811,7 @@ auto byte_size = input_arr.dtype().itemsize();
             .def(py::init<int, std::string>())
             .def("read_", (int (Decoder_RawStream::*)(pybind11::bytes, bm_image&, bool)) &Decoder_RawStream::read_)
             .def("read", (int (Decoder_RawStream::*)(pybind11::bytes, BMImage&, bool)) &Decoder_RawStream::read)
+            .def("read_single_frame", (int (Decoder_RawStream::*)(pybind11::bytes, BMImage&, bool, bool)) &Decoder_RawStream::read_single_frame)
             .def("release",              &Decoder_RawStream::release);
     #endif
 

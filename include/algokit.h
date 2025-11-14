@@ -45,6 +45,7 @@ typedef enum {
   SAIL_ALGO_ERROR_D2S = 50003,
   SAIL_ALGO_ERROR_BATCHSIZE = 50004,
   SAIL_ALGO_ERROR_SHAPES = 50005,
+  SAIL_ALGO_ERROR_PARAMS = 50006,
 } sail_algo_status;
 
 namespace sail {

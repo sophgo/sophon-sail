@@ -28,7 +28,7 @@ The ID of the Tensor Computing Processor visible in this MultiEngine.
 
 * sys_out: bool
 
-Whether to copy the results to system memory, the default is True
+Whether to copy the results to system memory, the default is true
 
 * graph_idx : int
 
@@ -62,7 +62,7 @@ Set whether to print debugging information.
 
 * print_flag: bool
 
-When True, debugging information is printed, otherwise it is not printed.
+When true, debugging information is printed, otherwise it is not printed.
 
 **Sample:**
     .. code-block:: c
@@ -73,7 +73,7 @@ When True, debugging information is printed, otherwise it is not printed.
             std::vector<int> dev_id = {0, 1};  
             std::string bmodel_path = "your_bmodel.bmodel"
             sail::MultiEngine engine(bmodel_path, dev_id);  
-            engine.set_print_flag(True);
+            engine.set_print_flag(true);
             return 0;  
         }
 
@@ -91,7 +91,7 @@ Setting whether to print is mainly time-consuming.
 
 * print_flag: bool
 
-When it is True, printing is mainly time-consuming, otherwise it will not print.
+When it is true, printing is mainly time-consuming, otherwise it will not print.
 
 **Sample:**
     .. code-block:: c
@@ -102,7 +102,7 @@ When it is True, printing is mainly time-consuming, otherwise it will not print.
             std::vector<int> dev_id = {0, 1};  
             std::string bmodel_path = "your_bmodel.bmodel"
             sail::MultiEngine engine(bmodel_path, dev_id);  
-            engine.set_print_time(True);
+            engine.set_print_time(true);
             return 0;  
         }
 

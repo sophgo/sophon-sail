@@ -86,13 +86,29 @@ linear_assignment::min_cost_matching(tracker *distance_metric,
 
     cv::Mat cost_matrix = (distance_metric->*(distance_metric_func))(
                 tracks, detections, track_indices, detection_indices);
-    for(int i = 0; i < cost_matrix.rows; i++) {
-        for(int j = 0; j < cost_matrix.cols; j++) {
+
+    // 清理数值
+    bool all_bad = true;
+    for (int i = 0; i < cost_matrix.rows; i++) {
+        for (int j = 0; j < cost_matrix.cols; j++) {
             float tmp = cost_matrix.at<float>(i,j);
-            if(tmp > max_distance) cost_matrix.at<float>(i,j) = max_distance + 1e-5;
+            if (!std::isfinite(tmp)) {
+                cost_matrix.at<float>(i,j) = max_distance + 1e3; // 很大的有限值
+            } else if (tmp > max_distance) {
+                cost_matrix.at<float>(i,j) = max_distance + 1e-5;
+            } else {
+                all_bad = false;
+            }
         }
     }
-    
+
+    // 如果全都是不可行，直接返回 unmatched，避免 Hungarian 卡死
+    if (all_bad) {
+        res.matches.clear();
+        res.unmatched_tracks.assign(track_indices.begin(), track_indices.end());
+        res.unmatched_detections.assign(detection_indices.begin(), detection_indices.end());
+        return res;
+    }
     cv::Mat indices = HungarianOper::Solve(cost_matrix);
 
     res.matches.clear();

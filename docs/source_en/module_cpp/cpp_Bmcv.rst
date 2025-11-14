@@ -1625,6 +1625,11 @@ Save the image in a specific file.
 
         int imwrite(
            const std::string &filename,
+           BMImage           &image,
+           const std::vector<int> &params = {});
+
+        int imwrite(
+           const std::string &filename,
            const bm_image     &image);
 
 
@@ -1638,6 +1643,10 @@ The name of the file.
 
 The image needs to be saved.
 
+* params : vector<int> 
+
+Format parameters for saving the image. Must ensure the validity of the parameters.
+
 **Returns:**
 
 * process_status : int
@@ -1648,6 +1657,7 @@ Returns 0 if the save is successful, otherwise returns a non-zero value.
     .. code-block:: c
 
         #include <sail/cvwrapper.h>
+        #include "opencv2/opencv.hpp"
         using namespace std;
         int main() {
             int tpu_id = 0;
@@ -1656,7 +1666,9 @@ Returns 0 if the save is successful, otherwise returns a non-zero value.
             sail::Decoder decoder(image_name, true, tpu_id);
             sail::BMImage BMimg = decoder.read(handle); 
             sail::Bmcv bmcv(handle);
-            int ret = bmcv.imwrite("new_3.jpg", BMimg);
+            int ret = bmcv.imwrite("new_0.jpg", BMimg);
+            std::vector<int> params = { cv::IMWRITE_JPEG_QUALITY, 95 };
+            ret = bmcv.imwrite("new_1.jpg", BMimg, params);
             return 0;
         }
 
@@ -2031,13 +2043,9 @@ Returns the converted image.
         }
 
 putText
->>>>>>>>>>
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
-Add text to the image.
-
-Supported pixel format for input BMImage: 
-FORMAT_GRAY, FORMAT_YUV420P, FORMAT_YUV422P, FORMAT_YUV444P, FORMAT_NV12, 
-FORMAT_NV21, FORMAT_NV16, FORMAT_NV61
+Draws a text on the image. The font size, color and thickness can be specified.
 
 **Interface:**
     .. code-block:: c
@@ -2097,6 +2105,14 @@ The thickness of the font.
 * process_status : int
 
 Returns 0 if processing is successful, otherwise returns a non-zero value.
+
+**Note：**
+
+When the parameter thickness is greater than 0, only English is supported. 
+Please refer to the ``bmcv_image_put_text`` in the "BMCV Development Reference Manual" for the pixel format supported by the input BMImage.
+
+When the parameter thickness is equal to 0, both Chinese and English are supported. 
+Please refer to the ``bmcv_image_watermark_superpose`` in the "BMCV Development Reference Manual" for the pixel format supported by the input BMImage.
 
 **Sample:**
     .. code-block:: c++
@@ -2892,7 +2908,7 @@ Whether the graph is closed.
 
 * color :  std::tuple<unsigned char, unsigned char, unsigned char>
 
-The color of the line is the value of the three RGB channels.
+The color of the line is the value of the three BGR channels.
 
 * thickness : int 
 
@@ -3438,7 +3454,7 @@ The number of line segments to draw.
 
 * color : std::tuple<unsigned char, unsigned char, unsigned char> 
 
-The color of the line segments, corresponding to the RGB channels.
+The color of the line segments, corresponding to the BGR channels.
 
 * thickness : int
 

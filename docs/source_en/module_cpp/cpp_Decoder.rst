@@ -24,7 +24,7 @@ The path or RTSP URL of the image or video file.
 
 * compressed: bool
 
-Whether to compress the decoded output to NV12, default is True
+Whether to compress the decoded output to NV12, default is true
 
 * tpu_id: int
 
@@ -45,7 +45,7 @@ Judge if the source is opened successfully.
 
 * judge_ret: bool
 
-Returns True if the opening is successful and False if it fails.
+Returns true if the opening is successful and false if it fails.
 
 **Sample:**
     .. code-block:: c

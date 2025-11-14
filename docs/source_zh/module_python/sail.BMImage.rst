@@ -220,7 +220,7 @@ asnumpy
 
    * - 像素格式
      - 输出维度
-   * - FORMAT_BGR_PACKED / FORMAT_BGR_PACKED
+   * - FORMAT_BGR_PACKED / FORMAT_RGB_PACKED
      - (height, width, 3)
    * - FORMAT_ARGB_PACKED / FORMAT_ABGR_PACKED
      - (height, width, 4)

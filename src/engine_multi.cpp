@@ -585,6 +585,10 @@ private:
 
     bool MultiEngine::MultiEngine_CC::PushData(std::map<std::string, Tensor*>& input, bool delete_ost_data)
     {
+        if (input.empty()) {
+            SPDLOG_ERROR("PushData Called With Empty Input!");
+            return false;
+        }
         {        
             std::lock_guard<std::mutex> lock(input_data_mutex_);
 
@@ -609,6 +613,7 @@ private:
             std::unique_lock<std::mutex> lck(process_mutex_);
             process_cond.notify_all(); 
         }
+        return true;
     }
 
     std::vector<std::map<std::string, Tensor*>> MultiEngine::MultiEngine_CC::GetResult()
@@ -669,7 +674,7 @@ private:
             if (print_flag_){
                 SPDLOG_INFO("PushData [{}]/[{}]",i+1,input_tensors.size());
             }
-            PushData(input_tensors[i],false);
+            bool ret = PushData(input_tensors[i],false);
         }
         return GetResult();
     }
@@ -927,7 +932,7 @@ private:
                 if (print_flag_){
                     SPDLOG_INFO("PushData [{}]/[{}] ",i,split_num);
                 }
-                PushData(input_tensor_map,true);
+                bool ret = PushData(input_tensor_map,true);
             }
         }
         
@@ -1043,7 +1048,7 @@ private:
                 if (print_flag_){
                     SPDLOG_INFO("PushData [{}]/[{}}] ",push_count++,split_num);
                 }
-                PushData(input_tensor_map,true);
+                bool ret = PushData(input_tensor_map,true);
             }
             iter_np++;
         }

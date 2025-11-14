@@ -42,7 +42,7 @@ Input parameter. The maximum length of the output Tensor queue cache, the defaul
 
 * use_mat_output: bool
 
-Input parameter. Whether to use Mat of OPENCV as the output of the image, the default is False, not used.
+Input parameter. Whether to use Mat of OPENCV as the output of the image, the default is false, not used.
 
 SetResizeImageAtrr
 >>>>>>>>>>>>>>>>>>>>
@@ -226,4 +226,4 @@ Set the flag for printing logs. If this interface is not called, the log will no
 
 * flag: bool
 
-The printing flag, False means not printing, True means printing.
+The printing flag, false means not printing, true means printing.

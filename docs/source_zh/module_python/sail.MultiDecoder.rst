@@ -592,6 +592,7 @@ get_channel_fps
                 print(multiDecoder.get_channel_fps(idx))
 
 get_drop_num
+>>>>>>>>>>>>>>>>>>
 
 获取丢帧数。
 

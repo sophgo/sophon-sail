@@ -45,7 +45,7 @@ Set whether to print the program's calculation time information.
 
 * print_flag: bool
 
-When print_flag is True, the main time-consuming information of the calculation of program is printed, otherwise it is not printed.
+When print_flag is true, the main time-consuming information of the calculation of program is printed, otherwise it is not printed.
 
 **Sample:**
     .. code-block:: c
@@ -75,7 +75,7 @@ Set whether to store input data and output data.
 
 * dump_io_flag: bool
 
-When dump_io_flag is True, input data and output data are stored, otherwise they are not stored.
+When dump_io_flag is true, input data and output data are stored, otherwise they are not stored.
 
 **Sample:**
     .. code-block:: c
@@ -422,7 +422,7 @@ Each integer in the List is the percent utilization of the corresponding core.
 get_board_temp
 >>>>>>>>>>>>>>>>>>>>>>>>>>
 
-Get the temperature of the board.
+Get the temperature of the board. Only supported in PCIe mode.
 
 **Interface:**
     .. code-block:: c
@@ -455,7 +455,7 @@ The board temperature for the corresponding card, with the default unit in Celsi
 get_chip_temp
 >>>>>>>>>>>>>>>>>>>>>>>>>>
 
-Get the temperature of the chip.
+Get the temperature of the chip. Only supported in PCIe mode.
 
 **Interface:**
     .. code-block:: c

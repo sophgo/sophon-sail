@@ -75,7 +75,7 @@ class Engine:
     def process(self, graph_name: str, 
         input: dict[str, Tensor], 
         output: dict[str, Tensor],
-        core_list: list[int]) -> None:
+        core_list: list[int] = []) -> None:
         """
         Inference with provided input and output tensors
 
@@ -88,7 +88,7 @@ class Engine:
         output : dict[str, Tensor]
             Output tensors.
         core_list : list[int]
-            Cores used to inference.
+            Cores used to inference, default is [].
         """
         pass
     
@@ -96,7 +96,7 @@ class Engine:
         input: dict[str, Tensor], 
         input_shapes: dict[str, list[int]],
         output: dict[str, Tensor],
-        core_list: list[int]) -> None:
+        core_list: list[int] = []) -> None:
         """
         Inference with provided input and output tensors and input shapes.
         
@@ -111,12 +111,12 @@ class Engine:
         output : dict[str, Tensor]
             Output tensors.
         core_list : list[int]
-            Cores used to inference.
+            Cores used to inference, default is [].
         """
         pass
     def process(self, graph_name: str,
         input_tensors: dict[str, numpy.ndarray[Any, numpy.dtype[numpy.float_]]],
-        core_list: list[int]) -> dict[str, numpy.ndarray[Any, numpy.dtype[numpy.float_]]] :
+        core_list: list[int] = []) -> dict[str, numpy.ndarray[Any, numpy.dtype[numpy.float_]]] :
         """
         Inference with provided input.
 
@@ -127,7 +127,7 @@ class Engine:
         input_tensors: dict[str,ndarray]
             Input tensors.
         core_list : list[int]
-            Cores used to inference.
+            Cores used to inference, default is [].
 
         Returns
         -------

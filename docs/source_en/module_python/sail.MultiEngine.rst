@@ -57,7 +57,7 @@ Print debug messages.
 
 * print_flag : bool
 
-if print_flag is true, print debug messages
+if print_flag is True, print debug messages
 
 **示例代码:**
     .. code-block:: python
@@ -68,7 +68,7 @@ if print_flag is true, print debug messages
             dev_id = [0,1]
             bmodel_path = "your_bmodel.bmodel"
             engine = sail.MultiEngine(bmodel_path,dev_id)
-            engine.set_print_flag(true)
+            engine.set_print_flag(True)
 
 
 set_print_time
@@ -86,7 +86,7 @@ Print main process time use.
 
 * print_flag : bool
 
-if print_flag is true, print main process time use, Otherwise not print.
+if print_flag is True, print main process time use, Otherwise not print.
 
 **示例代码:**
     .. code-block:: python
@@ -97,7 +97,7 @@ if print_flag is true, print main process time use, Otherwise not print.
             dev_id = [0,1]
             bmodel_path = "your_bmodel.bmodel"
             engine = sail.MultiEngine(bmodel_path,dev_id)
-            engine.set_print_time(true)
+            engine.set_print_time(True)
 
 
 get_device_ids

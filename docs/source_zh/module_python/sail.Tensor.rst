@@ -13,7 +13,7 @@ Tensor是模型推理的输入输出类型，包含了数据信息，实现内�
 **接口形式1:**
     .. code-block:: python
 
-        def __init__(self, handle: Handle, data: np.array, own_sys_data=True)
+        def __init__(self, handle: Handle, data: np.array, own_sys_data=True, own_dev_data=True)
 
 **参数说明1:**
 
@@ -25,11 +25,22 @@ Tensor是模型推理的输入输出类型，包含了数据信息，实现内�
 
 利用numpy.array类型初始化Tensor，其数据类型可以是np.float32,np.int8,np.uint8
 
-* own_sys_data: bool
+* own_sys_data: bool  
+  
+  指示该 Tensor 是否拥有系统内存： 
 
-指示该Tensor是否拥有system memory，如果为False，则直接将数据复制到device memory
+  - 如果为 `True`，Tensor 会分配系统内存，并将传入的数据拷贝到系统内存。  
+  - 如果为 `False`，Tensor 不分配系统内存。
 
-**接口形式2**
+* own_dev_data: bool  
+  
+  指示该 Tensor 是否拥有设备内存： 
+
+  - 如果为 `True`，Tensor 会分配设备内存（无论 `own_sys_data` 的值）  
+  - 如果为 `False`，Tensor 不分配设备内存  
+  - 仅当 `own_sys_data=False` 且 `own_dev_data=True` 时，Tensor 会将传入的数据拷贝到设备内存
+
+**接口形式2**           
     .. code-block:: python
 
         def __init__(self, handle: Handle, shape: list[int], dtype: Dtype, own_sys_data: bool, own_dev_data: bool)
@@ -66,7 +77,7 @@ Tensor的数据类型
             input = np.array([1, 2, 3]) 
             
             input_tensor1 = sail.Tensor(handle,input)
-            input_tensor2 = sail.Tensor(handle,[1,2],sail.Dtype.BM_FLOAT32,true,true)
+            input_tensor2 = sail.Tensor(handle,[1,2],sail.Dtype.BM_FLOAT32,True,True)
 
 **接口形式3**
 

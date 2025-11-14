@@ -1241,6 +1241,8 @@ Save the image to the specified file.
 
         def imwrite(self, file_name: str, image: sail.BMImage)-> int
 
+        def imwrite(self, file_name: str, image: sail.BMImage, params: list) -> int
+
         def imwrite(self, file_name: str, image: sail.bm_image)-> int
              
 **Parameters:**
@@ -1253,6 +1255,10 @@ Name of the file
 
 Image to be saved
 
+* params : list
+
+Format parameters for saving the image. Must ensure the validity of the parameters.
+
 **Returns:**
 
 * process_status : int
@@ -1263,6 +1269,7 @@ Image to be saved
     .. code-block:: python
 
         import sophon.sail as sail
+        import cv2
 
         if __name__ == '__main__':
             tpu_id = 0
@@ -1272,6 +1279,7 @@ Image to be saved
             BMimg = decoder.read(handle)# here is a sail.BMImage
             bmcv = sail.Bmcv(handle)
             bmcv.imwrite("{}_{}.jpg".format(BMimg.width(),BMimg.height()),BMimg)
+            bmcv.imwrite("{}_{}_qual95.jpg".format(BMimg.width(),BMimg.height()),BMimg,[cv2.IMWRITE_JPEG_QUALITY, 95])
 
 
 imread
@@ -1577,13 +1585,9 @@ output image
             output = bmcv.vpp_convert_format(BMimg,sail.FORMAT_BGR_PLANAR)
 
 putText
->>>>>>>>>>
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
-Draws a text on the image.
-
-Supported pixel format for input BMImage: 
-FORMAT_GRAY, FORMAT_YUV420P, FORMAT_YUV422P, FORMAT_YUV444P, FORMAT_NV12, 
-FORMAT_NV21, FORMAT_NV16, FORMAT_NV61
+Draws a text on the image. The font size, color and thickness can be specified.
 
 **Interface:**
     .. code-block:: python
@@ -1641,6 +1645,14 @@ Thickness of text
 * process_status : int
 
 0 for success and others for failure
+
+**Note：**
+
+When the parameter thickness is greater than 0, only English is supported. 
+Please refer to the ``bmcv_image_put_text`` in the "BMCV Development Reference Manual" for the pixel format supported by the input BMImage.
+
+When the parameter thickness is equal to 0, both Chinese and English are supported. 
+Please refer to the ``bmcv_image_watermark_superpose`` in the "BMCV Development Reference Manual" for the pixel format supported by the input BMImage.
 
 **Sample:**
     .. code-block:: python
@@ -2357,7 +2369,7 @@ Whether the graph is closed.
 
 * color : tuple(int, int, int)
 
-The color of the line is the value of the three RGB channels.
+The color of the line is the value of the three BGR channels.
 
 * thickness : int 
 
@@ -2774,7 +2786,7 @@ The number of line segments, which must be the same as the length of the startin
 
 * color : tuple[int, int, int]
 
-The color of the line segments, in RGB format.
+The color of the line segments, in BGR format.
 
 * thickness : int 
 
@@ -2900,7 +2912,7 @@ Inverse Short-Time Fourier Transform(ISTFT)
     The imaginary part of the input signal.
 
 * real_input: bool
-    Indicates whether the output signal is real; false for complex, true for real.
+    Indicates whether the output signal is real; False for complex, True for real.
 
 * normalize: bool
     Whether to normalize the output.
@@ -2947,7 +2959,7 @@ Inverse Short-Time Fourier Transform(ISTFT)
 bmcv_overlay
 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
-Add a watermark with a transparent channel to the image. Only support BM1688, CV186AH。
+Add a watermark with a transparent channel to the image.
 
 **Interface:**
     .. code-block:: python
@@ -2967,7 +2979,7 @@ The position and size information of a set of watermarks in the format of [x,y,w
 
 * overlay_image: list[BMImage]
 
-A group of watermark, only support sail.Format.FORMAT_ARGB_PACKED
+A group of watermark.
 
 **Returns:**
 
@@ -2977,7 +2989,21 @@ A group of watermark, only support sail.Format.FORMAT_ARGB_PACKED
 
 **Note：**
 
-You need to make sure that all rectangles in overlay_info do not overlap
+The overlay operator is not cross-compatible between BM1684X and BM1688/CV186AH. Please distinguish carefully when using them.
+
+* BM1684X:
+
+    Background image: Only supports sail.Format.FORMAT_RGB_PACKED.
+
+    Watermark image: Only supports sail.Format.FORMAT_ABGR_PACKED.
+
+    Max watermark size: 850 * 850.
+
+* BM1688 & CV186AH:
+
+    Watermark image: Only supports sail.Format.FORMAT_ARGB_PACKED.
+    
+    Overlap restriction: Ensure no overlapping between rectangles in overlay_info.
 
 **Sample1:**
 

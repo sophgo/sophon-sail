@@ -30,10 +30,10 @@ _______________
 
 * BM_UINT32      数据类型为uint32
 
-* BM_FLOAT16      数据类型为uint32
+* BM_FLOAT16      数据类型为float16
 
-* BM_BFLOAT16      数据类型为uint32
+* BM_BFLOAT16      数据类型为bfloat16
 
-* BM_INT16      数据类型为uint32
+* BM_INT16      数据类型为int16
 
-* BM_UINT16      数据类型为uint32
+* BM_UINT16      数据类型为uint16

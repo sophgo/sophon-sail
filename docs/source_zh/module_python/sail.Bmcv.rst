@@ -1350,6 +1350,8 @@ imwrite
 
         def imwrite(self, file_name: str, image: sail.BMImage) -> int
 
+        def imwrite(self, file_name: str, image: sail.BMImage, params: list) -> int
+
         def imwrite(self, file_name: str, image: sail.bm_image) -> int
 
 **参数说明:**
@@ -1362,6 +1364,10 @@ imwrite
 
 需要保存的图像。
 
+* params : list
+
+键值对列表，表示保存图像时的格式参数。需要自行确保参数有效。
+
 **返回值说明:**
 
 * process_status : int
@@ -1372,6 +1378,7 @@ imwrite
     .. code-block:: python
 
         import sophon.sail as sail
+        import cv2
 
         if __name__ == '__main__':
             tpu_id = 0
@@ -1381,6 +1388,7 @@ imwrite
             BMimg = decoder.read(handle)# here is a sail.BMImage
             bmcv = sail.Bmcv(handle)
             bmcv.imwrite("{}_{}.jpg".format(BMimg.width(),BMimg.height()),BMimg)
+            bmcv.imwrite("{}_{}_qual95.jpg".format(BMimg.width(),BMimg.height()),BMimg,[cv2.IMWRITE_JPEG_QUALITY, 95])
             # bmcv.imwrite("{}_{}.jpg".format(BMimg.width(),BMimg.height()),BMimg.data())
 
 
@@ -1720,17 +1728,15 @@ vpp_convert_format
             output = bmcv.vpp_convert_format(BMimg,sail.FORMAT_BGR_PLANAR)
             
 putText
->>>>>>>>>>
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
-在图像上添加text。只支持英文文字。
-
-输入的BMImage支持的像素格式为：
-FORMAT_GRAY、FORMAT_YUV420P、FORMAT_YUV422P、FORMAT_YUV444P、FORMAT_NV12、
-FORMAT_NV21、FORMAT_NV16、FORMAT_NV61。
+在图像上添加text。支持指定字体大小、颜色、粗细。
 
 **实现硬件**
-* BM1684: 处理器
-* BM1684X: 处理器
+
+* BM1684: thickness大于0时为处理器，thickness等于0时为VPP
+
+* BM1684X: thickness大于0时为处理器，thickness等于0时为VPP
 
 **接口形式:**
     .. code-block:: python
@@ -1781,13 +1787,19 @@ FORMAT_NV21、FORMAT_NV16、FORMAT_NV61。
 
 * thickness : int
 
-字体的粗细。建议设置为偶数。
+字体的粗细。建议设置为偶数。开启中文字库请将该参数设置为0。
 
 **返回值说明:**
 
 * process_status : int
 
 如果处理成功返回0，否则返回非0值。
+
+**注意：**
+
+当参数thickness大于0时，仅支持英文，输入的BMImage支持的像素格式请参考《BMCV开发参考手册》的 ``bmcv_image_put_text`` 。
+
+当参数thickness等于0时，支持中英文，输入的BMImage支持的像素格式请参考《BMCV开发参考手册》的 ``bmcv_image_watermark_superpose`` 。
 
 **示例代码:**
     .. code-block:: python
@@ -2659,7 +2671,7 @@ polylines
 
 * color : tuple(int, int, int)
 
-画线的颜色，分别为RGB三个通道的值。
+画线的颜色，分别为BGR三个通道的值。
 
 * thickness : int 
 
@@ -3003,7 +3015,7 @@ drawLines
 
 * color : tuple[int, int, int]
 
-线段的颜色，RGB格式。
+线段的颜色，分别为BGR三个通道的值。
 
 * thickness : int 
 
@@ -3129,7 +3141,7 @@ istft
     输入信号的虚数部分。
 
 * real_input: bool
-    输出的信号是否为实数， false 为复数， true 为实数。
+    输出的信号是否为实数， False 为复数， True 为实数。
 
 * normalize: bool
     是否对输出进行归一化。
@@ -3176,7 +3188,7 @@ istft
 bmcv_overlay
 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
-图片上添加带透明通道的水印图。仅支持BM1688和CV186AH。
+图片上添加带透明通道的水印图。
 
 **接口形式:**
     .. code-block:: python
@@ -3196,7 +3208,7 @@ bmcv_overlay
 
 * overlay_image: list[BMImage]
 
-一组水印图，目前仅支持sail.Format.FORMAT_ARGB_PACKED格式
+一组水印图。
 
 **返回值说明:**
 
@@ -3206,7 +3218,25 @@ bmcv_overlay
 
 **注：**
 
-需要自行确保overlay_info中的所有矩形位置不重叠
+BM1684X 和 BM1688/CV186AH的overlay算子使用要求不同，使用时请注意区分，具体可参考《Bmcv开发参考手册》。
+
+* BM1684X：
+
+    需要SDK版本v23.09 LTS SP4及以上；
+
+    背景图像仅支持sail.Format.FORMAT_RGB_PACKED格式；
+
+    水印图像仅支持sail.Format.FORMAT_ABGR_PACKED格式；
+
+    水印图像支持的最大尺寸为850 * 850。
+
+* BM1688和CV186AH：
+
+    水印图像仅支持sail.Format.FORMAT_ARGB_PACKED格式；
+
+    接口内部会对未对齐的水印图像做stride 16对齐，无需自行确保是否对齐；
+    
+    需要自行确保overlay_info中的所有矩形位置不重叠。
 
 **示例代码1:**
 

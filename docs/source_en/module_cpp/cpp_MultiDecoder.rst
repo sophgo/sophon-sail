@@ -534,7 +534,7 @@ Set whether the video is a local video. If not called, the video is represented 
 
 * flag: bool
 
-Standard bit. If it is True, each video channel will be decoded at a fixed rate of 25 frames per second.
+Standard bit. If it is true, each video channel will be decoded at a fixed rate of 25 frames per second.
 
 **Sample:**
     .. code-block:: c

@@ -218,6 +218,9 @@ class Decoder_RawStream:
 
     def release(self) -> None: pass
 
+    def read_single_frame(self, data: bytes, image: BMImage, continue_frame: bool = False, need_flush: bool = False) -> int:
+        pass
+
 
 class PaddingAtrr:
     def __init__(self): pass
@@ -1185,6 +1188,25 @@ class MultiDecoder:
             file path
         frame_skip_num : int
             frame skip number, default is 0
+
+        Returns:
+        ----------
+        return channel index number, int
+        """
+        pass
+
+    def add_channel(self, file_path: str, frame_skip_num: int, loop_num: int) -> int:
+        
+        """ Add a channel to decode
+
+        Parameters:
+        ----------
+        file_path : str
+            file path
+        frame_skip_num : int
+            frame skip number
+        loop_num : int
+            loop number
 
         Returns:
         ----------

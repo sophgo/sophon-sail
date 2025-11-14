@@ -63,6 +63,7 @@ class DECL_EXPORT Encoder {
     int video_write(BMImage &image);
     int video_write(bm_image &image);
 
+    int reconnect();
     void release();
 
   private:

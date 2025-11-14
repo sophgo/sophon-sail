@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.10)
-project(sail VERSION 3.10.2)
+project(sail VERSION 3.10.4)
 
 option(ONLY_RUNTIME "OFF for USE OpenCV,BM-FFMPEG,BMCV"  OFF)
 option(BUILD_PYSAIL "ON for Build sail with python"      ON)
@@ -37,6 +37,10 @@ set(CMAKE_CXX_STANDARD     14)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -w")
 set(CMAKE_CXX_FLAGS_DEBUG    "-g")
 set(CMAKE_CXX_FLAGS_RELEASE  "-O3")
+
+if(NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Choose the type of build." FORCE)
+endif()
 
 set(BUILD_X86_PCIE OFF)
 set(BUILD_SOC      OFF)

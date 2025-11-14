@@ -90,11 +90,11 @@ process
 
         int main(){
             Handle handle(0);
-            Decoder decoder("./left.jpg", False, 0);
+            Decoder decoder("./left.jpg", false, 0);
             BMImage image_left;
             decoder.read(handle, image_left);
 
-            Decoder decoder("./right.jpg", False, 0);
+            Decoder decoder("./right.jpg", false, 0);
             BMImage image_right;
             decoder.read(handle, image_left);
 

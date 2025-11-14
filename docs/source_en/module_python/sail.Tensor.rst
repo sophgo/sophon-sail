@@ -12,7 +12,8 @@ Constructor allocates memory of the tensor. If synchronization between system me
         def __init__(self, 
                     handle: sail.Handle, 
                     data: numpy.array, 
-                    own_sys_data: bool=True)
+                    own_sys_data: bool=True,
+                    own_dev_data: bool=True)
  
 
 **Parameters**
@@ -25,10 +26,23 @@ Handle instance
 
 Tensor ndarray data, dtype can be np.float32, np.int8 or np.uint8
 
-* own_sys_data : bool, default: True
+* own_sys_data: bool, default: True
 
-Indicator of whether own system memory, If false, the memory will be copied to device directly  
+  Indicates whether the Tensor owns system memory.
 
+  - If True, the Tensor allocates system memory and copies the input data into it.  
+  - If False, the Tensor does not allocate system memory.
+
+* own_dev_data: bool, default: True
+
+  Indicates whether the Tensor owns device memory.
+
+  - If True, the Tensor allocates device memory (regardless of `own_sys_data` value)  
+  - If False, the Tensor does not allocate device memory  
+  - Data copying to device memory occurs **only when** both:  
+  
+    - `own_sys_data=False`  
+    - `own_dev_data=True`
 
 **Interface:**
     .. code-block:: python
@@ -73,7 +87,7 @@ Indicator of whether own device memory
             input = np.array([1, 2, 3]) 
             
             input_tensor1 = sail.Tensor(handle,input)
-            input_tensor2 = sail.Tensor(handle,[1,2],sail.Dtype.BM_FLOAT32,true,true)
+            input_tensor2 = sail.Tensor(handle,[1,2],sail.Dtype.BM_FLOAT32,True,True)
 
 **Interface:**
 

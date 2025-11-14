@@ -42,7 +42,7 @@ Print main process time use.
 
 * print_flag : bool
 
-If print_flag is true, print main process time use, Otherwise not print.
+If print_flag is True, print main process time use, Otherwise not print.
 
 **Sample:**
     .. code-block:: python
@@ -66,7 +66,7 @@ Dump input date and output date.
 
 * dump_io_flag : bool
 
-If dump_io_flag is true, dump input data and output data, Otherwise not dump.
+If dump_io_flag is True, dump input data and output data, Otherwise not dump.
 
 
 **Sample:**
@@ -417,7 +417,7 @@ Each integer in the List is the percent utilization of the corresponding core.
 get_board_temp
 >>>>>>>>>>>>>>>>>>>>>>>>>>
 
-Get the temperature of the board.
+Get the temperature of the board. Only supported in PCIe mode.
 
 **Interface:**
     .. code-block:: python
@@ -445,7 +445,7 @@ The board temperature for the corresponding card, with the default unit in Celsi
 get_chip_temp
 >>>>>>>>>>>>>>>>>>>>>>>>>>
 
-Get the temperature of the processor.
+Get the temperature of the processor. Only supported in PCIe mode.
 
 **Interface:**
     .. code-block:: python

@@ -26,7 +26,7 @@ Input parameter. The tpu id used.
 
 * use_mat_output: bool
 
-Input parameter. Whether to use Mat of OPENCV as the output of the image, the default is False, not used.
+Input parameter. Whether to use Mat of OPENCV as the output of the image, the default is false, not used.
 
 * use_mat_output: bool
 
@@ -181,7 +181,7 @@ Returns 0 on success, fails on other values.
 GetBatchData
 >>>>>>>>>>>>>>>>>>>
 
-Obtain the inference results of a batch. When calling this interface, since the returned result type is BMImage, use_mat_output must be False. It is worth noting that output tensors must be manually released.
+Obtain the inference results of a batch. When calling this interface, since the returned result type is BMImage, use_mat_output must be false. It is worth noting that output tensors must be manually released.
 
 **Interface:**
     .. code-block:: c
@@ -221,7 +221,7 @@ The attribute list of the filled image, the starting point coordinate x of the f
 GetBatchData_CV
 >>>>>>>>>>>>>>>>>>>>>>>
 
-Obtain the inference result of a batch. When calling this interface, since the returned result type is cv::Mat, use_mat_output must be True. It is worth noting that output tensors must be manually released.
+Obtain the inference result of a batch. When calling this interface, since the returned result type is cv::Mat, use_mat_output must be true. It is worth noting that output tensors must be manually released.
 
 **Interface:**
     .. code-block:: c
