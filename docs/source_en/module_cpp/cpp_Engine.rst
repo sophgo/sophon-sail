@@ -791,47 +791,32 @@ Input parameter. This parameter is only valid for processors that support multi-
 **Sample:**
     .. code-block:: c
 
-        
+
         #include "engine.h"
 
-        int main() {  
+        int main() {
             int dev_id = 0;
             sail::Engine engine(dev_id);
             std::string bmodel_path = "your_bmodel.bmodel";
             engine.load(bmodel_path);
             std::vector<std::string> graph_names = engine.get_graph_names();
-            std::vector<std::string> input_names = engine.get_input_names(graph_names[0]);
-            std::vector<std::string> output_names = engine.get_input_names(graph_names[0]);
-
-            std::vector<int> input_shape, output_shape;
-            bm_data_type_t input_dtype, output_dtype;
-            // allocate input and output tensors with both system and device memory
-            // or you can use engine.create_input\output_tensors_map to create
-            for (int i = 0; i < input_names.size(); i++) {
-                input_shape = engine.get_input_shape(graph_names[0], input_names[i]);
-                input_dtype = engine.get_input_dtype(graph_names[0], input_names[i]);
-                input_tensor[i] = std::make_shared<sail::Tensor>(handle, input_shape, input_dtype, true, true);
-                input_tensors[input_names[i]] = input_tensor[i].get();
-            }
-            for (int i = 0; i < output_names.size(); i++) {
-                output_shape = engine.get_output_shape(graph_names[0], output_names[i]);
-                output_dtype = engine.get_output_dtype(graph_names[0], output_names[i]);
-                output_tensor[i] = std::make_shared<sail::Tensor>(handle, output_shape[i], output_dtype, true, true);
-                output_tensors[output_names[i]] = output_tensor[i].get();
-            }
 
             // process1
-            engine.process(graph_names[0], input_tensors, output_tensors);  
-            
+            std::map<std::string, sail::Tensor*> input_tensors_map = engine.create_input_tensors_map(graph_names[0]);
+            std::map<std::string, sail::Tensor*> output_tensors_map = engine.create_output_tensors_map(graph_names[0]);
+            engine.process(graph_names[0], input_tensors_map, output_tensors_map);
+
             // process2
+            std::vector<std::string> input_names = engine.get_input_names(graph_names[0]);
             std::map<std::string, std::vector<int>> input_shapes;
             for (const auto& input_name : input_names) {
-                input_shape = engine.get_input_shape(bmodel_names, input_name);
+                std::vector<int> input_shape = engine.get_input_shape(graph_names[0], input_name);
                 input_shapes[input_name] = input_shape;
             }
-
-            engine.process(graph_names[0], input_tensors, input_shapes, output_tensors);
-            return 0;  
+            input_tensors_map = engine.create_input_tensors_map(graph_names[0]);
+            output_tensors_map = engine.create_output_tensors_map(graph_names[0]);
+            engine.process(graph_names[0], input_tensors_map, input_shapes, output_tensors_map);
+            return 0;
         }
 
 

@@ -8,10 +8,12 @@ from . import get_include
 
 
 def print_includes():
-    dirs = [sysconfig.get_path('include'),
-            sysconfig.get_path('platinclude'),
-            get_include(),
-            get_include(True)]
+    dirs = [
+        sysconfig.get_path('include'),
+        sysconfig.get_path('platinclude'),
+        get_include(),
+        get_include(True)
+    ]
 
     # Make unique but preserve order
     unique_dirs = []
@@ -24,7 +26,8 @@ def print_includes():
 
 def main():
     parser = argparse.ArgumentParser(prog='python -m pybind11')
-    parser.add_argument('--includes', action='store_true',
+    parser.add_argument('--includes',
+                        action='store_true',
                         help='Include flags for both pybind11 and Python headers.')
     args = parser.parse_args()
     if not sys.argv[1:]:

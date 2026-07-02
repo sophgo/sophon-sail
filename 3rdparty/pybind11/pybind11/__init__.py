@@ -11,8 +11,7 @@ def get_include(user=False):
         sys.prefix != getattr(sys, "base_prefix", sys.prefix)
 
     if virtualenv:
-        return os.path.join(sys.prefix, 'include', 'site',
-                            'python' + sys.version[:3])
+        return os.path.join(sys.prefix, 'include', 'site', 'python' + sys.version[:3])
     else:
         dist = Distribution({'name': 'pybind11'})
         dist.parse_config_files()

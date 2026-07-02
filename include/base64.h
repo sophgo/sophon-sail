@@ -23,13 +23,13 @@ You may obtain a copy of the License at
 #ifndef SAIL_BASE64_H
 #define SAIL_BASE64_H
 
+#include "tensor.h"
 #include <iostream>
 #include <string>
-#include "tensor.h"
 
 #ifdef USE_BMCV
-#include <bmlib_runtime.h>
 #include <bmcv_api_ext.h>
+#include <bmlib_runtime.h>
 
 #if !((BMCV_VERSION_MAJOR == 2) && !defined(BMCV_VERSION_MINOR))
 #include <bmcv_api.h>
@@ -38,9 +38,10 @@ You may obtain a copy of the License at
 #endif
 
 namespace sail {
-    int base64_enc(Handle& handle, const void *data, uint32_t dlen, std::string& encoded);
-    int base64_dec(Handle& handle, const void *data, uint32_t dlen, uint8_t* p_outbuf, uint32_t *p_size);
-}
+int base64_enc(Handle &handle, const void *data, uint32_t dlen,
+               std::string &encoded);
+int base64_dec(Handle &handle, const void *data, uint32_t dlen,
+               uint8_t *p_outbuf, uint32_t *p_size);
+} // namespace sail
 
-
-#endif //!SAIL_BASE64_H
+#endif //! SAIL_BASE64_H

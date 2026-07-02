@@ -24,22 +24,20 @@ namespace sinks {
 /*
  * MSVC sink (logging using OutputDebugStringA)
  */
-template<typename Mutex>
-class msvc_sink : public base_sink<Mutex>
-{
+template <typename Mutex>
+class msvc_sink : public base_sink<Mutex> {
 public:
-    explicit msvc_sink() {}
+  explicit msvc_sink() {}
 
 protected:
-    void sink_it_(const details::log_msg &msg) override
-    {
+  void sink_it_(const details::log_msg &msg) override {
 
-        fmt::memory_buffer formatted;
-        sink::formatter_->format(msg, formatted);
-        OutputDebugStringA(fmt::to_string(formatted).c_str());
-    }
+    fmt::memory_buffer formatted;
+    sink::formatter_->format(msg, formatted);
+    OutputDebugStringA(fmt::to_string(formatted).c_str());
+  }
 
-    void flush_() override {}
+  void flush_() override {}
 };
 
 using msvc_sink_mt = msvc_sink<std::mutex>;

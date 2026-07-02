@@ -163,6 +163,8 @@ The property name to set for the Decoder. The available property names are as fo
         - *'analyzeduration'*: How many microseconds are analyzed to probe the input. 5000000 by default.
         - *'buffer_size'*: The maximum socket buffer size in bytes.
         - *'max_delay'*: Maximum demuxing delay in microseconds.
+        - *'low_delay'*: Enable low delay decoding mode. When set to 1, enables AV_CODEC_FLAG_LOW_DELAY and AV_CODEC_FLAG2_FAST. The default is 0.
+        - *'nobuffer'*: Enable no buffer mode. When set to 1, enables AVFMT_FLAG_NOBUFFER to reduce decoding buffer for lower latency. The default is 0.
 
 
 
@@ -174,11 +176,13 @@ The configuration value of this property
     .. code-block:: c
 
         #include <sail/cvwrapper.h>
-        
-        int main() {  
+
+        int main() {
             sail::set_decoder_env("extra_frame_buffer_num", "3"); // Decrease buffer num for lower memory usage
             sail::set_decoder_env("probesize", "1024") // Decrease probesize for lower latency
             sail::set_decoder_env("skip_non_idr", "2") // skip non-reference frames
+            sail::set_decoder_env("low_delay", "1") // Enable low delay decoding
+            sail::set_decoder_env("nobuffer", "1") // Enable no buffer mode
             int dev_id = 0;
             sail::Handle handle(dev_id);
             std::string video_path = "input_video.mp4";
@@ -190,7 +194,7 @@ The configuration value of this property
 base64_enc
 >>>>>>>>>>>>>>>>>>>>>>>>
 
-Base64 encode the data to generate the corresponding base64 encoded string. BM1688 and CV186AH PCIE mode are not supported.
+Base64 encode the data to generate the corresponding base64 encoded string. BM1688 and CV186AH PCIe mode are not supported.
     .. code-block:: c
 
         int base64_enc(Handle& handle, const void *data, uint32_t dlen, std::string& encoded);
@@ -242,7 +246,7 @@ Return 0 on successful base64 encoding, otherwise return -1.
 
 base64_dec
 >>>>>>>>>>>>>>>>>>>>>>>>
-Base64 encode the data to generate the corresponding base64 encoded string. BM1688 and CV186AH PCIE mode are not supported.
+Base64 encode the data to generate the corresponding base64 encoded string. BM1688 and CV186AH PCIe mode are not supported.
 
     .. code-block:: c
 
@@ -363,7 +367,7 @@ Device ID.
 
 **Return:**
 
-The vpu of bm1684 is 5-core, and the return value is a list of length 5. The vpu of bm1684x is 3-core, and the return value is a list of length 3.
+The VPU of BM1684 is 5-core, and the return value is a list of length 5. The VPU of BM1684X is 3-core, and the return value is a list of length 3.
 Each integer in the List is the percent utilization of the corresponding core.
 
 **Sample:**
@@ -401,7 +405,7 @@ Device ID.
 
 **Return:**
 
-The vpp of bm1684 and bm1684x are both 2-core, and the return value is a list of length 2.
+The VPP of BM1684 and BM1684X are both 2-core, and the return value is a list of length 2.
 Each integer in the List is the percent utilization of the corresponding core.
 
 **Sample:**
@@ -411,10 +415,10 @@ Each integer in the List is the percent utilization of the corresponding core.
         
         int main() {  
             std::vector<int> vpp_util;
-            vpp_util = sail::get_vpu_util(0); 
+            vpp_util = sail::get_vpp_util(0);
 
             for(int i = 0; i < vpp_util.size(); i++) {
-                std::cout << "VPU ID: " << i << ", Util Value: " << vpp_util[i] << "%" << std::endl;
+                std::cout << "VPP ID: " << i << ", Util Value: " << vpp_util[i] << "%" << std::endl;
             }
             return 0;  
         }

@@ -7,10 +7,10 @@ ______________________
 编译可被C++接口调用的动态库及头文件
 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
-*注意: BM1688和CV186AH处理器仅支持SOC MODE章节,BM1684和BM1684X处理器无此限制。对于BM1688或者CV186AH处理器,下列命令中的sophon-mw应改为sophon-media。*
+*注意: BM1688和CV186AH处理器仅支持SoC MODE章节,BM1684和BM1684X处理器无此限制。对于BM1688或者CV186AH处理器,下列命令中的sophon-mw应改为sophon-media。*
 
 
-PCIE MODE
+PCIe MODE
 :::::::::::
 
 **.安装libsophon,sophon-ffmpeg,sophon-opencv的SAIL**
@@ -63,7 +63,7 @@ libsophon,sophon-ffmpeg,sophon-opencv的安装方式可参考算能官方文档
     .. parsed-literal::
         sudo make install  
 
-SOC MODE
+SoC MODE
 :::::::::::
 
 **.获取交叉编译需要使用的libsophon,sophon-ffmpeg,sophon-opencv**    
@@ -156,7 +156,7 @@ SOC MODE
 5. 将‘build_soc’文件夹下的‘sophon-sail’拷贝至目标SOC的‘/opt/sophon’目录下,即可在soc上进行调用。                       
 
 
-ARM PCIE MODE
+ARM PCIe MODE
 ::::::::::::::::::
 
 **.获取交叉编译需要使用的libsophon,sophon-ffmpeg,sophon-opencv**
@@ -252,7 +252,7 @@ LOONGARCH64 MODE
 ::::::::::::::::::::
 
 此小节描述的是，如何在x86主机上，使用交叉编译的方式编译 LoongArch64 版本的SAIL。
-如果需要在 LoongArch64 主机上本地编译，操作过程与x86本地编译类似，请参考 PCIE MODE 章节。
+如果需要在 LoongArch64 主机上本地编译，操作过程与x86本地编译类似，请参考 PCIe MODE 章节。
 
 **.安装loongarch64-linux-gnu工具链**
 
@@ -346,7 +346,7 @@ RISCV MODE
 ::::::::::::::::::
 
 此小节描述的是，如何在x86主机上，使用交叉编译的方式编译 riscv64 版本的SAIL。
-如果需要在 riscv64 主机上本地编译，操作过程与x86本地编译类似，请参考 PCIE MODE 章节。
+如果需要在 riscv64 主机上本地编译，操作过程与x86本地编译类似，请参考 PCIe MODE 章节。
 
 **.获取交叉编译需要使用的libsophon,sophon-ffmpeg,sophon-opencv**
 
@@ -355,7 +355,7 @@ RISCV MODE
 1. 从算能官网中获取‘libsophon_0.5.0_riscv64.tar.gz’,并解压
 
     .. parsed-literal::
-        tar -xvf libsophon_0.4.0_riscv64.tar.gz
+        tar -xvf libsophon_0.5.0_riscv64.tar.gz
 
 解压后libsophon的目录为‘libsophon_0.5.0_riscv64/opt/sophon/libsophon-0.5.0’
 
@@ -515,11 +515,11 @@ windows下libsophon,sophon-ffmpeg,sophon-opencv的安装方式可参考算能官
 使用SAIL的C++接口进行开发
 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
-*注意: BM1688和CV186AH处理器仅支持SOC MODE章节,BM1684和BM1684X处理器无此限制。对于BM1688或者CV186AH处理器,下列命令中的sophon-mw应改为sophon-media。*
+*注意: BM1688和CV186AH处理器仅支持SoC MODE章节,BM1684和BM1684X处理器无此限制。对于BM1688或者CV186AH处理器,下列命令中的sophon-mw应改为sophon-media。*
 
-PCIE MODE
+PCIe MODE
 ::::::::::::::::
-在使用PCIE MODE编译好SAIL,并且通过执行‘sudo make install’或者通过拷贝的方式安装好SAIL的c++库之后,
+在使用PCIe MODE编译好SAIL,并且通过执行‘sudo make install’或者通过拷贝的方式安装好SAIL的c++库之后,
 推荐使用cmake来将SAIL中的库链接到自己的程序中,如果需要使用SAIL多媒体相关的功能,
 也需要将libsophon,sophon-ffmpeg,sophon-opencv的头文件目录及动态库目录添加到自己的程序中。
 可以在您程序的CMakeLists.txt中添加如下段落:
@@ -593,12 +593,12 @@ PCIE MODE
     }
 
 
-SOC MODE
+SoC MODE
 ::::::::::::::::
 
 **.SOC设备上编译程序**
 
-在SOC设备上安装好libsophon,sophon-ffmpeg,sophon-opencv,及SAIL之后,您可以参考PCIE MODE的开发方法使用cmake将SAIL中的库链接到自己的程序中,
+在SOC设备上安装好libsophon,sophon-ffmpeg,sophon-opencv,及SAIL之后,您可以参考PCIe MODE的开发方法使用cmake将SAIL中的库链接到自己的程序中,
 如果需要使用SAIL多媒体相关的功能,
 也需要将libsophon,sophon-ffmpeg,sophon-opencv的头文件目录及动态库目录添加到自己的程序中。
 
@@ -671,12 +671,12 @@ SOC MODE
     # sail为需要链接的库
 
 
-ARM PCIE MODE
+ARM PCIe MODE
 ::::::::::::::::
 
 **.ARM主机上编译程序**
 
-在ARM主机上安装好libsophon,sophon-ffmpeg,sophon-opencv,及SAIL之后,您可以参考PCIE MODE的开发方法使用cmake将SAIL中的库链接到自己的程序中,
+在ARM主机上安装好libsophon,sophon-ffmpeg,sophon-opencv,及SAIL之后,您可以参考PCIe MODE的开发方法使用cmake将SAIL中的库链接到自己的程序中,
 如果需要使用SAIL多媒体相关的功能,
 也需要将libsophon,sophon-ffmpeg,sophon-opencv的头文件目录及动态库目录添加到自己的程序中。
 

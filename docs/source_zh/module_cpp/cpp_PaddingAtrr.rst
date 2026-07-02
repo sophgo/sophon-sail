@@ -231,6 +231,6 @@ B通道上的padding值
             paddingatt.set_g(114);  
             paddingatt.set_b(114);  
             sail::BMImage BMimg3 = bmcv.crop_and_resize(BMimg, 0, 0, BMimg.width(), BMimg.height(), 640, 640, paddingatt);
-            bmcv.imwrite("{}-{}.jpg".format(BMimg3.width(), BMimg3.height()), BMimg3);
+            bmcv.imwrite(std::to_string(BMimg3.width()) + "-" + std::to_string(BMimg3.height()) + ".jpg", BMimg3);
             return 0;
         }

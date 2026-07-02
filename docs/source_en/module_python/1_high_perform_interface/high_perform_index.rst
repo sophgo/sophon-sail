@@ -81,7 +81,7 @@ bytetrack
 
 openpose 
 ======================
-Use tpukernel to speed up openpose post-processing of part nms.
+Use TPU kernel to speed up openpose post-processing of part nms.
 
 .. toctree::
    :glob:

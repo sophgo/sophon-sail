@@ -145,6 +145,8 @@ set_decoder_env
         - *'analyzeduration'* 解析文件时读取的最大时长，单位为ms。默认为5000000。
         - *'buffer_size'* 设置缓存大小。
         - *'max_delay'* 设置最大时延。
+        - *'low_delay'* 启用低延迟解码模式。设置为1时，启用AV_CODEC_FLAG_LOW_DELAY和AV_CODEC_FLAG2_FAST。默认为0。
+        - *'nobuffer'* 启用无缓冲模式。设置为1时，启用AVFMT_FLAG_NOBUFFER，减少解码缓冲以降低延迟。默认为0。
 
 * env_value: str
 
@@ -158,6 +160,8 @@ set_decoder_env
             sail.set_decoder_env("extra_frame_buffer_num", "3") # 减小buffer以降低内存占用
             sail.set_decoder_env("probesize", "1024") # 减小probesize以降低拉流延迟
             sail.set_decoder_env("skip_non_idr", "2") # 跳过非参考帧
+            sail.set_decoder_env("low_delay", "1") # 启用低延迟解码
+            sail.set_decoder_env("nobuffer", "1") # 启用无缓冲模式
             dev_id = 0
             handle = sail.Handle(dev_id)
             video_path = "input_video.mp4"
@@ -365,7 +369,7 @@ get_vpu_util
 
 **返回值说明:**
 
-bm1684为5核vpu，返回值为长度为5的List，bm1684x为3核vpu， 返回值为长度为3的List。
+BM1684为5核VPU，返回值为长度为5的List，BM1684X为3核VPU， 返回值为长度为3的List。
 List中的每项数据为对应核心的使用率百分比。
 
 **示例代码**
@@ -394,7 +398,7 @@ get_vpp_util
 
 **返回值说明:**
 
-bm1684与bm1684x均为2核vpp，返回值为长度为2的List。
+BM1684与BM1684X均为2核VPP，返回值为长度为2的List。
 List中的每项数据为对应核心的使用率百分比。
 
 **示例代码**

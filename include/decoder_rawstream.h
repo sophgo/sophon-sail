@@ -25,71 +25,74 @@ You may obtain a copy of the License at
 #if defined(USE_FFMPEG) && defined(USE_BMCV)
 #include <string>
 
-#include "bmcv_api_ext.h"
+#include <bmcv_api_ext.h>
 
 #ifdef PYTHON
-#include "pybind11/pybind11.h"
-#include "pybind11/pytypes.h"
-#endif  // PYTHON
+#include <pybind11/pybind11.h>
+#include <pybind11/pytypes.h>
+#endif // PYTHON
 
 namespace sail {
-class BMImage;  // forward declaration
+class BMImage; // forward declaration
 class DECL_EXPORT Decoder_RawStream {
-   public:
-    /**
-     * @brief Constructor.
-     *
-     * @param tpu_id     ID of TPU
-     * mode.
-     * @param decformt  Coding format of raw video data to be decoded, h264 or
-     * h265.
-     */
-    Decoder_RawStream(int tpu_id, std::string decformt);
-    /**
-     * @brief Destructor.
-     */
-    ~Decoder_RawStream();
-    void release();
+public:
+  /**
+   * @brief Constructor.
+   *
+   * @param tpu_id     ID of TPU
+   * mode.
+   * @param decformt  Coding format of raw video data to be decoded, h264 or
+   * h265.
+   * @param decode_order  Decoding order, 0 for presentation order, 1 for stream
+   * order.
+   */
+  Decoder_RawStream(int tpu_id, std::string decformt);
+  Decoder_RawStream(int tpu_id, std::string decformt, int decode_order);
+  /**
+   * @brief Destructor.
+   */
+  ~Decoder_RawStream();
+  void release();
 
-    /**
-     * @brief Read a frame from the raw stream.
-     * @param data        The raw stream data.
-     * @param data_size   The size of the raw stream data.
-     * @param image       The decoded image.
-     * @param continueFrame  Whether to continue decoding the current frame.
-     * @return 0 on success, -1 on failure.
-     * @details
-     * - Decoder will preserve decoding state internally, like how many data was
-     * consumed
-     */
-    int read(uint8_t* data, int data_size, sail::BMImage& image,
-             bool continueFrame = false);
-    int read_(uint8_t* data, int data_size, bm_image& image,
-              bool continueFrame = false);
-    int read_single_frame(uint8_t* data, int data_size, sail::BMImage& image,
-                         bool continueFrame = false, bool need_flush = false);
+  /**
+   * @brief Read a frame from the raw stream.
+   * @param data        The raw stream data.
+   * @param data_size   The size of the raw stream data.
+   * @param image       The decoded image.
+   * @param continueFrame  Whether to continue decoding the current frame.
+   * @return 0 on success, -1 on failure.
+   * @details
+   * - Decoder will preserve decoding state internally, like how many data was
+   * consumed
+   */
+  int read(uint8_t *data, int data_size, sail::BMImage &image,
+           bool continueFrame = false);
+  int read_(uint8_t *data, int data_size, bm_image &image,
+            bool continueFrame = false);
+  int read_single_frame(uint8_t *data, int data_size, sail::BMImage &image,
+                        bool continueFrame = false, bool need_flush = false);
 
 #ifdef PYTHON
-    /**
-     * @brief Read a frame from the raw stream.
-     * @param data_bytes  The raw stream data.
-     * @param image       The decoded image.
-     * @param continueFrame  Whether to continue decoding the current frame.
-     * @return 0 on success, -1 on failure.
-     */
-    int read(pybind11::bytes data_bytes, BMImage& image,
-             bool continueFrame = false);
-    int read_(pybind11::bytes data_bytes, bm_image& image,
-              bool continueFrame = false);
-    int read_single_frame(pybind11::bytes data_bytes, BMImage& image,
-                         bool continueFrame = false, bool need_flush = false);
+  /**
+   * @brief Read a frame from the raw stream.
+   * @param data_bytes  The raw stream data.
+   * @param image       The decoded image.
+   * @param continueFrame  Whether to continue decoding the current frame.
+   * @return 0 on success, -1 on failure.
+   */
+  int read(pybind11::bytes data_bytes, BMImage &image,
+           bool continueFrame = false);
+  int read_(pybind11::bytes data_bytes, bm_image &image,
+            bool continueFrame = false);
+  int read_single_frame(pybind11::bytes data_bytes, BMImage &image,
+                        bool continueFrame = false, bool need_flush = false);
 #endif
 
-   private:
-    class Decoder_RawStream_CC;
-    class Decoder_RawStream_CC* const _impl;
+private:
+  class Decoder_RawStream_CC;
+  class Decoder_RawStream_CC *const _impl;
 };
 
-}  // namespace sail
+} // namespace sail
 
-#endif  // USE_FFMPEG
+#endif // USE_FFMPEG

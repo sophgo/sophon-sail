@@ -5,7 +5,7 @@
 
 class HungarianOper {
 public:
-    static cv::Mat Solve(const cv::Mat &cost_matrix);
+  static cv::Mat Solve(const cv::Mat &cost_matrix);
 };
 
 #endif // HUNGARIANOPER_H

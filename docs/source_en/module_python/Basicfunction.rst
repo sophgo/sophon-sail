@@ -143,6 +143,8 @@ The property name to set for the Decoder. The available property names are as fo
         - *'analyzeduration'*: How many microseconds are analyzed to probe the input. 5000000 microseconds by default.
         - *'buffer_size'*: The maximum socket buffer size in bytes.
         - *'max_delay'*: Maximum demuxing delay in microseconds.
+        - *'low_delay'*: Enable low delay decoding mode. When set to 1, enables AV_CODEC_FLAG_LOW_DELAY and AV_CODEC_FLAG2_FAST. The default is 0.
+        - *'nobuffer'*: Enable no buffer mode. When set to 1, enables AVFMT_FLAG_NOBUFFER to reduce decoding buffer for lower latency. The default is 0.
 
 * env_value: str
 
@@ -156,6 +158,8 @@ Environment value.
             sail.set_decoder_env("extra_frame_buffer_num", "3") # Decrease buffer num for lower memory usage
             sail.set_decoder_env("probesize", "1024") # Decrease probesize for lower latency
             sail.set_decoder_env("skip_non_idr", "2") # skip non-reference frames
+            sail.set_decoder_env("low_delay", "1") # Enable low delay decoding
+            sail.set_decoder_env("nobuffer", "1") # Enable no buffer mode
             dev_id = 0
             handle = sail.Handle(dev_id)
             image_name = "your_video.mp4"
@@ -166,7 +170,7 @@ Environment value.
 base64_encode
 >>>>>>>>>>>>>>>>>>>>>>>>>>
 
-Encode byte data into base64 and return the encoded data as bytes. BM1688 and CV186AH PCIE mode are not supported.
+Encode byte data into base64 and return the encoded data as bytes. BM1688 and CV186AH PCIe mode are not supported.
 
 **Interface:**
     .. code-block:: python
@@ -209,7 +213,7 @@ The byte data encoded in base64.
 base64_decode
 >>>>>>>>>>>>>>>>>>>>>>>>
 
-Decode the byte-encoded data in base64 and return the decoded byte data. BM1688 and CV186AH PCIE mode are not supported.
+Decode the byte-encoded data in base64 and return the decoded byte data. BM1688 and CV186AH PCIe mode are not supported.
 
 **Interface:**
     .. code-block:: python
@@ -257,7 +261,7 @@ The byte data decoded from base64.
 base64_encode_array
 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
-Encode a numpy.array into base64, generating byte-encoded data. BM1688 and CV186AH PCIE mode are not supported.
+Encode a numpy.array into base64, generating byte-encoded data. BM1688 and CV186AH PCIe mode are not supported.
 
 **Interface:**
     .. code-block:: python
@@ -372,7 +376,7 @@ Device ID.
 
 **Return:**
 
-The vpu of bm1684 is 5-core, and the return value is a list of length 5. The vpu of bm1684x is 3-core, and the return value is a list of length 3.
+The VPU of BM1684 is 5-core, and the return value is a list of length 5. The VPU of BM1684X is 3-core, and the return value is a list of length 3.
 Each integer in the List is the percent utilization of the corresponding core.
 
 **Sample**
@@ -402,7 +406,7 @@ Device ID.
 
 **Return:**
 
-The vpp of bm1684 and bm1684x are both 2-core, and the return value is a list of length 2.
+The VPP of BM1684 and BM1684X are both 2-core, and the return value is a list of length 2.
 Each integer in the List is the percent utilization of the corresponding core.
 
 **Sample**

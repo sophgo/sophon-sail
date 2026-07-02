@@ -16,18 +16,17 @@ You may obtain a copy of the License at
 
 #include "processor.h"
 
-PreProcessor::PreProcessor(float scale) :
-  ab_{1, -103.94, 1, -116.78, 1, -123.68} {
-  for (int i = 0; i < 6; i ++) {
+PreProcessor::PreProcessor(float scale)
+    : ab_{1, -103.94, 1, -116.78, 1, -123.68} {
+  for (int i = 0; i < 6; i++) {
     ab_[i] *= scale;
   }
 }
 
-BmcvPreProcessor::BmcvPreProcessor(sail::Bmcv& bmcv, float scale)
-    : PreProcessor(scale), bmcv_(bmcv) {
-}
+BmcvPreProcessor::BmcvPreProcessor(sail::Bmcv &bmcv, float scale)
+    : PreProcessor(scale), bmcv_(bmcv) {}
 
-void BmcvPreProcessor::process(sail::BMImage& input, sail::BMImage& output) {
+void BmcvPreProcessor::process(sail::BMImage &input, sail::BMImage &output) {
   sail::BMImage tmp;
   bmcv_.vpp_resize(input, tmp, 224, 224);
   bmcv_.convert_to(tmp, output,
@@ -36,11 +35,7 @@ void BmcvPreProcessor::process(sail::BMImage& input, sail::BMImage& output) {
                                    std::make_pair(ab_[4], ab_[5])));
 }
 
-
-PostProcessor::PostProcessor(
-    size_t batch_size,
-    size_t class_num,
-    size_t top_k)
+PostProcessor::PostProcessor(size_t batch_size, size_t class_num, size_t top_k)
     : batch_size_(batch_size), class_num_(class_num), top_k_(top_k) {
   if (top_k > class_num) {
     spdlog::error("Error: top_k > class_num");
@@ -48,7 +43,7 @@ PostProcessor::PostProcessor(
   }
 }
 
-std::vector<std::vector<int>> PostProcessor::process(float* input) {
+std::vector<std::vector<int>> PostProcessor::process(float *input) {
   std::vector<std::vector<int>> result;
   float *data = input;
   for (int i = 0; i < batch_size_; ++i) {
@@ -57,7 +52,7 @@ std::vector<std::vector<int>> PostProcessor::process(float* input) {
     std::iota(idx.begin(), idx.end(), 0);
     // sort indexes based on comparing values in data
     std::stable_sort(idx.begin(), idx.end(),
-              [&data](int i1, int i2) {return data[i1] > data[i2];});
+                     [&data](int i1, int i2) { return data[i1] > data[i2]; });
     idx.resize(top_k_);
     result.push_back(idx);
     data += class_num_;

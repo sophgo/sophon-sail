@@ -18,45 +18,61 @@ from threading import Thread, Semaphore
 from multiprocessing import cpu_count
 
 RECURSE_LIST = [
-    CursorKind.TRANSLATION_UNIT,
-    CursorKind.NAMESPACE,
-    CursorKind.CLASS_DECL,
-    CursorKind.STRUCT_DECL,
-    CursorKind.ENUM_DECL,
-    CursorKind.CLASS_TEMPLATE
+    CursorKind.TRANSLATION_UNIT, CursorKind.NAMESPACE, CursorKind.CLASS_DECL,
+    CursorKind.STRUCT_DECL, CursorKind.ENUM_DECL, CursorKind.CLASS_TEMPLATE
 ]
 
 PRINT_LIST = [
-    CursorKind.CLASS_DECL,
-    CursorKind.STRUCT_DECL,
-    CursorKind.ENUM_DECL,
-    CursorKind.ENUM_CONSTANT_DECL,
-    CursorKind.CLASS_TEMPLATE,
-    CursorKind.FUNCTION_DECL,
-    CursorKind.FUNCTION_TEMPLATE,
-    CursorKind.CONVERSION_FUNCTION,
-    CursorKind.CXX_METHOD,
-    CursorKind.CONSTRUCTOR,
-    CursorKind.FIELD_DECL
+    CursorKind.CLASS_DECL, CursorKind.STRUCT_DECL, CursorKind.ENUM_DECL,
+    CursorKind.ENUM_CONSTANT_DECL, CursorKind.CLASS_TEMPLATE, CursorKind.FUNCTION_DECL,
+    CursorKind.FUNCTION_TEMPLATE, CursorKind.CONVERSION_FUNCTION, CursorKind.CXX_METHOD,
+    CursorKind.CONSTRUCTOR, CursorKind.FIELD_DECL
 ]
 
 CPP_OPERATORS = {
-    '<=': 'le', '>=': 'ge', '==': 'eq', '!=': 'ne', '[]': 'array',
-    '+=': 'iadd', '-=': 'isub', '*=': 'imul', '/=': 'idiv', '%=':
-    'imod', '&=': 'iand', '|=': 'ior', '^=': 'ixor', '<<=': 'ilshift',
-    '>>=': 'irshift', '++': 'inc', '--': 'dec', '<<': 'lshift', '>>':
-    'rshift', '&&': 'land', '||': 'lor', '!': 'lnot', '~': 'bnot',
-    '&': 'band', '|': 'bor', '+': 'add', '-': 'sub', '*': 'mul', '/':
-    'div', '%': 'mod', '<': 'lt', '>': 'gt', '=': 'assign', '()': 'call'
+    '<=': 'le',
+    '>=': 'ge',
+    '==': 'eq',
+    '!=': 'ne',
+    '[]': 'array',
+    '+=': 'iadd',
+    '-=': 'isub',
+    '*=': 'imul',
+    '/=': 'idiv',
+    '%=': 'imod',
+    '&=': 'iand',
+    '|=': 'ior',
+    '^=': 'ixor',
+    '<<=': 'ilshift',
+    '>>=': 'irshift',
+    '++': 'inc',
+    '--': 'dec',
+    '<<': 'lshift',
+    '>>': 'rshift',
+    '&&': 'land',
+    '||': 'lor',
+    '!': 'lnot',
+    '~': 'bnot',
+    '&': 'band',
+    '|': 'bor',
+    '+': 'add',
+    '-': 'sub',
+    '*': 'mul',
+    '/': 'div',
+    '%': 'mod',
+    '<': 'lt',
+    '>': 'gt',
+    '=': 'assign',
+    '()': 'call'
 }
 
-CPP_OPERATORS = OrderedDict(
-    sorted(CPP_OPERATORS.items(), key=lambda t: -len(t[0])))
+CPP_OPERATORS = OrderedDict(sorted(CPP_OPERATORS.items(), key=lambda t: -len(t[0])))
 
 job_count = cpu_count()
 job_semaphore = Semaphore(job_count)
 
 output = []
+
 
 def d(s):
     return s.decode('utf8')
@@ -108,23 +124,22 @@ def process_comment(comment):
     s = re.sub(r'\\em\s+%s' % cpp_group, r'*\1*', s)
     s = re.sub(r'\\b\s+%s' % cpp_group, r'**\1**', s)
     s = re.sub(r'\\ingroup\s+%s' % cpp_group, r'', s)
-    s = re.sub(r'\\param%s?\s+%s' % (param_group, cpp_group),
-               r'\n\n$Parameter ``\2``:\n\n', s)
+    s = re.sub(r'\\param%s?\s+%s' % (param_group, cpp_group), r'\n\n$Parameter ``\2``:\n\n', s)
     s = re.sub(r'\\tparam%s?\s+%s' % (param_group, cpp_group),
                r'\n\n$Template parameter ``\2``:\n\n', s)
 
     for in_, out_ in {
-        'return': 'Returns',
-        'author': 'Author',
-        'authors': 'Authors',
-        'copyright': 'Copyright',
-        'date': 'Date',
-        'remark': 'Remark',
-        'sa': 'See also',
-        'see': 'See also',
-        'extends': 'Extends',
-        'throw': 'Throws',
-        'throws': 'Throws'
+            'return': 'Returns',
+            'author': 'Author',
+            'authors': 'Authors',
+            'copyright': 'Copyright',
+            'date': 'Date',
+            'remark': 'Remark',
+            'sa': 'See also',
+            'see': 'See also',
+            'extends': 'Extends',
+            'throw': 'Throws',
+            'throws': 'Throws'
     }.items():
         s = re.sub(r'\\%s\s*' % in_, r'\n\n$%s:\n\n' % out_, s)
 
@@ -133,8 +148,7 @@ def process_comment(comment):
     s = re.sub(r'\\short\s*', r'', s)
     s = re.sub(r'\\ref\s*', r'', s)
 
-    s = re.sub(r'\\code\s?(.*?)\s?\\endcode',
-               r"```\n\1\n```\n", s, flags=re.DOTALL)
+    s = re.sub(r'\\code\s?(.*?)\s?\\endcode', r"```\n\1\n```\n", s, flags=re.DOTALL)
 
     # HTML/TeX tags
     s = re.sub(r'<tt>(.*?)</tt>', r'``\1``', s, flags=re.DOTALL)
@@ -183,8 +197,7 @@ def process_comment(comment):
 
 
 def extract(filename, node, prefix):
-    if not (node.location.file is None or
-            os.path.samefile(d(node.location.file.name), filename)):
+    if not (node.location.file is None or os.path.samefile(d(node.location.file.name), filename)):
         return 0
     if node.kind in RECURSE_LIST:
         sub_prefix = prefix
@@ -207,6 +220,7 @@ def extract(filename, node, prefix):
 
 
 class ExtractionThread(Thread):
+
     def __init__(self, filename, parameters):
         Thread.__init__(self)
         self.filename = filename
@@ -216,12 +230,12 @@ class ExtractionThread(Thread):
     def run(self):
         print('Processing "%s" ..' % self.filename, file=sys.stderr)
         try:
-            index = cindex.Index(
-                cindex.conf.lib.clang_createIndex(False, True))
+            index = cindex.Index(cindex.conf.lib.clang_createIndex(False, True))
             tu = index.parse(self.filename, self.parameters)
             extract(self.filename, tu.cursor, '')
         finally:
             job_semaphore.release()
+
 
 if __name__ == '__main__':
     parameters = ['-x', 'c++', '-std=c++11']

@@ -3,13 +3,13 @@
 #ifdef WIN
 typedef unsigned char u_char;
 #else
-#include <unistd.h>
 #include <sys/time.h>
+#include <unistd.h>
 #endif
 #include <csignal>
 
 #ifdef USE_BMCV
-#include "bmcv_api_ext.h"
+#include <bmcv_api_ext.h>
 
 #if !(BMCV_VERSION_MAJOR > 1)
 #include <bmcv_api.h>
@@ -25,8 +25,7 @@ typedef unsigned char u_char;
 #endif
 
 #ifdef USE_FFMPEG
-extern "C"
-{
+extern "C" {
 #include <libavformat/avformat.h>
 #include <libavutil/imgutils.h>
 #include <libavutil/time.h>
@@ -42,33 +41,51 @@ namespace sail {
 #ifdef USE_FFMPEG
 
 class DECL_EXPORT Encoder {
-  public:
-    Encoder();
-    Encoder(const std::string &output_path, int device_id, const std::string &enc_fmt, const std::string &pix_fmt, const std::string &enc_params, int cache_buffer_length=5, int abort_policy=0);
-    Encoder(const std::string &output_path, Handle& handle, const std::string &enc_fmt, const std::string &pix_fmt, const std::string &enc_params, int cache_buffer_length=5, int abort_policy=0);
-    ~Encoder();
+public:
+  Encoder();
+  Encoder(const std::string &output_path, int device_id,
+          const std::string &enc_fmt, const std::string &pix_fmt,
+          const std::string &enc_params, int cache_buffer_length = 5,
+          int abort_policy = 0);
+  Encoder(const std::string &output_path, Handle &handle,
+          const std::string &enc_fmt, const std::string &pix_fmt,
+          const std::string &enc_params, int cache_buffer_length = 5,
+          int abort_policy = 0);
+  // Memory mode constructor: encode to memory buffer instead of file/stream
+  // output_path is ignored (pass empty string), output is fragmented MP4
+  Encoder(int device_id, const std::string &enc_fmt, const std::string &pix_fmt,
+          const std::string &enc_params, bool memory_mode,
+          int cache_buffer_length = 5, int abort_policy = 0);
+  ~Encoder();
 
-    bool is_opened();
+  bool is_opened();
 
-    // c++ interface for pic encode, return data length
-    int pic_encode(std::string& ext, BMImage &image, std::vector<u_char>& data);
-    int pic_encode(std::string& ext, bm_image &image, std::vector<u_char>& data);
+  // c++ interface for pic encode, return data length
+  int pic_encode(std::string &ext, BMImage &image, std::vector<u_char> &data);
+  int pic_encode(std::string &ext, bm_image &image, std::vector<u_char> &data);
 
-    // python interface for pic encode, return data on system memory as numpy
+  // python interface for pic encode, return data on system memory as numpy
 #ifdef PYTHON
-    pybind11::array_t<uint8_t> pic_encode(std::string& ext, BMImage &image);
-    pybind11::array_t<uint8_t> pic_encode(std::string& ext, bm_image &image);
+  pybind11::array_t<uint8_t> pic_encode(std::string &ext, BMImage &image);
+  pybind11::array_t<uint8_t> pic_encode(std::string &ext, bm_image &image);
 #endif
 
-    int video_write(BMImage &image);
-    int video_write(bm_image &image);
+  int video_write(BMImage &image);
+  int video_write(bm_image &image);
 
-    int reconnect();
-    void release();
+  int reconnect();
+  void release();
 
-  private:
-    class Encoder_CC;
-    class Encoder_CC* const _impl;
+  // Memory mode: get encoded data as a copy (call after release())
+  std::vector<uint8_t> get_encoded_data();
+  // Memory mode: get current buffer size
+  size_t get_encoded_size();
+  // Memory mode: reset buffer for reuse
+  void reset_encoded_data();
+
+private:
+  class Encoder_CC;
+  class Encoder_CC *const _impl;
 };
 #endif
-}
+} // namespace sail

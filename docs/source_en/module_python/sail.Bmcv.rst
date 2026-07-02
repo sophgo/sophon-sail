@@ -466,7 +466,7 @@ Output image or image array
 vpp_crop_and_resize
 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
-Crop then resize an image or an image array using vpp
+Crop then resize an image or an image array using VPP
 
 **Interface:**
     .. code-block:: python
@@ -553,7 +553,7 @@ Output image or image array
 vpp_crop_and_resize_padding
 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
-Crop then resize an image or an image array using vpp.
+Crop then resize an image or an image array using VPP.
 
 **Interface:**
     .. code-block:: python
@@ -639,7 +639,7 @@ Output image or image array
 vpp_crop
 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
-Crop an image or an image array with given window using vpp.
+Crop an image or an image array with given window using VPP.
 
 **Interface:**
     .. code-block:: python
@@ -698,7 +698,7 @@ Output image or image array
 vpp_resize
 >>>>>>>>>>>>>>>>>
 
-Resize an image or an image array with interpolation of INTER_NEAREST using vpp.
+Resize an image or an image array with interpolation of INTER_NEAREST using VPP.
 
 **Interface:**
     .. code-block:: python
@@ -798,7 +798,7 @@ Resize algorithm, default is BMCV_INTER_NEAREST
 vpp_resize_padding
 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
-Resize an image or an image array with interpolation of INTER_NEAREST using vpp.
+Resize an image or an image array with interpolation of INTER_NEAREST using VPP.
 
 **Interface:**
     .. code-block:: python
@@ -1521,7 +1521,7 @@ output image
 vpp_convert_format
 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
-Convert input to output format or convert an image to BGR PLANAR format using vpp. 
+Convert input to output format or convert an image to BGR PLANAR format using VPP.
 
 **Interface:**
     .. code-block:: python
@@ -1901,7 +1901,7 @@ point start y.
 
 nms
 >>>>>>>>
-Do nms use tpu.
+Do nms use TPU.
 
 **Note:** For details about whether this operator in current SDK supports BM1688, check the page "BMCV API" in 《Multimedia User Guide》. 
 
@@ -3625,5 +3625,77 @@ The Symmetric Distance Computation (SDC) lookup table is used to speed up the di
         D_, I_ = bmcv.faiss_indexPQ_SDC(nxcodes_vecs, nycodes_vecs, SDC_tables, slice_num, 256, database_vecs_num, query_vecs_num, topK, 0)
         print("The index of sail:\n", I_)
         print("The distance of sail:\n", D_)
+
+
+ssim
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+Calculate the Structural Similarity (SSIM) between two images. This interface is used to measure the degree of similarity between two images and outputs the SSIM score.
+
+**Interface Prototype:**
+    .. code-block:: python
+
+        ssim(
+            self,
+            bm_img1: BMImage,
+            bm_img2: BMImage,
+            win_size: int = 7,
+            data_range: float = 255.0,
+            full: bool = False,
+            gaussian_weights: bool = True,
+            use_sample_covariance: bool = True
+        ) -> float | tuple[float, numpy.ndarray]:
+
+**Parameters:**
+
+* bm_img1: BMImage
+    The first input image. Only FORMAT_BGR_PLANAR, FORMAT_RGB_PLANAR, and FORMAT_GRAY formats are supported.
+
+* bm_img2: BMImage
+    The second input image. The image dimensions and data type must match bm_img1.
+
+* win_size: int
+    The size of the sliding window used in the calculation. It must be an odd number. The default value is 7.
+
+* data_range: float
+    The value range of the input image data (maximum value minus minimum value). The default value is 255.0.
+
+* full: bool
+    Whether to return the full SSIM image. If False, returns the average SSIM score; if True, returns both the SSIM score and the SSIM image. The default value is False.
+
+* gaussian_weights: bool
+    Whether to use Gaussian weighting in the calculation. If True, a Gaussian kernel is used for weighted calculation. The default value is True.
+
+* use_sample_covariance: bool
+    Whether to use sample covariance for calculation. The default value is True.
+
+**Returns:**
+
+* result: float | tuple[float, numpy.ndarray]
+    If full is False, returns a float representing the average SSIM score of the two images.
+    If full is True, returns a tuple (mssim, ssim_map), where mssim is the average SSIM score and ssim_map is the full SSIM image.
+
+**Example Code:**
+    .. code-block:: python
+
+        import sophon.sail as sail
+
+        tpu_id = 0
+        handle = sail.Handle(tpu_id)
+        bmcv = sail.Bmcv(handle)
+        image_name1 = "test1.png"
+        image_name2 = "test2.png"
+        decoder1 = sail.Decoder(image_name1,True,tpu_id)
+        decoder2 = sail.Decoder(image_name2,True,tpu_id)
+        BMimg1 = decoder1.read(handle) # this is a sail.BMImage
+        BMimg2 = decoder2.read(handle) # this is a sail.BMImage
+
+        #only support FORMAT_BGR_PLANAR, FORMAT_RGB_PLANAR, FORMAT_GRAY
+        input1 = bmcv.vpp_convert_format(BMimg1, sail.FORMAT_GRAY)
+        input2 = bmcv.vpp_convert_format(BMimg2, sail.FORMAT_GRAY)
+
+        ssim_score = bmcv.ssim(input1, input2, full=False)
+        #ssim_score, ssim_map = bmcv.ssim(input1, input2, full=True)
+        print("ssim_score:", ssim_score)
 
 

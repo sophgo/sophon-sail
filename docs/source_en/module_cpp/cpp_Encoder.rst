@@ -39,6 +39,19 @@ Vedio encoder initialization
                     int cache_buffer_length=5
                     int abort_policy=0);
 
+Memory mode encoder initialization (encode output to memory buffer, format is fragmented MP4):
+
+**Memory Mode Encoder Interface:**
+    .. code-block:: c
+
+        Encoder(int device_id,
+                    const std::string &enc_fmt,
+                    const std::string &pix_fmt,
+                    const std::string &enc_params,
+                    bool memory_mode,
+                    int cache_buffer_length=5,
+                    int abort_policy=0);
+
 **Parameters:**
 
 * output_path: string
@@ -71,6 +84,10 @@ Input parameter. Internal cache queue length, default is 5. sail.Encoder interna
 * abort_policy: int
 
 Input parameter. The rejection policy of the video_write interface when the cache queue is full. When set to 0, the video_write interface returns -1 immediately. When set to 1, pop the queue head. When set to 2, the queue is cleared. When set to 3, it blocks until the encoding thread consumes one frame and the queue becomes empty.
+
+* memory_mode: bool
+
+Input parameter. Whether to enable memory mode. When set to true, encoded output goes to a memory buffer instead of a file or stream. The output format is fragmented MP4. No output_path is needed in this mode. Use ``get_encoded_data()`` to retrieve the encoded data after encoding is complete.
 
 is_opened
 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>
@@ -300,5 +317,114 @@ Successfully returned 0, failed to reconnect returned other values.
                 cout << "Reconnect failed!" << endl;
                 return ret;
             }
+            return 0;
+        }
+
+get_encoded_data
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+Get encoded data from memory buffer. Must be called after ``release()``. Returns fragmented MP4 data.
+
+**Interface:**
+    .. code-block:: c
+
+        std::vector<uint8_t> get_encoded_data();
+
+**Returns:**
+
+* data: vector<uint8_t>
+
+Encoded MP4 data. Can be used for network transmission, file saving, etc. Returns empty vector if the buffer is empty.
+
+**Sample:**
+    .. code-block:: c
+
+        #include <sail/encoder.h>
+        #include <fstream>
+
+        using namespace std;
+        int main() {
+            int dev_id = 0;
+            string enc_fmt = "h264_bm";
+            string pix_fmt = "I420";
+            string enc_params = "width=1920:height=1080:bitrate=2000:gop=32:gop_preset=2:framerate=25";
+            // Create memory mode encoder
+            sail::Encoder encoder(dev_id, enc_fmt, pix_fmt, enc_params, true);
+            // Write frames...
+            // encoder.video_write(img);
+            // Release encoder (flush all buffered frames)
+            encoder.release();
+            // Get encoded data
+            vector<uint8_t> mp4_data = encoder.get_encoded_data();
+            cout << "Encoded size: " << mp4_data.size() << " bytes" << endl;
+            // Save to file
+            ofstream ofs("output.mp4", ios::binary);
+            ofs.write(reinterpret_cast<char*>(mp4_data.data()), mp4_data.size());
+            return 0;
+        }
+
+get_encoded_size
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+Get current size of the memory encoding buffer in bytes.
+
+**Interface:**
+    .. code-block:: c
+
+        size_t get_encoded_size();
+
+**Returns:**
+
+* size: size_t
+
+Current buffer size in bytes. Returns 0 if not in memory mode.
+
+**Sample:**
+    .. code-block:: c
+
+        #include <sail/encoder.h>
+
+        using namespace std;
+        int main() {
+            int dev_id = 0;
+            string enc_fmt = "h264_bm";
+            string pix_fmt = "I420";
+            string enc_params = "width=1920:height=1080:bitrate=2000:gop=32:framerate=25";
+            sail::Encoder encoder(dev_id, enc_fmt, pix_fmt, enc_params, true);
+            // Check encoding progress after writing frames
+            // encoder.video_write(img);
+            cout << "Encoded so far: " << encoder.get_encoded_size() << " bytes" << endl;
+            return 0;
+        }
+
+reset_encoded_data
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+Reset the memory encoding buffer for reuse with the same encoder instance.
+
+**Interface:**
+    .. code-block:: c
+
+        void reset_encoded_data();
+
+**Sample:**
+    .. code-block:: c
+
+        #include <sail/encoder.h>
+
+        using namespace std;
+        int main() {
+            int dev_id = 0;
+            string enc_fmt = "h264_bm";
+            string pix_fmt = "I420";
+            string enc_params = "width=1920:height=1080:bitrate=2000:gop=32:framerate=25";
+            sail::Encoder encoder(dev_id, enc_fmt, pix_fmt, enc_params, true);
+            // ... encode first segment ...
+            encoder.release();
+            vector<uint8_t> data1 = encoder.get_encoded_data();
+            // Reset buffer and reuse encoder for next segment
+            encoder.reset_encoded_data();
+            encoder.reconnect();
+            // ... encode second segment ...
             return 0;
         }

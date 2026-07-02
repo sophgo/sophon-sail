@@ -16,7 +16,6 @@
 # import sys
 # sys.path.insert(0, os.path.abspath('.'))
 
-
 # -- Project information -----------------------------------------------------
 
 project = u'SOPHON-SAIL'
@@ -24,10 +23,11 @@ copyright = u'2022, SOPHGO'
 author = u'SOPHGO'
 
 import os, subprocess
+
 command_line = "git branch | sed -n '/\* /s///p'"
 branch_str = u""
 try:
-    branch_str = subprocess.check_output(command_line, shell = True).decode()
+    branch_str = subprocess.check_output(command_line, shell=True).decode()
 except subprocess.TimeoutExpired as time_e:
     print(time_e)
 except subprocess.CalledProcessError as call_e:
@@ -41,7 +41,6 @@ with open("../../git_version") as fp:
 version = os.getenv('BUILD_RELEASE_VERSION', branch_str)
 # The full version, including alpha/beta/rc tags
 release = os.getenv('BUILD_RELEASE_VERSION', branch_str)
-
 
 # -- General configuration ---------------------------------------------------
 
@@ -87,7 +86,6 @@ exclude_patterns = []
 # The name of the Pygments (syntax highlighting) style to use.
 pygments_style = None
 
-
 # -- Options for HTML output -------------------------------------------------
 
 # The theme to use for HTML and HTML Help pages.  See the documentation for
@@ -117,14 +115,12 @@ html_static_path = []
 #
 # html_sidebars = {}
 
-
 # -- Options for HTMLHelp output ---------------------------------------------
 
 # Output file base name for HTML help builder.
 htmlhelp_basename = project + 'doc'
 
-
-# 图片和表格自动编号
+# Automatic numbering of images and tables
 numfig = True
 
 # -- Options for LaTeX output ------------------------------------------------
@@ -132,29 +128,29 @@ latex_engine = 'xelatex'
 latex_elements = {
     # Papersize ('letterpaper' or 'a4paper'), default is letterpaper
     'papersize': 'a4paper',
-    # 设置页边距大小
+    # Set page margins
     'geometry': r' \usepackage[left=2.8cm,right=2.6cm,top=3.7cm,bottom=3.5cm]{geometry}',
     # The font size ('10pt', '11pt' or '12pt'), default is '10pt'.
     'pointsize': '11pt',
     # \setCJKmainfont[BoldFont=Heiti SC Medium]{Heiti SC Light}
     # \setCJKmonofont[BoldFont=Times Regular]{Times Italic}
     # `\setmainfont`、`\setsansfont{}`、`\setmonofont{}`
-    # 分别设置正文字体、无衬线字体：标题、等宽字体：用于抄录内容
+    # Set the body text font and sans serif font separately for titles and monospaced font for transcribed content
     'fontpkg': r'''
     \setmainfont{FandolSong}
     \setsansfont{FandolHei}
     \setmonofont{FandolFang}
     ''',
-    # 设置章节标题样式
+    # Set section title style
     # \usepackage[Lenny]{fncychap}  Bjarne, Sonny, Lenny, Glenn, Conny, Rejne
     'fncychap': '\\usepackage[Sonny]{fncychap}',
-    # 图片严格出现在文字处
+    # Images appear strictly in the text
     # 'figure_align': 'H',
-    # preamble 样式
-    # 目录样式：tocloft
-    # 每节从新页面开始：newcommand{\sectionbreak}{\clearpage}
-    # 全文文本左对齐：\usepackage[document]{ragged2e}
-    'preamble':r'''
+    # preamble style
+    # Catalog style: tocloft
+    # Start each section on a new page: newcommand{\sectionbreak}{\clearpage}
+    # Full-text text left-aligned: \usepackage [document] {ragged2e}
+    'preamble': r'''
     \usepackage{tocloft}
     \renewcommand\cftfignumwidth{4em} 
     \renewcommand\cfttabnumwidth{4em} 
@@ -187,20 +183,14 @@ latex_elements = {
 # (source start file, target name, title,
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
-    (master_doc, project + '.tex', project + u' 使用手册',
-     author, 'manual'),
+    (master_doc, project + '.tex', project + u' 使用手册', author, 'manual'),
 ]
-
 
 # -- Options for manual page output ------------------------------------------
 
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
-man_pages = [
-    (master_doc, project, project + u' Documentation',
-     [author], 1)
-]
-
+man_pages = [(master_doc, project, project + u' Documentation', [author], 1)]
 
 # -- Options for Texinfo output ----------------------------------------------
 
@@ -208,11 +198,9 @@ man_pages = [
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
 texinfo_documents = [
-    (master_doc, project, project + u' Documentation',
-     author, project, u'SOPHON-SAIL: SAIL(SOPHON Artificial Intelligent Library).',
-     'Miscellaneous'),
+    (master_doc, project, project + u' Documentation', author, project,
+     u'SOPHON-SAIL: SAIL(SOPHON Artificial Intelligent Library).', 'Miscellaneous'),
 ]
-
 
 # -- Options for Epub output -------------------------------------------------
 
@@ -230,7 +218,6 @@ epub_title = project
 
 # A list of files that should not be packed into the epub file.
 epub_exclude_files = ['search.html']
-
 
 # -- Extension configuration -------------------------------------------------
 

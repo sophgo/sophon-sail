@@ -75,7 +75,7 @@ bytetrack 算法
 
 openpose 算法
 ======================
-openpose  使用tpukernel对part nms后处理加速
+openpose  使用TPU kernel对part nms后处理加速
 
 .. toctree::
    :glob:

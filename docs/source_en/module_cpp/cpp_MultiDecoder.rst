@@ -22,11 +22,14 @@ Input parameter. For each channel of video, the length of the decoding cache ima
 
 * tpu_id: int
 
-Input parameter. The tpu id used, the default is 0.
+Input parameter. The TPU id used, the default is 0.
 
 * discard_mode: int
 
-Input parameter. The data discarding strategy after the cache reaches the maximum size. 0 means not to put data into the cache; 1 means to take out the picture at the head of the queue from the queue, discard it, and then cache the decoded picture. Default is 0.
+Data discard method when the cache reaches the maximum value. \
+0 indicates that data is not put into the cache. The default value is 0. \
+1 indicates that the image of the queue header is poped , and then push into the decoded image. \
+2 indicates that the decoder is blocked until the cache queue produces an empty position, and then push into the decoded image. Only local video files are supported for blocking.
 
 
 set_read_timeout

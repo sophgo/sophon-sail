@@ -16,7 +16,6 @@
 # import sys
 # sys.path.insert(0, os.path.abspath('.'))
 
-
 # -- Project information -----------------------------------------------------
 
 project = u'SOPHON-SAIL'
@@ -24,10 +23,11 @@ copyright = u'2022, SOPHGO'
 author = u'SOPHGO'
 
 import os, subprocess
+
 command_line = "git branch | sed -n '/\* /s///p'"
 branch_str = u""
 try:
-    branch_str = subprocess.check_output(command_line, shell = True).decode()
+    branch_str = subprocess.check_output(command_line, shell=True).decode()
 except subprocess.TimeoutExpired as time_e:
     print(time_e)
 except subprocess.CalledProcessError as call_e:
@@ -41,7 +41,6 @@ with open("../../git_version") as fp:
 version = os.getenv('BUILD_RELEASE_VERSION', branch_str)
 # The full version, including alpha/beta/rc tags
 release = os.getenv('BUILD_RELEASE_VERSION', branch_str)
-
 
 # -- General configuration ---------------------------------------------------
 
@@ -87,7 +86,6 @@ exclude_patterns = []
 # The name of the Pygments (syntax highlighting) style to use.
 pygments_style = None
 
-
 # -- Options for HTML output -------------------------------------------------
 
 # The theme to use for HTML and HTML Help pages.  See the documentation for
@@ -117,12 +115,10 @@ html_static_path = []
 #
 # html_sidebars = {}
 
-
 # -- Options for HTMLHelp output ---------------------------------------------
 
 # Output file base name for HTML help builder.
 htmlhelp_basename = project + 'doc'
-
 
 # Automatic numbering of images and tables
 numfig = True
@@ -154,7 +150,7 @@ latex_elements = {
     # Catalog style：tocloft
     # Each section starts from a new page：newcommand{\sectionbreak}{\clearpage}
     # Left alignment of text：\usepackage[document]{ragged2e}
-    'preamble':r'''
+    'preamble': r'''
     \usepackage{tocloft}
     \renewcommand\cftfignumwidth{4em} 
     \renewcommand\cfttabnumwidth{4em} 
@@ -187,20 +183,14 @@ latex_elements = {
 # (source start file, target name, title,
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
-    (master_doc, project + '.tex', project + u' User Manual',
-     author, 'manual'),
+    (master_doc, project + '.tex', project + u' User Manual', author, 'manual'),
 ]
-
 
 # -- Options for manual page output ------------------------------------------
 
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
-man_pages = [
-    (master_doc, project, project + u' Documentation',
-     [author], 1)
-]
-
+man_pages = [(master_doc, project, project + u' Documentation', [author], 1)]
 
 # -- Options for Texinfo output ----------------------------------------------
 
@@ -208,11 +198,9 @@ man_pages = [
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
 texinfo_documents = [
-    (master_doc, project, project + u' Documentation',
-     author, project, u'SOPHON-SAIL: SAIL(SOPHON Artificial Intelligent Library).',
-     'Miscellaneous'),
+    (master_doc, project, project + u' Documentation', author, project,
+     u'SOPHON-SAIL: SAIL(SOPHON Artificial Intelligent Library).', 'Miscellaneous'),
 ]
-
 
 # -- Options for Epub output -------------------------------------------------
 
@@ -230,7 +218,6 @@ epub_title = project
 
 # A list of files that should not be packed into the epub file.
 epub_exclude_files = ['search.html']
-
 
 # -- Extension configuration -------------------------------------------------
 

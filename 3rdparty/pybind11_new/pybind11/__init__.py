@@ -6,7 +6,6 @@ if sys.version_info < (3, 7):  # noqa: UP036
     msg = "pybind11 does not support Python < 3.7. v2.12 was the last release supporting Python 3.6."
     raise ImportError(msg)
 
-
 from ._version import __version__, version_info
 from .commands import get_cmake_dir, get_include, get_pkgconfig_dir
 

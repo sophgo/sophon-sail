@@ -27,6 +27,13 @@ ____________
 
         def __init__(self, output_path: str, device_id: int, enc_fmt: str, pix_fmt: str, enc_params: str, cache_buffer_length: int=5, abort_policy: int=0)
 
+内存模式编码器初始化（编码输出到内存缓冲区，格式为fragmented MP4）：
+
+**视频编码器接口形式3（内存模式）:**
+    .. code-block:: python
+
+        def __init__(self, device_id: int, enc_fmt: str, pix_fmt: str, enc_params: str, memory_mode: bool, cache_buffer_length: int=5, abort_policy: int=0)
+
 **参数说明:**
 
 * output_path: str
@@ -60,6 +67,10 @@ ____________
 * abort_policy: int
 
 输入参数。缓存队列已满时，video_write接口的拒绝策略。设为0时，video_write接口立即返回-1。设为1时，pop队列头。设为2时，清空队列。设为3时，阻塞直到编码线程消耗一帧，队列产生空位。
+
+* memory_mode: bool
+
+输入参数。是否启用内存模式。设为True时，编码输出到内存缓冲区而非文件或流，输出格式为fragmented MP4。此模式下无需指定output_path。编码完成后通过 ``get_encoded_data()`` 获取数据。
 
 is_opened
 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>
@@ -253,3 +264,100 @@ reconnect
             encoder = sail.Encoder(out_path, handle, enc_fmt, pix_fmt, enc_params, cache_buffer_length, abort_policy)
             ret = encoder.reconnect()
             print(ret)
+
+get_encoded_data
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+获取内存模式编码后的数据。需在 ``release()`` 之后调用，返回编码后的fragmented MP4数据。
+
+**接口形式:**
+    .. code-block:: python
+
+        def get_encoded_data(self) -> bytes
+
+**返回值说明:**
+
+* data: bytes
+
+编码后的MP4数据。可直接用于网络传输、文件保存等。若缓冲区为空，返回空的bytes对象。
+
+**示例代码:**
+    .. code-block:: python
+
+        import sophon.sail as sail
+        if __name__ == '__main__':
+            dev_id = 0
+            handle = sail.Handle(dev_id)
+            enc_fmt = "h264_bm"
+            pix_fmt = "I420"
+            enc_params = "width=1920:height=1080:bitrate=2000:gop=32:gop_preset=2:framerate=25"
+            # 创建内存模式编码器
+            encoder = sail.Encoder(dev_id, enc_fmt, pix_fmt, enc_params, True)
+            # 写入帧...
+            # encoder.video_write(img)
+            # 释放编码器（刷出所有缓冲帧）
+            encoder.release()
+            # 获取编码数据
+            mp4_data = encoder.get_encoded_data()
+            print(f"编码数据大小: {len(mp4_data)} bytes")
+            # 保存到文件
+            with open("output.mp4", "wb") as f:
+                f.write(mp4_data)
+
+get_encoded_size
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+获取内存模式编码缓冲区的当前大小（字节数）。
+
+**接口形式:**
+    .. code-block:: python
+
+        def get_encoded_size(self) -> int
+
+**返回值说明:**
+
+* size: int
+
+编码缓冲区当前大小（字节）。若未使用内存模式，返回0。
+
+**示例代码:**
+    .. code-block:: python
+
+        import sophon.sail as sail
+        if __name__ == '__main__':
+            dev_id = 0
+            enc_fmt = "h264_bm"
+            pix_fmt = "I420"
+            enc_params = "width=1920:height=1080:bitrate=2000:gop=32:framerate=25"
+            encoder = sail.Encoder(dev_id, enc_fmt, pix_fmt, enc_params, True)
+            # 写入帧后查看编码进度
+            # encoder.video_write(img)
+            print(f"已编码: {encoder.get_encoded_size()} bytes")
+
+reset_encoded_data
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+重置内存模式的编码缓冲区，用于复用编码器进行下一段编码。
+
+**接口形式:**
+    .. code-block:: python
+
+        def reset_encoded_data(self) -> None
+
+**示例代码:**
+    .. code-block:: python
+
+        import sophon.sail as sail
+        if __name__ == '__main__':
+            dev_id = 0
+            enc_fmt = "h264_bm"
+            pix_fmt = "I420"
+            enc_params = "width=1920:height=1080:bitrate=2000:gop=32:framerate=25"
+            encoder = sail.Encoder(dev_id, enc_fmt, pix_fmt, enc_params, True)
+            # ... 编码第一段 ...
+            encoder.release()
+            data1 = encoder.get_encoded_data()
+            # 重置缓冲区，复用编码器编码下一段
+            encoder.reset_encoded_data()
+            encoder.reconnect()
+            # ... 编码第二段 ...

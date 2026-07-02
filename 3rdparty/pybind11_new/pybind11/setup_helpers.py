@@ -67,8 +67,7 @@ try:
     from setuptools.command.build_ext import build_ext as _build_ext
 except ImportError:
     from distutils.command.build_ext import (  # type: ignore[assignment]
-        build_ext as _build_ext,
-    )
+        build_ext as _build_ext, )
     from distutils.extension import Extension as _Extension  # type: ignore[assignment]
 
 import distutils.ccompiler
@@ -77,7 +76,6 @@ import distutils.errors
 WIN = sys.platform.startswith("win32") and "mingw" not in sysconfig.get_platform()
 MACOS = sys.platform.startswith("darwin")
 STD_TMPL = "/std:c++{}" if WIN else "-std=c++{}"
-
 
 # It is recommended to use PEP 518 builds if using this module. However, this
 # file explicitly supports being copied into a user's project directory
@@ -171,9 +169,7 @@ class Pybind11Extension(_Extension):
     @cxx_std.setter
     def cxx_std(self, level: int) -> None:
         if self._cxx_level:
-            warnings.warn(
-                "You cannot safely change the cxx_level after setting it!", stacklevel=2
-            )
+            warnings.warn("You cannot safely change the cxx_level after setting it!", stacklevel=2)
 
         # MSVC 2015 Update 3 and later only have 14 (and later 17) modes, so
         # force a valid flag here.
@@ -287,9 +283,8 @@ class build_ext(_build_ext):  # noqa: N801
         super().build_extensions()
 
 
-def intree_extensions(
-    paths: Iterable[str], package_dir: dict[str, str] | None = None
-) -> list[Pybind11Extension]:
+def intree_extensions(paths: Iterable[str],
+                      package_dir: dict[str, str] | None = None) -> list[Pybind11Extension]:
     """
     Generate Pybind11Extensions from source files directly located in a Python
     source tree.
@@ -320,10 +315,8 @@ def intree_extensions(
                 exts.append(Pybind11Extension(qualified_name, [path]))
                 break
         else:
-            msg = (
-                f"path {path} is not a child of any of the directories listed "
-                f"in 'package_dir' ({package_dir})"
-            )
+            msg = (f"path {path} is not a child of any of the directories listed "
+                   f"in 'package_dir' ({package_dir})")
             raise ValueError(msg)
 
     return exts
@@ -438,9 +431,9 @@ class ParallelCompile:
         ) -> Any:
             # These lines are directly from distutils.ccompiler.CCompiler
             macros, objects, extra_postargs, pp_opts, build = compiler._setup_compile(  # type: ignore[attr-defined]
-                output_dir, macros, include_dirs, sources, depends, extra_postargs
-            )
-            cc_args = compiler._get_cc_args(pp_opts, debug, extra_preargs)  # type: ignore[attr-defined]
+                output_dir, macros, include_dirs, sources, depends, extra_postargs)
+            cc_args = compiler._get_cc_args(pp_opts, debug,
+                                            extra_preargs)  # type: ignore[attr-defined]
 
             # The number of threads; start with default.
             threads = self.default
@@ -456,7 +449,8 @@ class ParallelCompile:
                     return
 
                 if not os.path.exists(obj) or self.needs_recompile(obj, src):
-                    compiler._compile(obj, src, ext, cc_args, extra_postargs, pp_opts)  # type: ignore[attr-defined]
+                    compiler._compile(obj, src, ext, cc_args, extra_postargs,
+                                      pp_opts)  # type: ignore[attr-defined]
 
             try:
                 # Importing .synchronize checks for platforms that have some multiprocessing

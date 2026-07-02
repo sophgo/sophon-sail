@@ -1,5 +1,5 @@
-set(SAIL_INCLUDE_DIRS "/opt/sophon/sophon-sail/include" "/opt/sophon/sophon-sail/include/sail")
-set(SAIL_LIB_DIRS "/opt/sophon/sophon-sail/lib")
+set(SAIL_INCLUDE_DIRS "/workspace/sdk/sophon-sail/build_soc/sophon-sail/include" "/workspace/sdk/sophon-sail/build_soc/sophon-sail/include/sail")
+set(SAIL_LIB_DIRS "/workspace/sdk/sophon-sail/build_soc/sophon-sail/lib")
 
 find_library(SAIL_LIBRARY NAMES sail PATHS  NO_DEFAULT_PATH)
 

@@ -1059,6 +1059,64 @@ class Bmcv:
         Returns:
         return ret, 0 for success and others for failed
         """
+
+    def ssim(
+        self,
+        bm_img1: BMImage,
+        bm_img2: BMImage,
+        win_size: int = 7,
+        data_range: float = 255.0,
+        full: bool = False,
+        gaussian_weights: bool = True,
+        use_sample_covariance: bool = True
+    ) -> float:
+        """
+        Computes the Structural Similarity Index Measure between two images.
+
+        Parameters:
+        -----------
+        bm_img1: The first input image.
+        bm_img2: The second input image.
+        win_size: The size of the sliding window, must be odd, defaults to 7.
+        data_range: The data range of the input images, defaults to 255.0.
+        full: If False, only return the full SSIM score. If True, both return SSIM score and difference map
+        gaussian_weights: If True, use Gaussian weighting for the window.
+        use_sample_covariance: If True, use sample covariance.
+
+        Returns:
+        ----------
+        return ssim_score, only the SSIM value when full=False.
+        """
+        pass
+
+    def ssim(
+        self,
+        bm_img1: BMImage,
+        bm_img2: BMImage,
+        win_size: int = 7,
+        data_range: float = 255.0,
+        full: bool = True,
+        gaussian_weights: bool = True,
+        use_sample_covariance: bool = True
+    ) -> tuple[float, numpy.ndarray]:
+        """
+        Parameters:
+        -----------
+        bm_img1: The first input image.
+        bm_img2: The second input image.
+        win_size: The size of the sliding window, must be odd, defaults to 7.
+        data_range: The data range of the input images, defaults to 255.0.
+        full: If False, only return the full SSIM score. If True, both return SSIM score and difference map
+        gaussian_weights: If True, use Gaussian weighting for the window.
+        use_sample_covariance: If True, use sample covariance.
+
+        Returns:
+        ----------
+        tuple[float, numpy.ndarray]
+        return a tuple (SSIM, full SSIM map) when full=True.
+        """
+        pass
+
 class BMImageArray():
     def __init__(self) -> None: ...
 

@@ -22,14 +22,14 @@ For each video, the length of the decoded cached image queue.
 
 * tpu_id: int
 
-Tpu id that used, which defaults to 0.
+TPU id that used, which defaults to 0.
 
 * discard_mode: int
 
 Data discard method when the cache reaches the maximum value. \
-0 indicates that data is not put into the cache; \
-1 indicates that the image of the queue header is poped , \
-and then push into the decoded image. The default value is 0.
+0 indicates that data is not put into the cache. The default value is 0. \
+1 indicates that the image of the queue header is poped , and then push into the decoded image. \
+2 indicates that the decoder is blocked until the cache queue produces an empty position, and then push into the decoded image. Only local video files are supported for blocking.
 
 set_read_timeout
 >>>>>>>>>>>>>>>>>>>>

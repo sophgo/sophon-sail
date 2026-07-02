@@ -5,7 +5,7 @@ import cv2
 from PIL import Image
 
 if __name__ == '__main__':
-    file_path = './dog.jpg' # 请替换为您的文件路径
+    file_path = './dog.jpg'  # Please replace with your file path
     dev_id = 0
     handle = sail.Handle(dev_id)
     decoder = sail.Decoder(file_path, False, dev_id)
@@ -21,15 +21,11 @@ if __name__ == '__main__':
     height = BMimg.height()
     format = BMimg.format()
 
-
-
     # BMimage to MAT
     mat_from_bmimg = BMimg.asmat()
     cv2.imwrite('mat_from_bmimg.jpg', mat_from_bmimg)
-    # BMimage to tensor 
+    # BMimage to tensor
     tensor = bmcv.bm_image_to_tensor(BMimg)
-
-
 
     # Mat to tensor
     tensor_from_mat = sail.Tensor(handle, mat_from_bmimg)
@@ -37,12 +33,9 @@ if __name__ == '__main__':
     bmimg_from_mat = bmcv.mat_to_bm_image(mat_from_bmimg)
     bmcv.imwrite('bmimg_from_mat.jpg', bmimg_from_mat)
 
-
-
     # tensor to MAT
     mat_from_tensor = tensor.asnumpy()
     cv2.imwrite('mat_from_tensor.jpg', mat_from_tensor[0])
     # tensor to BMimage
     bmimg_from_tensor = bmcv.tensor_to_bm_image(tensor, False, 'nhwc')
     bmcv.imwrite('bmimg_from_tensor.jpg', bmimg_from_tensor)
-

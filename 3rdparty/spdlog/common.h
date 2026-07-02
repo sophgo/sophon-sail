@@ -9,12 +9,12 @@
 
 #include <atomic>
 #include <chrono>
+#include <cstring>
 #include <functional>
 #include <initializer_list>
 #include <memory>
 #include <stdexcept>
 #include <string>
-#include <cstring>
 #include <type_traits>
 #include <unordered_map>
 
@@ -108,52 +108,47 @@ using level_t = std::atomic<int>;
 
 // Log level enum
 namespace level {
-enum level_enum
-{
-    trace = SPDLOG_LEVEL_TRACE,
-    debug = SPDLOG_LEVEL_DEBUG,
-    info = SPDLOG_LEVEL_INFO,
-    warn = SPDLOG_LEVEL_WARN,
-    err = SPDLOG_LEVEL_ERROR,
-    critical = SPDLOG_LEVEL_CRITICAL,
-    off = SPDLOG_LEVEL_OFF,
+enum level_enum {
+  trace = SPDLOG_LEVEL_TRACE,
+  debug = SPDLOG_LEVEL_DEBUG,
+  info = SPDLOG_LEVEL_INFO,
+  warn = SPDLOG_LEVEL_WARN,
+  err = SPDLOG_LEVEL_ERROR,
+  critical = SPDLOG_LEVEL_CRITICAL,
+  off = SPDLOG_LEVEL_OFF,
 };
 
 #if !defined(SPDLOG_LEVEL_NAMES)
-#define SPDLOG_LEVEL_NAMES                                                                                                                 \
-    {                                                                                                                                      \
-        "trace", "debug", "info", "warning", "error", "critical", "off"                                                                    \
-    }
+#define SPDLOG_LEVEL_NAMES                                                     \
+  { "trace", "debug", "info", "warning", "error", "critical", "off" }
 #endif
 static string_view_t level_string_views[] SPDLOG_LEVEL_NAMES;
 
 #if !defined(SPDLOG_SHORT_LEVEL_NAMES)
-#define SPDLOG_SHORT_LEVEL_NAMES {"T", "D", "I", "W", "E", "C", "O"}
+#define SPDLOG_SHORT_LEVEL_NAMES                                               \
+  { "T", "D", "I", "W", "E", "C", "O" }
 #endif
 static const char *short_level_names[] SPDLOG_SHORT_LEVEL_NAMES;
 
-inline string_view_t &to_string_view(spdlog::level::level_enum l) SPDLOG_NOEXCEPT
-{
-    return level_string_views[l];
+inline string_view_t &
+to_string_view(spdlog::level::level_enum l) SPDLOG_NOEXCEPT {
+  return level_string_views[l];
 }
 
-inline const char *to_short_c_str(spdlog::level::level_enum l) SPDLOG_NOEXCEPT
-{
-    return short_level_names[l];
+inline const char *to_short_c_str(spdlog::level::level_enum l) SPDLOG_NOEXCEPT {
+  return short_level_names[l];
 }
 
-inline spdlog::level::level_enum from_str(const std::string &name) SPDLOG_NOEXCEPT
-{
-    int level = 0;
-    for (const auto &level_str : level_string_views)
-    {
-        if (level_str == name)
-        {
-            return static_cast<level::level_enum>(level);
-        }
-        level++;
+inline spdlog::level::level_enum
+from_str(const std::string &name) SPDLOG_NOEXCEPT {
+  int level = 0;
+  for (const auto &level_str : level_string_views) {
+    if (level_str == name) {
+      return static_cast<level::level_enum>(level);
     }
-    return level::off;
+    level++;
+  }
+  return level::off;
 }
 
 using level_hasher = std::hash<int>;
@@ -163,37 +158,28 @@ using level_hasher = std::hash<int>;
 // Pattern time - specific time getting to use for pattern_formatter.
 // local time by default
 //
-enum class pattern_time_type
-{
-    local, // log localtime
-    utc    // log utc
+enum class pattern_time_type {
+  local, // log localtime
+  utc    // log utc
 };
 
 //
 // Log exception
 //
-class spdlog_ex : public std::exception
-{
+class spdlog_ex : public std::exception {
 public:
-    explicit spdlog_ex(std::string msg)
-        : msg_(std::move(msg))
-    {
-    }
+  explicit spdlog_ex(std::string msg) : msg_(std::move(msg)) {}
 
-    spdlog_ex(const std::string &msg, int last_errno)
-    {
-        fmt::memory_buffer outbuf;
-        fmt::format_system_error(outbuf, last_errno, msg);
-        msg_ = fmt::to_string(outbuf);
-    }
+  spdlog_ex(const std::string &msg, int last_errno) {
+    fmt::memory_buffer outbuf;
+    fmt::format_system_error(outbuf, last_errno, msg);
+    msg_ = fmt::to_string(outbuf);
+  }
 
-    const char *what() const SPDLOG_NOEXCEPT override
-    {
-        return msg_.c_str();
-    }
+  const char *what() const SPDLOG_NOEXCEPT override { return msg_.c_str(); }
 
 private:
-    std::string msg_;
+  std::string msg_;
 };
 
 //
@@ -205,28 +191,17 @@ using filename_t = std::wstring;
 using filename_t = std::string;
 #endif
 
-struct source_loc
-{
-    SPDLOG_CONSTEXPR source_loc()
-        : filename{""}
-        , line{0}
-        , funcname{""}
-    {
-    }
-    SPDLOG_CONSTEXPR source_loc(const char *filename_in, int line_in, const char *funcname_in)
-        : filename{filename_in}
-        , line{static_cast<uint32_t>(line_in)}
-        , funcname{funcname_in}
-    {
-    }
+struct source_loc {
+  SPDLOG_CONSTEXPR source_loc() : filename{""}, line{0}, funcname{""} {}
+  SPDLOG_CONSTEXPR source_loc(const char *filename_in, int line_in,
+                              const char *funcname_in)
+      : filename{filename_in}, line{static_cast<uint32_t>(line_in)},
+        funcname{funcname_in} {}
 
-    SPDLOG_CONSTEXPR bool empty() const SPDLOG_NOEXCEPT
-    {
-        return line == 0;
-    }
-    const char *filename;
-    uint32_t line;
-    const char *funcname;
+  SPDLOG_CONSTEXPR bool empty() const SPDLOG_NOEXCEPT { return line == 0; }
+  const char *filename;
+  uint32_t line;
+  const char *funcname;
 };
 
 namespace details {
@@ -235,11 +210,10 @@ namespace details {
 #if __cplusplus >= 201402L // C++14 and beyond
 using std::make_unique;
 #else
-template<typename T, typename... Args>
-std::unique_ptr<T> make_unique(Args &&... args)
-{
-    static_assert(!std::is_array<T>::value, "arrays not supported");
-    return std::unique_ptr<T>(new T(std::forward<Args>(args)...));
+template <typename T, typename... Args>
+std::unique_ptr<T> make_unique(Args &&... args) {
+  static_assert(!std::is_array<T>::value, "arrays not supported");
+  return std::unique_ptr<T>(new T(std::forward<Args>(args)...));
 }
 #endif
 } // namespace details

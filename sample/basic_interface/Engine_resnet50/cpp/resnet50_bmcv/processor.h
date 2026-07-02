@@ -20,25 +20,23 @@ You may obtain a copy of the License at
 #include <getopt.h>
 #endif
 
-#define USE_FFMPEG  1
-#define USE_OPENCV  1
-#define USE_BMCV    1
+#define USE_FFMPEG 1
+#define USE_OPENCV 1
+#define USE_BMCV 1
 
-#include <string>
-#include <vector>
-#include <numeric>
 #include <fstream>
 #include <inireader.hpp>
+#include <numeric>
+#include <string>
+#include <vector>
 
 #include <iostream>
 #include <sail/cvwrapper.h>
 #include <sail/engine.h>
 #include <sail/tensor.h>
 
-
-
 class PreProcessor {
- public:
+public:
   /**
    * @brief Constructor.
    *
@@ -52,21 +50,21 @@ class PreProcessor {
    * @param input Input data
    * @param input Output data
    */
-//   void process(cv::Mat& input, cv::Mat& output);
+  //   void process(cv::Mat& input, cv::Mat& output);
 
- protected:
+protected:
   float ab_[6];
 };
 
-class BmcvPreProcessor: public PreProcessor{  //
- public:
+class BmcvPreProcessor : public PreProcessor { //
+public:
   /**
    * @brief Constructor.
    *
    * @param bmcv  Reference to a Bmcv instance
    * @param scale Scale factor from float32 to int8
    */
-  BmcvPreProcessor(sail::Bmcv& bmcv, float scale = 1.0);
+  BmcvPreProcessor(sail::Bmcv &bmcv, float scale = 1.0);
 
   /**
    * @brief Execution function of preprocessing.
@@ -74,14 +72,14 @@ class BmcvPreProcessor: public PreProcessor{  //
    * @param input Input data
    * @param input Output data
    */
-  void process(sail::BMImage& input, sail::BMImage& output);
+  void process(sail::BMImage &input, sail::BMImage &output);
 
-  protected: sail::Bmcv& bmcv_;
+protected:
+  sail::Bmcv &bmcv_;
 };
 
-
 class PostProcessor {
- public:
+public:
   /**
    * @brief Constructor.
    *
@@ -103,7 +101,7 @@ class PostProcessor {
    * @return The classification result of each input
    *     @retval Ex:[[20,3,4,5,7],[6,30,1,2,3]] the index of classes
    */
-  std::vector<std::vector<int>> process(float* input);
+  std::vector<std::vector<int>> process(float *input);
 
   /**
    * @brief Get correct result from given file.
@@ -111,8 +109,8 @@ class PostProcessor {
    * @param compare_path Path to correct result file
    * @return correct result
    */
-  std::map<std::string, std::vector<int>> get_reference(
-      const std::string& compare_path);
+  std::map<std::string, std::vector<int>>
+  get_reference(const std::string &compare_path);
 
   /**
    * @brief Compare result.
@@ -124,12 +122,10 @@ class PostProcessor {
    *     @retval true  Success
    *     @retval false Failure
    */
-  bool compare(
-    std::map<std::string, std::vector<int>>& reference,
-    std::vector<int>&                        result,
-    const std::string&                       dtype);
+  bool compare(std::map<std::string, std::vector<int>> &reference,
+               std::vector<int> &result, const std::string &dtype);
 
- private:
+private:
   size_t batch_size_;
   size_t class_num_;
   size_t top_k_;

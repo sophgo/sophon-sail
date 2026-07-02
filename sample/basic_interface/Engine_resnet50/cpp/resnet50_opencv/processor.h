@@ -13,21 +13,20 @@ You may obtain a copy of the License at
  limitations under the License.
 
 ==============================================================================*/
-#define USE_FFMPEG  1
-#define USE_OPENCV  1
-#define USE_BMCV    1
+#define USE_FFMPEG 1
+#define USE_OPENCV 1
+#define USE_BMCV 1
 
-#include <vector>
-#include <string>
 #include <fstream>
 #include <numeric>
-#include <opencv2/opencv.hpp>
 #include <opencv2/core/core.hpp>
+#include <opencv2/opencv.hpp>
+#include <string>
+#include <vector>
 
 #include <sail/cvwrapper.h>
 #include <sail/engine.h>
 #include <sail/tensor.h>
-
 
 /**
  * @brief Judge if a file exists..
@@ -35,10 +34,10 @@ You may obtain a copy of the License at
  * @param file_path Path to the file
  * @return True for exist, false for not.
  **/
-bool file_exists(const std::string& file_path);
+bool file_exists(const std::string &file_path);
 
 class PreProcessor {
- public:
+public:
   /**
    * @brief Constructor.
    *
@@ -51,12 +50,8 @@ class PreProcessor {
    * @param scale_factor  Scale factor of all channel
    * @param convert_color Flag of whether to do BGR2RGB
    */
-  PreProcessor(
-      int   height,
-      int   width,
-      float mean_0 = 103.94,
-      float mean_1 = 116.78,
-      float mean_2 = 123.68);
+  PreProcessor(int height, int width, float mean_0 = 103.94,
+               float mean_1 = 116.78, float mean_2 = 123.68);
 
   /**
    * @brief Destructor.
@@ -69,19 +64,19 @@ class PreProcessor {
    * @param input Input data pointer in system memory
    * @param frame Original image
    */
-  void process(sail::Handle& handle, sail::Tensor& input, cv::Mat& frame, sail::Bmcv& bmcv);
+  void process(sail::Handle &handle, sail::Tensor &input, cv::Mat &frame,
+               sail::Bmcv &bmcv);
 
- private:
+private:
   int height_;
   int width_;
-  std::tuple<
-    std::pair<float, float>,
-    std::pair<float, float>,
-    std::pair<float, float>> linear_trans_param_; 
+  std::tuple<std::pair<float, float>, std::pair<float, float>,
+             std::pair<float, float>>
+      linear_trans_param_;
 };
 
 class PostProcessor {
- public:
+public:
   /**
    * @brief Constructor.
    *
@@ -103,7 +98,7 @@ class PostProcessor {
    * @return The classification result of each input
    *     @retval Ex:[[20,3,4,5,7],[6,30,1,2,3]] the index of classes
    */
-  std::vector<std::vector<int>> process(float* input);
+  std::vector<std::vector<int>> process(float *input);
 
   /**
    * @brief Get correct result from given file.
@@ -111,8 +106,8 @@ class PostProcessor {
    * @param compare_path Path to correct result file
    * @return correct result
    */
-  std::map<std::string, std::vector<int>> get_reference(
-      const std::string& compare_path);
+  std::map<std::string, std::vector<int>>
+  get_reference(const std::string &compare_path);
 
   /**
    * @brief Compare result.
@@ -124,12 +119,10 @@ class PostProcessor {
    *     @retval true  Success
    *     @retval false Failure
    */
-  bool compare(
-    std::map<std::string, std::vector<int>>& reference,
-    std::vector<int>&                        result,
-    const std::string&                       dtype);
+  bool compare(std::map<std::string, std::vector<int>> &reference,
+               std::vector<int> &result, const std::string &dtype);
 
- private:
+private:
   size_t batch_size_;
   size_t class_num_;
   size_t top_k_;

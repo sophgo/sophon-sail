@@ -1,18 +1,18 @@
 #include "tools.h"
+#include <bmruntime_interface.h>
 #include <chrono>
 #include <cstdlib>
 #include <future>
 #include <iomanip>
 #include <sstream>
+#include <tabulate.hpp>
 #include <thread>
 #include <vector>
-#include "bmruntime_interface.h"
-#include "tabulate.hpp"
 using std::chrono::microseconds;
 
-#define TENSOR_VAR(name, type, num) std::unique_ptr<type[]> \
-          ptr##name(new type[num]); \
-          type* name = ptr##name.get() \
+#define TENSOR_VAR(name, type, num)                                            \
+  std::unique_ptr<type[]> ptr##name(new type[num]);                            \
+  type *name = ptr##name.get()
 
 void model_dryrun(std::string path) {
   int loopnum = 10;
@@ -24,13 +24,13 @@ void model_dryrun(std::string path) {
   // create bmruntime
   bm_handle_t bm_handle;
   bm_dev_request(&bm_handle, 0);
-  void* p_bmrt = bmrt_create(bm_handle);
+  void *p_bmrt = bmrt_create(bm_handle);
   int ret = bmrt_load_bmodel(p_bmrt, path.c_str());
   if (ret == 0) {
     printf("load bmodel file, check it available");
     exit(-1);
   }
-  const char** net_names = nullptr;
+  const char **net_names = nullptr;
   bmrt_get_network_names(p_bmrt, &net_names);
   int net_num = bmrt_get_network_number(p_bmrt);
   // init Table
@@ -47,7 +47,7 @@ void model_dryrun(std::string path) {
     // printf("\e[1;1H\e[2J");
     for (int stage_idx = 0; stage_idx < net_info->stage_num; stage_idx++) {
       std::string input_node, input_shape, output_node, output_shape;
-      auto& stage = net_info->stages[stage_idx];
+      auto &stage = net_info->stages[stage_idx];
       // prepare input tensor
       TENSOR_VAR(input_tensors, bm_tensor_t, net_info->input_num);
       for (int input_idx = 0; input_idx < net_info->input_num; input_idx++) {
@@ -59,7 +59,7 @@ void model_dryrun(std::string path) {
           input_shape += (std::to_string(shape->dims[k]) + " ");
         }
         input_shape += ")";
-        auto& input_tensor = input_tensors[input_idx];
+        auto &input_tensor = input_tensors[input_idx];
         bmrt_tensor(&input_tensor, p_bmrt, net_info->input_dtypes[input_idx],
                     stage.input_shapes[input_idx]);
         bmrt_tensor_bytesize(&input_tensor);
@@ -76,7 +76,7 @@ void model_dryrun(std::string path) {
           output_shape += (std::to_string(shape->dims[k]) + " ");
         }
         output_shape += ")";
-        auto& output_tensor = output_tensors[output_idx];
+        auto &output_tensor = output_tensors[output_idx];
         bmrt_tensor(&output_tensor, p_bmrt, net_info->output_dtypes[output_idx],
                     stage.input_shapes[output_idx]);
         bmrt_tensor_bytesize(&output_tensor);
@@ -120,25 +120,22 @@ void model_dryrun(std::string path) {
   bm_dev_free(bm_handle);
 }
 
-float perf_thread(std::string path,
-                  int tpu_id,
-                  int net_id,
-                  int stage_id,
+float perf_thread(std::string path, int tpu_id, int net_id, int stage_id,
                   int loopnum) {
   // create bmruntime
   bm_handle_t bm_handle;
   bm_dev_request(&bm_handle, tpu_id);
-  void* p_bmrt = bmrt_create(bm_handle);
+  void *p_bmrt = bmrt_create(bm_handle);
   bmrt_load_bmodel(p_bmrt, path.c_str());
-  const char** net_names = nullptr;
+  const char **net_names = nullptr;
   bmrt_get_network_names(p_bmrt, &net_names);
   int net_num = bmrt_get_network_number(p_bmrt);
   auto net_info = bmrt_get_network_info(p_bmrt, net_names[net_id]);
-  auto& stage = net_info->stages[stage_id];
+  auto &stage = net_info->stages[stage_id];
   // prepare input tensor
   TENSOR_VAR(input_tensors, bm_tensor_t, net_info->input_num);
   for (int input_idx = 0; input_idx < net_info->input_num; input_idx++) {
-    auto& input_tensor = input_tensors[input_idx];
+    auto &input_tensor = input_tensors[input_idx];
     bmrt_tensor(&input_tensor, p_bmrt, net_info->input_dtypes[input_idx],
                 stage.input_shapes[input_idx]);
     bmrt_tensor_bytesize(&input_tensor);
@@ -146,7 +143,7 @@ float perf_thread(std::string path,
   // prepare output tensor
   TENSOR_VAR(output_tensors, bm_tensor_t, net_info->output_num);
   for (int output_idx = 0; output_idx < net_info->output_num; output_idx++) {
-    auto& output_tensor = output_tensors[output_idx];
+    auto &output_tensor = output_tensors[output_idx];
     bmrt_tensor(&output_tensor, p_bmrt, net_info->output_dtypes[output_idx],
                 stage.input_shapes[output_idx]);
     bmrt_tensor_bytesize(&output_tensor);
@@ -198,22 +195,22 @@ void multi_tpu_perf(std::string path, std::vector<int> tpu_id_list) {
   // load bmodel to extract info
   bm_handle_t bm_handle;
   bm_dev_request(&bm_handle, 0);
-  void* p_bmrt = bmrt_create(bm_handle);
+  void *p_bmrt = bmrt_create(bm_handle);
   int ret = bmrt_load_bmodel(p_bmrt, path.c_str());
   if (ret == 0) {
     printf("load bmodel file, check it available");
     exit(-1);
   }
-  const char** net_names = nullptr;
+  const char **net_names = nullptr;
   bmrt_get_network_names(p_bmrt, &net_names);
   int net_num = bmrt_get_network_number(p_bmrt);
   for (int net_id = 0; net_id < net_num; ++net_id) {
     auto net_info = bmrt_get_network_info(p_bmrt, net_names[net_id]);
     int stage_num = net_info->stage_num;
     for (int stage_id = 0; stage_id < stage_num; stage_id++) {
-      int batch;  // extract batch size to calculate throughput
+      int batch; // extract batch size to calculate throughput
       std::string input_node, output_node;
-      auto& stage = net_info->stages[stage_id];
+      auto &stage = net_info->stages[stage_id];
       for (int input_idx = 0; input_idx < net_info->input_num; input_idx++) {
         input_node += std::string(net_info->input_names[input_idx]) + "(" +
                       dtype_names[net_info->input_dtypes[input_idx]] + ")";
@@ -231,7 +228,7 @@ void multi_tpu_perf(std::string path, std::vector<int> tpu_id_list) {
         t_arr.push_back(
             std::async(perf_thread, path, tpu_id, net_id, stage_id, loopnum));
       }
-      for (auto& t : t_arr) {
+      for (auto &t : t_arr) {
         duration += t.get();
       }
       duration = duration / num_tpu;

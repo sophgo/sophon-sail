@@ -33,19 +33,18 @@ Processing interface.
 **Interface:**
     .. code-block:: python
 
-        def process(detected_objects:list[list[int, float, float, float, float, float, float, float]], 
-                tracked_objects:list[list[int, float, float, float, float, float, float, float, int]]) 
-                    -> int
+        def process(detected_objects:list[tuple[int, int, int, int, int, float]]) 
+                    -> tracked_objects:list[tuple[int, int, int, int, int, float, int]]
 
 **Parameters:**
 
-* detected_objects: list[list[int, float, float, float, float, float, float, float]]
+* detected_objects: list[tuple(left, top, right, bottom, class_id, score)]
 
 Input. Detected objects.
 
-* tracked_objects: list[list[int, float, float, float, float, float, float, float, int]]
+* tracked_objects: list[tuple(left, top, right, bottom, class_id, score, track_id)]
 
-Output。Tracked objects.
+Output. Tracked objects. The track_id is the ID of the tracked object.
 
 **Returns:**
 

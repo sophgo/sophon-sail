@@ -39,6 +39,19 @@ ____________
                     int cache_buffer_length=5
                     int abort_policy=0);
 
+内存模式编码器初始化（编码输出到内存缓冲区，格式为fragmented MP4）：
+
+**视频编码器接口形式3（内存模式）:**
+    .. code-block:: c
+
+        Encoder(int device_id,
+                    const std::string &enc_fmt,
+                    const std::string &pix_fmt,
+                    const std::string &enc_params,
+                    bool memory_mode,
+                    int cache_buffer_length=5,
+                    int abort_policy=0);
+
 **参数说明:**
 
 * output_path: string
@@ -72,6 +85,10 @@ ____________
 * abort_policy: int
 
 输入参数。缓存队列已满时，video_write接口的拒绝策略。设为0时，video_write接口立即返回-1。设为1时，pop队列头。设为2时，清空队列。设为3时，阻塞直到编码线程消耗一帧，队列产生空位。
+
+* memory_mode: bool
+
+输入参数。是否启用内存模式。设为true时，编码输出到内存缓冲区而非文件或流，输出格式为fragmented MP4。此模式下无需指定output_path。编码完成后通过 ``get_encoded_data()`` 获取数据。
 
 is_opened
 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>
@@ -300,5 +317,114 @@ reconnect
                 cout << "Reconnect failed!" << endl;
                 return ret;
             }
+            return 0;
+        }
+
+get_encoded_data
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+获取内存模式编码后的数据。需在 ``release()`` 之后调用，返回编码后的fragmented MP4数据。
+
+**接口形式:**
+    .. code-block:: c
+
+        std::vector<uint8_t> get_encoded_data();
+
+**返回值说明:**
+
+* data: vector<uint8_t>
+
+编码后的MP4数据。可直接用于网络传输、文件保存等。若缓冲区为空，返回空的vector。
+
+**示例代码:**
+    .. code-block:: c
+
+        #include <sail/encoder.h>
+        #include <fstream>
+
+        using namespace std;
+        int main() {
+            int dev_id = 0;
+            string enc_fmt = "h264_bm";
+            string pix_fmt = "I420";
+            string enc_params = "width=1920:height=1080:bitrate=2000:gop=32:gop_preset=2:framerate=25";
+            // 创建内存模式编码器
+            sail::Encoder encoder(dev_id, enc_fmt, pix_fmt, enc_params, true);
+            // 写入帧...
+            // encoder.video_write(img);
+            // 释放编码器（刷出所有缓冲帧）
+            encoder.release();
+            // 获取编码数据
+            vector<uint8_t> mp4_data = encoder.get_encoded_data();
+            cout << "编码数据大小: " << mp4_data.size() << " bytes" << endl;
+            // 保存到文件
+            ofstream ofs("output.mp4", ios::binary);
+            ofs.write(reinterpret_cast<char*>(mp4_data.data()), mp4_data.size());
+            return 0;
+        }
+
+get_encoded_size
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+获取内存模式编码缓冲区的当前大小（字节数）。
+
+**接口形式:**
+    .. code-block:: c
+
+        size_t get_encoded_size();
+
+**返回值说明:**
+
+* size: size_t
+
+编码缓冲区当前大小（字节）。若未使用内存模式，返回0。
+
+**示例代码:**
+    .. code-block:: c
+
+        #include <sail/encoder.h>
+
+        using namespace std;
+        int main() {
+            int dev_id = 0;
+            string enc_fmt = "h264_bm";
+            string pix_fmt = "I420";
+            string enc_params = "width=1920:height=1080:bitrate=2000:gop=32:framerate=25";
+            sail::Encoder encoder(dev_id, enc_fmt, pix_fmt, enc_params, true);
+            // 写入帧后查看编码进度
+            // encoder.video_write(img);
+            cout << "已编码: " << encoder.get_encoded_size() << " bytes" << endl;
+            return 0;
+        }
+
+reset_encoded_data
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+重置内存模式的编码缓冲区，用于复用编码器进行下一段编码。
+
+**接口形式:**
+    .. code-block:: c
+
+        void reset_encoded_data();
+
+**示例代码:**
+    .. code-block:: c
+
+        #include <sail/encoder.h>
+
+        using namespace std;
+        int main() {
+            int dev_id = 0;
+            string enc_fmt = "h264_bm";
+            string pix_fmt = "I420";
+            string enc_params = "width=1920:height=1080:bitrate=2000:gop=32:framerate=25";
+            sail::Encoder encoder(dev_id, enc_fmt, pix_fmt, enc_params, true);
+            // ... 编码第一段 ...
+            encoder.release();
+            vector<uint8_t> data1 = encoder.get_encoded_data();
+            // 重置缓冲区，复用编码器编码下一段
+            encoder.reset_encoded_data();
+            encoder.reconnect();
+            // ... 编码第二段 ...
             return 0;
         }

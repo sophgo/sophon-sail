@@ -449,7 +449,7 @@ input_mems和addr_mode的定义请参考《BMRuntime开发参考手册》。
 
 **接口形式2:**
 
-根据stage，获取一组对应的输入Tensor。
+根据stage，获取所有的输入Tensor。
 
     .. code-block:: python
 
@@ -463,15 +463,13 @@ input_mems和addr_mode的定义请参考《BMRuntime开发参考手册》。
 get_input_tensor
 >>>>>>>>>>>>>>>>>>>
 
-根据索引和stage，获取一个对应的输入Tensor。
+根据Tensor索引、计算图名称、stage，获取一个对应的输入Tensor。
 
 该接口使用net_info中的input_mems创建Tensor，而非额外重新申请内存。
 为了内存安全，该接口仅在addr_mode模式为1时可用，否则返回的字典为空。
 input_mems和addr_mode的定义请参考《BMRuntime开发参考手册》。
 
 **接口形式:**
-
-根据Tensor名称和索引，获取一个对应的输入Tensor。
 
     .. code-block:: python
 
@@ -497,7 +495,7 @@ output_mems和addr_mode的定义请参考《BMRuntime开发参考手册》。
 
 **接口形式2:**
 
-根据stage，获取一组对应的输出Tensor。
+根据stage，获取所有的输出Tensor。
 
     .. code-block:: python
 
@@ -511,15 +509,13 @@ output_mems和addr_mode的定义请参考《BMRuntime开发参考手册》。
 get_output_tensor
 >>>>>>>>>>>>>>>>>>>
 
-根据索引和stage，获取一个对应的输出Tensor。
+根据Tensor索引、计算图名称、stage，获取一个对应的输出Tensor。
 
 该接口使用net_info中的output_mems创建Tensor，而非额外重新申请内存。
 为了内存安全，该接口仅在addr_mode模式为1时可用，否则返回的字典为空。
 output_mems和addr_mode的定义请参考《BMRuntime开发参考手册》。
 
 **接口形式:**
-
-根据Tensor名称和索引，获取一个对应的输出Tensor。
 
     .. code-block:: python
 
@@ -529,15 +525,13 @@ output_mems和addr_mode的定义请参考《BMRuntime开发参考手册》。
 get_input_tensors_addrmode0
 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
-根据Tensor名称和stage，获取一组对应的输入Tensor。
+根据计算图名称和stage，获取所有的输入Tensor。
 
 该接口使用net_info中的input_mems创建Tensor，而非额外重新申请内存。
 该接口在addr_mode模式不为1时也可用，调用者需要确认Tensor的内存安全。
 addr_mode的定义请参考《BMRuntime开发参考手册》。
 
 **接口形式:**
-
-获取所有输入Tensors。
 
     .. code-block:: python
 
@@ -551,15 +545,13 @@ addr_mode的定义请参考《BMRuntime开发参考手册》。
 get_output_tensors_addrmode0
 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
-根据Tensor名称和stage，获取一组对应的输出Tensor。
+根据计算图名称和stage，获取所有的输出Tensor。
 
 该接口使用net_info中的output_mems创建Tensor，而非额外重新申请内存。
 该接口在addr_mode模式不为1时也可用，调用者需要确认Tensor的内存安全。
 addr_mode的定义请参考《BMRuntime开发参考手册》。
 
 **接口形式:**
-
-获取所有输出Tensors。
 
     .. code-block:: python
 
@@ -568,3 +560,44 @@ addr_mode的定义请参考《BMRuntime开发参考手册》。
 **返回值说明:**
 
 返回由索引和Tensor组成的字典dict[int, Tensor]
+
+
+create_max_input_tensors
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+创建指定计算图的全部输入Tensor。
+
+该接口使用net_info中的信息重新创建Tensor，并分配独立的设备内存。
+
+若计算图中有多个stage，则选择输入shape最大的stage来创建Tensor。
+
+**接口形式:**
+
+    .. code-block:: python
+
+        def create_max_input_tensors(self, graph_name: str) -> dict[int, Tensor]
+
+**返回值说明:**
+
+返回由索引和Tensor组成的字典dict[int, Tensor]
+
+
+create_max_output_tensors
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+创建指定计算图的全部输出Tensor。
+
+该接口使用net_info中的信息重新创建Tensor，并分配独立的设备内存。
+
+若计算图中有多个stage，则选择输入shape最大的stage来创建Tensor。
+
+**接口形式:**
+
+    .. code-block:: python
+
+        def create_max_output_tensors(self, graph_name: str) -> dict[int, Tensor]
+
+**返回值说明:**
+
+返回由索引和Tensor组成的字典dict[int, Tensor]
+

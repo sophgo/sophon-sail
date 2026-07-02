@@ -8,10 +8,15 @@ ____________________
 
 初始化Decoder_RawStream。
 
-**接口形式:**
+**接口形式1:**
     .. code-block:: c
 
-        Decoder_RawStream(int tpu_id, string  decformt);
+        Decoder_RawStream(int tpu_id, string decformt);
+
+**接口形式2:**
+    .. code-block:: c
+
+        Decoder_RawStream(int tpu_id, string decformt, int decode_order);
 
 **参数说明:**
 
@@ -23,6 +28,10 @@ ____________________
 
 输入参数。输入图像的格式，支持h264和h265
 
+* decode_order: int
+
+输入参数。解码顺序，0表示按显示顺序出帧，1表示按码流顺序出帧，默认为0。\
+若码流中存在B帧，请设置此参数为0。
 
 read
 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>
@@ -185,4 +194,4 @@ read_single_frame
 
 读取成功返回0，需要继续输入数据返回1，失败返回其他值。
 
-首帧返回1是正常情况，请继续输入下一帧数据。
+按显示顺序出帧时，首帧返回1是正常情况，请继续输入下一帧数据。

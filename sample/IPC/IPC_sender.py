@@ -1,51 +1,54 @@
 import sophon.sail as sail
 import time
 """
-测试进程间通信的代码。开启两个终端, 一个运行python3 IPC_sender.py, 一个运行python3 IPC_receiver.py
-发送方会给接收方传递一个BMImage, 接收方收到之后,会将它保存成本地文件
+Code for testing interprocess communication. Turn on two terminals, one running python3 IPC_sender.py, one running python3 IPC_receiver.py
+The sender will pass a BMImage to the receiver, and when the receiver receives it, it will save the local file
 
-IPC的构造函数参数:
-    bool isSender_ 是否为发送方;
-    string image_pipe 用于传递图片或tensor的管道名, 管道不需要提前创建，但父目录必须存在;
-    string final_pipe 用于接收返回信息的管道名;
-    usec2c 接收方是否使用c2c接口拷贝内存。默认为false;
-        从单纯通信上来看, c2c比d2d更慢, 但由于d2d使用gdma, 所以可能c2c对推理影响更小。
-        发送方不需要设置。
+Constructor parameters for IPC:
+    bool isSender_: Is the sender or not;
+    string image_pipe: Whether used to pass the picture or tensor pipe name, the pipe does not need to be created in advance, but the parent directory must exist;
+    string final_pipe: The pipe name used to receive the returned information;
+    usec2c: Whether the receiver copies memory using the c2c interface. Defaults to false;
+        From the perspective of pure communication, c2c is slower than d2d, but since d2d uses gdma, it is possible that c2c has less influence on inference.
+        Sender does not need to be set up.
 
-运行本例程前, 请函数中的文件路径
+Before running this routine, please ask the file path in the function
 """
+
 
 def test_send_bmi():
     file_path = '/home/xyz/projects/videos/monitor.mp4'
-    
+
     handle = sail.Handle(0)
     decoder = sail.Decoder(file_path)
     ipc = sail.IPC(True, "/tmp/img", "/tmp/final")
     idx = 0
-    
+
     while True:
         time.sleep(0.04)
         bmi = decoder.read(handle)
-        # 发送方
+        # Sender
         ipc.sendBMImage(bmi, 0, idx)
         idx += 1
 
+
 def test_send_tensor():
     file_path = '/home/xyz/projects/videos/monitor.mp4'
-    
+
     handle = sail.Handle(0)
     decoder = sail.Decoder(file_path)
     bmcv = sail.Bmcv(handle)
     ipc = sail.IPC(True, "/tmp/img", "/tmp/final")
     idx = 0
-    
+
     while True:
         time.sleep(0.04)
         bmi = decoder.read(handle)
         tensor = bmcv.bm_image_to_tensor(bmi)
-        # 发送方
+        # Sender
         ipc.sendTensor(tensor, 0, idx)
         idx += 1
+
 
 if __name__ == "__main__":
     test_send_bmi()

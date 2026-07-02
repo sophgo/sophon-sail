@@ -71,6 +71,25 @@ get_target
 
 返回设备智能视觉深度学习处理器的型号
 
+get_status
+>>>>>>>>>>>>>>>
+
+获取智能视觉深度学习处理器的运行状态
+
+**接口形式:**
+    .. code-block:: python
+
+        def get_status(self) -> bool
+
+**返回值说明:**
+
+* status: bool
+
+返回设备智能视觉深度学习处理器的运行状态。
+
+True表示Active状态，运行正常；False表示Fault状态，运行异常或处理器hang了。
+
+
 **示例代码:**
     .. code-block:: python
         
@@ -78,4 +97,7 @@ get_target
         if __name__ == '__main__':
             tpu_id = 0
             handle = sail.Handle(tpu_id)
-            print(handle.get_device_id(), handle.get_sn(), handle.get_target())
+            print(f"Device ID: {handle.get_device_id()}")
+            print(f"SN: {handle.get_sn()}")
+            print(f"Target: {handle.get_target()}")
+            print(f"Status: {handle.get_status()}")

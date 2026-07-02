@@ -1,7 +1,7 @@
 import os
 from langchain_huggingface.embeddings import HuggingFaceEmbeddings
 from langchain_milvus import Milvus
-from sophon_faiss_service import IndexFlat,IndexPQ,SearchType
+from sophon_faiss_service import IndexFlat, IndexPQ, SearchType
 import time
 
 #768
@@ -9,18 +9,15 @@ embedding_model_path = "bce-embedding-base_1b.bmodel"
 tokenizer_path = "token_config"
 db_vectors_path = "db_vectors.npy"
 
-indexflatl2 = IndexFlat(embedding_model_path,tokenizer_path,0,SearchType.IndexFlatL2)
-indexpq = IndexPQ(embedding_model_path,tokenizer_path,0)
-embeddings = HuggingFaceEmbeddings(model_name="maidalun1020/bce-embedding-base_v1", model_kwargs={'device': 'cpu'})
+indexflatl2 = IndexFlat(embedding_model_path, tokenizer_path, 0, SearchType.IndexFlatL2)
+indexpq = IndexPQ(embedding_model_path, tokenizer_path, 0)
+embeddings = HuggingFaceEmbeddings(model_name="maidalun1020/bce-embedding-base_v1",
+                                   model_kwargs={'device': 'cpu'})
 URI = "ready.db"
 load_flag = False
 if not os.path.exists(URI):
     load_flag = True
-vector_store = Milvus(
-    embedding_function=embeddings,
-    connection_args={"uri": URI},
-    auto_id=True
-)
+vector_store = Milvus(embedding_function=embeddings, connection_args={"uri": URI}, auto_id=True)
 
 if load_flag:
     from langchain_core.documents import Document
@@ -30,7 +27,7 @@ if load_flag:
     ids = vector_store.add_documents(documents=documents)
     for id, doc in zip(ids, documents):
         indexflatl2.add_text(doc.page_content, id)
-    indexflatl2.save_npy('db_vectors','db_ids')
+    indexflatl2.save_npy('db_vectors', 'db_ids')
 else:
     indexflatl2.load_from_npy(db_vectors_path, "db_ids.npy")
     indexpq.load_from_npy(db_vectors_path, "db_ids.npy")
@@ -81,7 +78,6 @@ duration = time.time() - start
 print("query time(s): ", duration)
 print("-------------------------------")
 
-
 print("---------IndexFlatL2-----------")
 start = time.time()
 sim, sids = indexflatl2.similarity_search("哈利波特猛然睡醒", 5, search_type=SearchType.IndexFlatL2)
@@ -112,7 +108,6 @@ for res in results_:
 duration = time.time() - start
 print("query time(s): ", duration)
 print("-------------------------------")
-
 
 print("---------IndexPQSDC-----------")
 start = time.time()

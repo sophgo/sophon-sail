@@ -3858,3 +3858,76 @@ faiss_indexPQ_SDC
         D_, I_ = bmcv.faiss_indexPQ_SDC(nxcodes_vecs, nycodes_vecs, SDC_tables, slice_num, 256, database_vecs_num, query_vecs_num, topK, 0)
         print("The index of sail:\n", I_)
         print("The distance of sail:\n", D_)
+
+ssim
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+计算两张图像之间的结构相似性。该接口用于衡量两张图像的相似程度，输出 SSIM 分数。
+
+**接口形式:**
+    .. code-block:: python
+
+        ssim(
+            self,
+            bm_img1: BMImage,
+            bm_img2: BMImage,
+            win_size: int = 7,
+            data_range: float = 255.0,
+            full: bool = False,
+            gaussian_weights: bool = True,
+            use_sample_covariance: bool = True
+        ) -> float | tuple[float, numpy.ndarray]:
+
+        
+
+**参数说明:**
+
+* bm_img1: BMImage
+    输入的第一张图像。只支持FORMAT_BGR_PLANAR, FORMAT_RGB_PLANAR, FORMAT_GRAY三种格式。
+
+* bm_img2: BMImage
+    输入的第二张图像，图像尺寸和数据类型需与 bm_img1 保持一致。
+
+* win_size: int
+    计算过程中使用的滑动窗口大小，必须为奇数，默认值为 7。
+
+* data_range: float
+    输入图像数据的数值范围（最大值减最小值），默认值为 255.0。
+
+* full: bool
+    是否返回完整的 SSIM 图像。若为 False 则返回平均 SSIM 分数；若为 True 则同时返回 SSIM 分数和 SSIM 图像，默认值为 False。
+
+* gaussian_weights: bool
+    是否在计算中使用高斯加权。若为 True，则使用高斯核进行加权计算，默认值为 True。
+
+* use_sample_covariance: bool
+    是否使用样本协方差进行计算，默认值为 True。
+
+**返回值说明:**
+
+* result: float | tuple[float, numpy.ndarray]
+    如果 full 为 False，返回一个浮点数，表示两张图像的平均 SSIM 分数。
+    如果 full 为 True，返回一个元组 (mssim, ssim_map)，其中 mssim 为平均 SSIM 分数，ssim_map 为完整的 SSIM 图像。
+
+**示例代码:**
+    .. code-block:: python
+
+        import sophon.sail as sail
+
+        tpu_id = 0
+        handle = sail.Handle(tpu_id)
+        bmcv = sail.Bmcv(handle)
+        image_name1 = "test1.png"
+        image_name2 = "test2.png"
+        decoder1 = sail.Decoder(image_name1,True,tpu_id)
+        decoder2 = sail.Decoder(image_name2,True,tpu_id)
+        BMimg1 = decoder1.read(handle)# here is a sail.BMImage
+        BMimg2 = decoder2.read(handle)# here is a sail.BMImage
+
+        #only support FORMAT_BGR_PLANAR, FORMAT_RGB_PLANAR, FORMAT_GRAY
+        input1 = bmcv.vpp_convert_format(BMimg1, sail.FORMAT_GRAY) 
+        input2 = bmcv.vpp_convert_format(BMimg2, sail.FORMAT_GRAY)
+
+        ssim_score_tpu = bmcv.ssim(input1, input2, full=False)
+        #ssim_score, ssim_map = bmcv.ssim(input1, input2, full=True)
+        print("ssim_score_tpu:", ssim_score_tpu)

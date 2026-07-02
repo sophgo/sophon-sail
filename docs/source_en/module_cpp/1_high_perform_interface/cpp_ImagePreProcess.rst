@@ -30,7 +30,7 @@ Input parameter. Internal scale transformation method.
 
 * tpu_id: int
 
-Input parameter. The tpu id used, the default is 0.
+Input parameter. The TPU id used, the default is 0.
 
 * queue_in_size: int
 

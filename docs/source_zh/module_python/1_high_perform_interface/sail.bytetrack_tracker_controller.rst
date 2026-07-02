@@ -30,28 +30,23 @@ process
 
 处理接口。
 
-**接口形式1:**
+**接口形式:**
     .. code-block:: python
 
-        def process(detected_objects:list[list[int, float, float, float, float, float, float, float]], 
-                tracked_objects:list[list[int, float, float, float, float, float, float, float, int]]) 
-                    -> int
+        def process(detected_objects:list[tuple[int, int, int, int, int, float]]) 
+                    -> tracked_objects:list[tuple[int, int, int, int, int, float, int]]
 
-**参数说明1:**
+**参数说明:**
 
-* detected_objects: list[list[int, float, float, float, float, float, float, float]]
+* detected_objects: list[tuple(left, top, right, bottom, class_id, score)]
 
 输入参数。检测出的物体框。
 
-* tracked_objects: list[list[int, float, float, float, float, float, float, float, int]]
-
-输出参数。被跟踪的物体。
-
 **返回值说明:**
 
-int
+* tracked_objects: list[tuple(left, top, right, bottom, class_id, score, track_id)]
 
-成功返回0，失败返回其他。
+输出参数。被跟踪的物体，其中track_id为被跟踪物体的ID。
 
 **示例代码:**
     .. code-block:: python

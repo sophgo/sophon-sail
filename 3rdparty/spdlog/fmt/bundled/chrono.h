@@ -18,22 +18,23 @@
 
 FMT_BEGIN_NAMESPACE
 
-namespace internal{
+namespace internal {
 
 enum class numeric_system {
   standard,
-  // Alternative numeric system, e.g. 十二 instead of 12 in ja_JP locale.
+  // Alternative numeric system, e.g. twelve instead of 12 in ja_JP locale.
   alternative
 };
 
 // Parses a put_time-like format string and invokes handler actions.
 template <typename Char, typename Handler>
-FMT_CONSTEXPR const Char *parse_chrono_format(
-    const Char *begin, const Char *end, Handler &&handler) {
+FMT_CONSTEXPR const Char *
+parse_chrono_format(const Char *begin, const Char *end, Handler &&handler) {
   auto ptr = begin;
   while (ptr != end) {
     auto c = *ptr;
-    if (c == '}') break;
+    if (c == '}')
+      break;
     if (c != '%') {
       ++ptr;
       continue;
@@ -213,7 +214,8 @@ struct chrono_format_checker {
 template <typename Int>
 inline int to_int(Int value) {
   FMT_ASSERT(value >= (std::numeric_limits<int>::min)() &&
-             value <= (std::numeric_limits<int>::max)(), "invalid value");
+                 value <= (std::numeric_limits<int>::max)(),
+             "invalid value");
   return static_cast<int>(value);
 }
 
@@ -227,7 +229,7 @@ struct chrono_formatter {
   typedef typename FormatContext::char_type char_type;
 
   explicit chrono_formatter(FormatContext &ctx, OutputIt o)
-    : context(ctx), out(o) {}
+      : context(ctx), out(o) {}
 
   int hour() const { return to_int((s.count() / 3600) % 24); }
 
@@ -339,38 +341,92 @@ struct chrono_formatter {
 
   void on_am_pm() { format_localized(time(), "%p"); }
 };
-}  // namespace internal
+} // namespace internal
 
-template <typename Period> FMT_CONSTEXPR const char *get_units() {
+template <typename Period>
+FMT_CONSTEXPR const char *get_units() {
   return FMT_NULL;
 }
-template <> FMT_CONSTEXPR const char *get_units<std::atto>() { return "as"; }
-template <> FMT_CONSTEXPR const char *get_units<std::femto>() { return "fs"; }
-template <> FMT_CONSTEXPR const char *get_units<std::pico>() { return "ps"; }
-template <> FMT_CONSTEXPR const char *get_units<std::nano>() { return "ns"; }
-template <> FMT_CONSTEXPR const char *get_units<std::micro>() { return "µs"; }
-template <> FMT_CONSTEXPR const char *get_units<std::milli>() { return "ms"; }
-template <> FMT_CONSTEXPR const char *get_units<std::centi>() { return "cs"; }
-template <> FMT_CONSTEXPR const char *get_units<std::deci>() { return "ds"; }
-template <> FMT_CONSTEXPR const char *get_units<std::ratio<1>>() { return "s"; }
-template <> FMT_CONSTEXPR const char *get_units<std::deca>() { return "das"; }
-template <> FMT_CONSTEXPR const char *get_units<std::hecto>() { return "hs"; }
-template <> FMT_CONSTEXPR const char *get_units<std::kilo>() { return "ks"; }
-template <> FMT_CONSTEXPR const char *get_units<std::mega>() { return "Ms"; }
-template <> FMT_CONSTEXPR const char *get_units<std::giga>() { return "Gs"; }
-template <> FMT_CONSTEXPR const char *get_units<std::tera>() { return "Ts"; }
-template <> FMT_CONSTEXPR const char *get_units<std::peta>() { return "Ps"; }
-template <> FMT_CONSTEXPR const char *get_units<std::exa>() { return "Es"; }
-template <> FMT_CONSTEXPR const char *get_units<std::ratio<60>>() {
+template <>
+FMT_CONSTEXPR const char *get_units<std::atto>() {
+  return "as";
+}
+template <>
+FMT_CONSTEXPR const char *get_units<std::femto>() {
+  return "fs";
+}
+template <>
+FMT_CONSTEXPR const char *get_units<std::pico>() {
+  return "ps";
+}
+template <>
+FMT_CONSTEXPR const char *get_units<std::nano>() {
+  return "ns";
+}
+template <>
+FMT_CONSTEXPR const char *get_units<std::micro>() {
+  return "µs";
+}
+template <>
+FMT_CONSTEXPR const char *get_units<std::milli>() {
+  return "ms";
+}
+template <>
+FMT_CONSTEXPR const char *get_units<std::centi>() {
+  return "cs";
+}
+template <>
+FMT_CONSTEXPR const char *get_units<std::deci>() {
+  return "ds";
+}
+template <>
+FMT_CONSTEXPR const char *get_units<std::ratio<1>>() {
+  return "s";
+}
+template <>
+FMT_CONSTEXPR const char *get_units<std::deca>() {
+  return "das";
+}
+template <>
+FMT_CONSTEXPR const char *get_units<std::hecto>() {
+  return "hs";
+}
+template <>
+FMT_CONSTEXPR const char *get_units<std::kilo>() {
+  return "ks";
+}
+template <>
+FMT_CONSTEXPR const char *get_units<std::mega>() {
+  return "Ms";
+}
+template <>
+FMT_CONSTEXPR const char *get_units<std::giga>() {
+  return "Gs";
+}
+template <>
+FMT_CONSTEXPR const char *get_units<std::tera>() {
+  return "Ts";
+}
+template <>
+FMT_CONSTEXPR const char *get_units<std::peta>() {
+  return "Ps";
+}
+template <>
+FMT_CONSTEXPR const char *get_units<std::exa>() {
+  return "Es";
+}
+template <>
+FMT_CONSTEXPR const char *get_units<std::ratio<60>>() {
   return "m";
 }
-template <> FMT_CONSTEXPR const char *get_units<std::ratio<3600>>() {
+template <>
+FMT_CONSTEXPR const char *get_units<std::ratio<3600>>() {
   return "h";
 }
 
 template <typename Rep, typename Period, typename Char>
 struct formatter<std::chrono::duration<Rep, Period>, Char> {
- private:
+private:
   align_spec spec;
   internal::arg_ref<Char> width_ref;
   mutable basic_string_view<Char> format_str;
@@ -403,25 +459,27 @@ struct formatter<std::chrono::duration<Rep, Period>, Char> {
     }
   };
 
- public:
+public:
   formatter() : spec() {}
 
   FMT_CONSTEXPR auto parse(basic_parse_context<Char> &ctx)
       -> decltype(ctx.begin()) {
     auto begin = ctx.begin(), end = ctx.end();
-    if (begin == end) return begin;
+    if (begin == end)
+      return begin;
     spec_handler handler{*this, ctx};
     begin = internal::parse_align(begin, end, handler);
-    if (begin == end) return begin;
+    if (begin == end)
+      return begin;
     begin = internal::parse_width(begin, end, handler);
     end = parse_chrono_format(begin, end, internal::chrono_format_checker());
-    format_str = basic_string_view<Char>(&*begin, internal::to_unsigned(end - begin));
+    format_str =
+        basic_string_view<Char>(&*begin, internal::to_unsigned(end - begin));
     return end;
   }
 
   template <typename FormatContext>
-  auto format(const duration &d, FormatContext &ctx)
-      -> decltype(ctx.out()) {
+  auto format(const duration &d, FormatContext &ctx) -> decltype(ctx.out()) {
     auto begin = format_str.begin(), end = format_str.end();
     memory_buffer buf;
     typedef output_range<decltype(ctx.out()), Char> range;
@@ -433,8 +491,8 @@ struct formatter<std::chrono::duration<Rep, Period>, Char> {
         format_to(buf, "{}[{}]s", d.count(), Period::num);
       else
         format_to(buf, "{}[{}/{}]s", d.count(), Period::num, Period::den);
-      internal::handle_dynamic_spec<internal::width_checker>(
-        spec.width_, width_ref, ctx);
+      internal::handle_dynamic_spec<internal::width_checker>(spec.width_,
+                                                             width_ref, ctx);
     } else {
       auto out = std::back_inserter(buf);
       internal::chrono_formatter<FormatContext, decltype(out)> f(ctx, out);
@@ -449,4 +507,4 @@ struct formatter<std::chrono::duration<Rep, Period>, Char> {
 
 FMT_END_NAMESPACE
 
-#endif  // FMT_CHRONO_H_
+#endif // FMT_CHRONO_H_

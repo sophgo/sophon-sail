@@ -22,7 +22,7 @@ Input parameter. The path to input the model.
 
 * tpu_id: int
 
-Input parameter. The tpu id used.
+Input parameter. The TPU id used.
 
 * use_mat_output: bool
 

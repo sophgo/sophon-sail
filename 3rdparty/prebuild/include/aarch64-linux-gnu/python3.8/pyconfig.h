@@ -1,10 +1,8 @@
 /* pyconfig.h.  Generated from pyconfig.h.in by configure.  */
 /* pyconfig.h.in.  Generated from configure.ac by autoheader.  */
 
-
 #ifndef Py_PYCONFIG_H
 #define Py_PYCONFIG_H
-
 
 /* Define if building universal (internal helper macro) */
 /* #undef AC_APPLE_UNIVERSAL_BUILD */
@@ -205,11 +203,11 @@
 #define HAVE_DECL_ISFINITE 1
 
 /* Define to 1 if you have the declaration of `isinf', and to 0 if you don't.
-   */
+ */
 #define HAVE_DECL_ISINF 1
 
 /* Define to 1 if you have the declaration of `isnan', and to 0 if you don't.
-   */
+ */
 #define HAVE_DECL_ISNAN 1
 
 /* Define to 1 if you have the declaration of `RTLD_DEEPBIND', and to 0 if you
@@ -245,7 +243,7 @@
 #define HAVE_DECL_RTLD_NOW 1
 
 /* Define to 1 if you have the declaration of `tzname', and to 0 if you don't.
-   */
+ */
 /* #undef HAVE_DECL_TZNAME */
 
 /* Define to 1 if you have the device macros. */
@@ -264,7 +262,7 @@
 #define HAVE_DIRENT_D_TYPE 1
 
 /* Define to 1 if you have the <dirent.h> header file, and it defines `DIR'.
-   */
+ */
 #define HAVE_DIRENT_H 1
 
 /* Define if you have the 'dirfd' function or macro. */
@@ -412,7 +410,7 @@
 #define HAVE_GCC_ASM_FOR_X64 1
 
 /* Define if we can use gcc inline assembler to get and set x87 control word
-   */
+ */
 #define HAVE_GCC_ASM_FOR_X87 1
 
 /* Define if your compiler provides __uint128_t */
@@ -1102,7 +1100,7 @@
 /* #undef HAVE_SYS_DEVPOLL_H */
 
 /* Define to 1 if you have the <sys/dir.h> header file, and it defines `DIR'.
-   */
+ */
 /* #undef HAVE_SYS_DIR_H */
 
 /* Define to 1 if you have the <sys/endian.h> header file. */
@@ -1142,7 +1140,7 @@
 /* #undef HAVE_SYS_MODEM_H */
 
 /* Define to 1 if you have the <sys/ndir.h> header file, and it defines `DIR'.
-   */
+ */
 /* #undef HAVE_SYS_NDIR_H */
 
 /* Define to 1 if you have the <sys/param.h> header file. */
@@ -1327,7 +1325,7 @@
 #define HAVE_WMEMCMP 1
 
 /* Define if tzset() actually switches the local timezone in a meaningful way.
-   */
+ */
 #define HAVE_WORKING_TZSET 1
 
 /* Define to 1 if you have the `writev' function. */
@@ -1343,7 +1341,7 @@
 /* #undef HAVE__GETPTY */
 
 /* Define to 1 if `major', `minor', and `makedev' are declared in <mkdev.h>.
-   */
+ */
 /* #undef MAJOR_IN_MKDEV */
 
 /* Define to 1 if `major', `minor', and `makedev' are declared in
@@ -1496,25 +1494,24 @@
 
 /* Enable extensions on AIX 3, Interix.  */
 #ifndef _ALL_SOURCE
-# define _ALL_SOURCE 1
+#define _ALL_SOURCE 1
 #endif
 /* Enable GNU extensions on systems that have them.  */
 #ifndef _GNU_SOURCE
-# define _GNU_SOURCE 1
+#define _GNU_SOURCE 1
 #endif
 /* Enable threading extensions on Solaris.  */
 #ifndef _POSIX_PTHREAD_SEMANTICS
-# define _POSIX_PTHREAD_SEMANTICS 1
+#define _POSIX_PTHREAD_SEMANTICS 1
 #endif
 /* Enable extensions on HP NonStop.  */
 #ifndef _TANDEM_SOURCE
-# define _TANDEM_SOURCE 1
+#define _TANDEM_SOURCE 1
 #endif
 /* Enable general extensions on Solaris.  */
 #ifndef __EXTENSIONS__
-# define __EXTENSIONS__ 1
+#define __EXTENSIONS__ 1
 #endif
-
 
 /* Define if WINDOW in curses.h offers a field _flags. */
 #define WINDOW_HAS_FLAGS 1
@@ -1546,13 +1543,13 @@
 /* Define WORDS_BIGENDIAN to 1 if your processor stores words with the most
    significant byte first (like Motorola and SPARC, unlike Intel). */
 #if defined AC_APPLE_UNIVERSAL_BUILD
-# if defined __BIG_ENDIAN__
-#  define WORDS_BIGENDIAN 1
-# endif
+#if defined __BIG_ENDIAN__
+#define WORDS_BIGENDIAN 1
+#endif
 #else
-# ifndef WORDS_BIGENDIAN
+#ifndef WORDS_BIGENDIAN
 /* #  undef WORDS_BIGENDIAN */
-# endif
+#endif
 #endif
 
 /* Define if arithmetic is subject to x87-style double rounding issue */
@@ -1648,11 +1645,9 @@
 /* Define to `int' if <sys/types.h> doesn't define. */
 /* #undef uid_t */
 
-
 /* Define the macros needed if on a UnixWare 7.x system. */
 #if defined(__USLC__) && defined(__SCO_VERSION__)
 #define STRICT_SYSV_CURSES /* Don't use ncurses extensions */
 #endif
 
 #endif /*Py_PYCONFIG_H*/
-

@@ -70,3 +70,43 @@ Get the Tensor Computing Processor model of the device
 * Tensor Computing Processor type: str
 
 Returns the model of the device Tensor Computing Processor
+
+
+get_status
+>>>>>>>>>>>>>>>
+
+Get the status of the Tensor Computing Processor.
+
+**Interface:**
+    .. code-block:: c
+
+        bool get_status();
+
+**Returns:**
+
+* Status: bool
+
+Returns the status of the Tensor Computing Processor.
+
+true means Active, false means Fault.
+
+**Example Code:**
+    .. code-block:: c
+
+        #include <stdio.h>
+        #include <sail/cvwrapper.h>
+        #include <iostream>
+
+        using namespace std;
+        
+        int main() {  
+            int tpu_id = 0;  
+            sail::Handle handle(tpu_id);  
+        
+            std::cout << "Device ID: " << handle.get_device_id() << std::endl;  
+            std::cout << "SN: " << handle.get_sn() << std::endl;  
+            std::cout << "Target: " << handle.get_target() << std::endl;  
+            std::cout << "Status: " << handle.get_status() << std::endl;  
+
+            return 0;  
+        }

@@ -21,15 +21,15 @@ You may obtain a copy of the License at
  */
 
 #pragma once
-#include <bmruntime_interface.h>
 #include <bmlib_runtime.h>
+#include <bmruntime_interface.h>
 
 #include "graph.h"
 #include "tensor.h"
 
 #ifdef PYTHON
-#include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
+#include <pybind11/pybind11.h>
 #endif
 
 /// Namespace containing all symbols from the sail library.
@@ -43,7 +43,7 @@ namespace sail {
  * It can load more than one model and runs on more than one TPU.
  */
 class DECL_EXPORT Engine {
- public:
+public:
   /**
    * @brief Constructor does not load bmodel.
    *
@@ -59,10 +59,7 @@ class DECL_EXPORT Engine {
    * @param mode        Specify the input/output tensors are in system memory
    *                    or device memory
    */
-  Engine(
-      const std::string& bmodel_path,
-      int                tpu_id,
-      IOMode             mode);
+  Engine(const std::string &bmodel_path, int tpu_id, IOMode mode);
 
   /**
    * @brief Constructor loads bmodel from system memory.
@@ -73,18 +70,14 @@ class DECL_EXPORT Engine {
    * @param mode        Specify the input/output tensors are in system memory
    *                    or device memory
    */
-  Engine(
-      const void* bmodel_ptr,
-      size_t      bmodel_size,
-      int         tpu_id,
-      IOMode      mode);
+  Engine(const void *bmodel_ptr, size_t bmodel_size, int tpu_id, IOMode mode);
 
   /**
    * @brief Constructor does not load bmodel.
    *
    * @param handle Handle created elsewhere.
    */
-  Engine(const Handle&   handle);
+  Engine(const Handle &handle);
 
   /**
    * @brief Constructor loads bmodel from file.
@@ -94,10 +87,7 @@ class DECL_EXPORT Engine {
    * @param mode        Specify the input/output tensors are in system memory
    *                    or device memory
    */
-  Engine(
-      const std::string& bmodel_path,
-      const Handle&      handle,
-      IOMode             mode);
+  Engine(const std::string &bmodel_path, const Handle &handle, IOMode mode);
 
   /**
    * @brief Constructor loads bmodel from system memory.
@@ -108,11 +98,8 @@ class DECL_EXPORT Engine {
    * @param mode        Specify the input/output tensors are in system memory
    *                    or device memory
    */
-  Engine(
-      const void*        bmodel_ptr,
-      size_t             bmodel_size,
-      const Handle&      handle,
-      IOMode             mode);
+  Engine(const void *bmodel_ptr, size_t bmodel_size, const Handle &handle,
+         IOMode mode);
 
   ~Engine();
 
@@ -121,7 +108,7 @@ class DECL_EXPORT Engine {
    *
    * @return Handle reference
    */
-  Handle& get_handle();
+  Handle &get_handle();
 
   /**
    * @brief Get device id of this engine..
@@ -138,7 +125,7 @@ class DECL_EXPORT Engine {
    *     @retval true  Success
    *     @retval false Failure
    */
-  bool load(const std::string& bmodel_path);
+  bool load(const std::string &bmodel_path);
 
   /**
    * @brief Load bmodel from system memory.
@@ -149,7 +136,7 @@ class DECL_EXPORT Engine {
    *     @retval true  Success
    *     @retval false Failure
    */
-  bool load(const void* bmodel_ptr, size_t bmodel_size);
+  bool load(const void *bmodel_ptr, size_t bmodel_size);
 
   /**
    * @brief Get all graph names in the loaded bomodels.
@@ -164,9 +151,7 @@ class DECL_EXPORT Engine {
    * @param graph_name The specified graph name
    * @param mode The specified IOMode
    */
-  void set_io_mode(
-    const std::string& graph_name,
-    IOMode             mode);
+  void set_io_mode(const std::string &graph_name, IOMode mode);
 
   /**
    * @brief Jugde if the graph is dynamic.
@@ -174,7 +159,7 @@ class DECL_EXPORT Engine {
    * @param graph_name The specified graph name
    * @return 0 for dynamic and 1 for static
    */
-  bool graph_is_dynamic(const std::string& graph_name);
+  bool graph_is_dynamic(const std::string &graph_name);
 
   /**
    * @brief Get all input tensor names of the specified graph.
@@ -182,7 +167,7 @@ class DECL_EXPORT Engine {
    * @param graph_name The specified graph name
    * @return All the input tensor names of the graph
    */
-  std::vector<std::string> get_input_names(const std::string& graph_name);
+  std::vector<std::string> get_input_names(const std::string &graph_name);
 
   /**
    * @brief Get all output tensor names of the specified graph.
@@ -190,7 +175,7 @@ class DECL_EXPORT Engine {
    * @param graph_name The specified graph name
    * @return All the output tensor names of the graph
    */
-  std::vector<std::string> get_output_names(const std::string& graph_name);
+  std::vector<std::string> get_output_names(const std::string &graph_name);
 
   /**
    * @brief Get max shapes of input tensors in a graph.
@@ -202,8 +187,8 @@ class DECL_EXPORT Engine {
    * @param graph_name The specified graph name
    * @return Max shapes of input tensors
    */
-  std::map<std::string, std::vector<int>> get_max_input_shapes(
-      const std::string& graph_name);
+  std::map<std::string, std::vector<int>>
+  get_max_input_shapes(const std::string &graph_name);
 
   /**
    * @brief Get the shape of an input tensor in a graph.
@@ -212,9 +197,8 @@ class DECL_EXPORT Engine {
    * @param tensor_name The specified tensor name
    * @return The shape of the tensor
    */
-  std::vector<int> get_input_shape(
-      const std::string& graph_name,
-      const std::string& tensor_name);
+  std::vector<int> get_input_shape(const std::string &graph_name,
+                                   const std::string &tensor_name);
 
   /**
    * @brief Get max shapes of output tensors in a graph.
@@ -226,8 +210,8 @@ class DECL_EXPORT Engine {
    * @param graph_name The specified graph name
    * @return Max shapes of output tensors
    */
-  std::map<std::string, std::vector<int>> get_max_output_shapes(
-      const std::string& graph_name);
+  std::map<std::string, std::vector<int>>
+  get_max_output_shapes(const std::string &graph_name);
 
   /**
    * @brief Get the shape of an output tensor in a graph.
@@ -236,9 +220,8 @@ class DECL_EXPORT Engine {
    * @param tensor_name The specified tensor name
    * @return The shape of the tensor
    */
-  std::vector<int> get_output_shape(
-      const std::string& graph_name,
-      const std::string& tensor_name);
+  std::vector<int> get_output_shape(const std::string &graph_name,
+                                    const std::string &tensor_name);
 
   /**
    * @brief Get data type of an input tensor. Refer to bmdef.h as following.
@@ -257,9 +240,8 @@ class DECL_EXPORT Engine {
    * @param tensor_name The specified tensor name
    * @return Data type of the input tensor
    */
-  bm_data_type_t get_input_dtype(
-      const std::string& graph_name,
-      const std::string& tensor_name);
+  bm_data_type_t get_input_dtype(const std::string &graph_name,
+                                 const std::string &tensor_name);
 
   /**
    * @brief Get data type of an output tensor. Refer to bmdef.h as following.
@@ -278,9 +260,8 @@ class DECL_EXPORT Engine {
    * @param tensor_name The specified tensor name
    * @return Data type of the input tensor
    */
-  bm_data_type_t get_output_dtype(
-      const std::string& graph_name,
-      const std::string& tensor_name);
+  bm_data_type_t get_output_dtype(const std::string &graph_name,
+                                  const std::string &tensor_name);
 
   /**
    * @brief Get scale of an input tensor. Only used for int8 models.
@@ -289,9 +270,8 @@ class DECL_EXPORT Engine {
    * @param tensor_name The specified tensor name
    * @return Scale of the input tensor
    */
-  float get_input_scale(
-      const std::string& graph_name,
-      const std::string& tensor_name);
+  float get_input_scale(const std::string &graph_name,
+                        const std::string &tensor_name);
 
   /**
    * @brief Get scale of an output tensor. Only used for int8 models.
@@ -300,9 +280,8 @@ class DECL_EXPORT Engine {
    * @param tensor_name The specified tensor name
    * @return Scale of the output tensor
    */
-  float get_output_scale(
-      const std::string& graph_name,
-      const std::string& tensor_name);
+  float get_output_scale(const std::string &graph_name,
+                         const std::string &tensor_name);
 
   /**
    * @brief Reshape input tensor for dynamic models.
@@ -314,9 +293,8 @@ class DECL_EXPORT Engine {
    * @param input_shapes Specified shapes of all input tensors of the graph
    * @return 0 for success and 1 for failure
    */
-  int reshape(
-      const std::string&                       graph_name,
-      std::map<std::string, std::vector<int>>& input_shapes);
+  int reshape(const std::string &graph_name,
+              std::map<std::string, std::vector<int>> &input_shapes);
 
   /**
    * @brief Get the specified input tensor.
@@ -325,9 +303,8 @@ class DECL_EXPORT Engine {
    * @param tensor_name The specified tensor name
    * @return The specified input tensor
    */
-  Tensor* get_input_tensor(
-      const std::string& graph_name,
-      const std::string& tensor_name);
+  Tensor *get_input_tensor(const std::string &graph_name,
+                           const std::string &tensor_name);
 
   /**
    * @brief Get the specified output tensor.
@@ -336,9 +313,8 @@ class DECL_EXPORT Engine {
    * @param tensor_name The specified tensor name
    * @return The specified output tensor
    */
-  Tensor* get_output_tensor(
-      const std::string& graph_name,
-      const std::string& tensor_name);
+  Tensor *get_output_tensor(const std::string &graph_name,
+                            const std::string &tensor_name);
 
   /**
    * @brief Scale input tensor for int8 models.
@@ -347,10 +323,8 @@ class DECL_EXPORT Engine {
    * @param tensor_name The specified tensor name
    * @param data        Pointer to float data to be scaled
    */
-  void scale_input_tensor(
-      const std::string& graph_name,
-      const std::string& tensor_name,
-      float*             data);
+  void scale_input_tensor(const std::string &graph_name,
+                          const std::string &tensor_name, float *data);
 
   /**
    * @brief Scale output tensor for int8 models.
@@ -359,10 +333,8 @@ class DECL_EXPORT Engine {
    * @param tensor_name The specified tensor name
    * @param data        Pointer to float data to be scaled
    */
-  void scale_output_tensor(
-      const std::string& graph_name,
-      const std::string& tensor_name,
-      float*             data);
+  void scale_output_tensor(const std::string &graph_name,
+                           const std::string &tensor_name, float *data);
 
   /**
    * @brief Scale data from float32 to int8. Only used for int8 models.
@@ -372,7 +344,7 @@ class DECL_EXPORT Engine {
    * @param scale Value of scale
    * @param size  Size of data
    */
-  void scale_fp32_to_int8(float* src, int8_t* dst, float scale, int size);
+  void scale_fp32_to_int8(float *src, int8_t *dst, float scale, int size);
 
   /**
    * @brief Scale data from float32 to uint8. Only used for int8 models.
@@ -382,7 +354,7 @@ class DECL_EXPORT Engine {
    * @param scale Value of scale
    * @param size  Size of data
    */
-  void scale_fp32_to_uint8(float* src, uint8_t* dst, float scale, int size);
+  void scale_fp32_to_uint8(float *src, uint8_t *dst, float scale, int size);
 
   /**
    * @brief Scale data from int8 to float32. Only used for int8 models.
@@ -392,7 +364,7 @@ class DECL_EXPORT Engine {
    * @param scale Value of scale
    * @param size  Size of data
    */
-  void scale_int8_to_fp32(int8_t* src, float* dst, float scale, int size);
+  void scale_int8_to_fp32(int8_t *src, float *dst, float scale, int size);
 
   /**
    * @brief Scale data from uint8 to float32. Only used for int8 models.
@@ -402,8 +374,8 @@ class DECL_EXPORT Engine {
    * @param scale Value of scale
    * @param size  Size of data
    */
-  void scale_uint8_to_fp32(uint8_t* src, float* dst, float scale, int size);
-  
+  void scale_uint8_to_fp32(uint8_t *src, float *dst, float scale, int size);
+
   /**
    * @brief Scale data from int32 to float32. Only used for int32 models.
    *
@@ -412,7 +384,7 @@ class DECL_EXPORT Engine {
    * @param scale Value of scale
    * @param size  Size of data
    */
-  void scale_int32_to_fp32(int32_t* src, float* dst, float scale, int size);
+  void scale_int32_to_fp32(int32_t *src, float *dst, float scale, int size);
   /**
    * @brief Scale data from fp32 to int32. Only used for int32 models.
    * @param src Pointer to fp32 data
@@ -420,34 +392,37 @@ class DECL_EXPORT Engine {
    * @param scale Value of scale
    * @param size Size of data
    */
-  void scale_fp32_to_int32(float* src, int32_t* dst, float scale, int size);
+  void scale_fp32_to_int32(float *src, int32_t *dst, float scale, int size);
 
   /**
    * @brief Create input tensors map, according to and bmodel.
    * @param graph_name   The specified graph name
    * @param create_mode Tensor Create mode
-   *  case 0: only allocate system memory 
-   *  case 1: only allocate device memory
-   *  case other: according to engine IOMode
-   */
-  std::map<std::string, Tensor*> create_input_tensors_map(const std::string& graph_name, int create_mode = -1);
-  
-  /**
-   * @brief Create output tensors map, according to and bmodel.
-   * @param graph_name   The specified graph name 
-   * @param create_mode Tensor Create mode 
    *  case 0: only allocate system memory
    *  case 1: only allocate device memory
    *  case other: according to engine IOMode
    */
-  std::map<std::string, Tensor*> create_output_tensors_map(const std::string& graph_name, int create_mode = -1);
+  std::map<std::string, Tensor *>
+  create_input_tensors_map(const std::string &graph_name, int create_mode = -1);
+
+  /**
+   * @brief Create output tensors map, according to and bmodel.
+   * @param graph_name   The specified graph name
+   * @param create_mode Tensor Create mode
+   *  case 0: only allocate system memory
+   *  case 1: only allocate device memory
+   *  case other: according to engine IOMode
+   */
+  std::map<std::string, Tensor *>
+  create_output_tensors_map(const std::string &graph_name,
+                            int create_mode = -1);
   /**
    * @brief Inference with builtin input and output tensors.
    *
    * @param graph_name The specified graph name
    * @param core_list  Those cores will be used to inference
    */
-  void process(const std::string& graph_name, std::vector<int> core_list = {});
+  void process(const std::string &graph_name, std::vector<int> core_list = {});
 
   /**
    * @brief Inference with provided input tensors.
@@ -458,11 +433,10 @@ class DECL_EXPORT Engine {
    * @param scale         Indicator of multiply scale for input tensors or not
    * @param core_list     Those cores will be used to inference
    */
-  void process(
-      const std::string&                       graph_name,
-      std::map<std::string, std::vector<int>>& input_shapes,
-      std::map<std::string, void*>&            input_tensors,
-      std::vector<int>                         core_list = {});
+  void process(const std::string &graph_name,
+               std::map<std::string, std::vector<int>> &input_shapes,
+               std::map<std::string, void *> &input_tensors,
+               std::vector<int> core_list = {});
 
   /**
    * @brief Inference with provided input and output tensors.
@@ -471,11 +445,10 @@ class DECL_EXPORT Engine {
    * @param output    Output tensors
    * @param core_list Those cores will be used to inference
    */
-  void process(
-      const std::string&              graph_name,
-      std::map<std::string, Tensor*>& input,
-      std::map<std::string, Tensor*>& output,
-      std::vector<int>                core_list = {});
+  void process(const std::string &graph_name,
+               std::map<std::string, Tensor *> &input,
+               std::map<std::string, Tensor *> &output,
+               std::vector<int> core_list = {});
 
   /**
    * @brief Inference with provided input and output tensors and input shapes.
@@ -485,54 +458,42 @@ class DECL_EXPORT Engine {
    * @param output       Output tensors
    * @param core_list    Those cores will be used to inference
    */
-  void process(
-      const std::string&                       graph_name,
-      std::map<std::string, Tensor*>&          input,
-      std::map<std::string, std::vector<int>>& input_shapes,
-      std::map<std::string, Tensor*>&          output,
-      std::vector<int>                         core_list = {});
+  void process(const std::string &graph_name,
+               std::map<std::string, Tensor *> &input,
+               std::map<std::string, std::vector<int>> &input_shapes,
+               std::map<std::string, Tensor *> &output,
+               std::vector<int> core_list = {});
 
 #ifdef PYTHON
-  Engine(
-      pybind11::bytes& bmodel_bytes,
-      int              bmodel_size,
-      int              tpu_id,
-      IOMode           mode);
+  Engine(pybind11::bytes &bmodel_bytes, int bmodel_size, int tpu_id,
+         IOMode mode);
 
-  Engine(
-      pybind11::bytes& bmodel_bytes,
-      int              bmodel_size,
-      const Handle&    handle,
-      IOMode           mode);
+  Engine(pybind11::bytes &bmodel_bytes, int bmodel_size, const Handle &handle,
+         IOMode mode);
 
-  bool load(
-      pybind11::bytes& bmodel,
-      int              bmodel_size);
+  bool load(pybind11::bytes &bmodel, int bmodel_size);
 
-  void process(
-      const std::string&              graph_name,
-      std::map<std::string, Tensor&>& input,
-      std::map<std::string, Tensor&>& output,
-      std::vector<int>                core_list = {});
+  void process(const std::string &graph_name,
+               std::map<std::string, Tensor &> &input,
+               std::map<std::string, Tensor &> &output,
+               std::vector<int> core_list = {});
 
-  void process(
-      const std::string&                       graph_name,
-      std::map<std::string, Tensor&>&          input,
-      std::map<std::string, std::vector<int>>& input_shapes,
-      std::map<std::string, Tensor&>&          output,
-      std::vector<int>                         core_list = {});
+  void process(const std::string &graph_name,
+               std::map<std::string, Tensor &> &input,
+               std::map<std::string, std::vector<int>> &input_shapes,
+               std::map<std::string, Tensor &> &output,
+               std::vector<int> core_list = {});
 
-  std::map<std::string, pybind11::array_t<float>> process(
-      const std::string&                               graph_name,
-      std::map<std::string, pybind11::array_t<float>>& input_tensors,
-      std::vector<int>                                 core_list = {});
-    
+  std::map<std::string, pybind11::array_t<float>>
+  process(const std::string &graph_name,
+          std::map<std::string, pybind11::array_t<float>> &input_tensors,
+          std::vector<int> core_list = {});
+
 #endif
 
- private:
-
+private:
   class Engine_CC;
-  class Engine_CC* const _impl;
+  class Engine_CC *const _impl;
 
   /**
    * @brief Forbidden copy constructor.
@@ -540,7 +501,7 @@ class DECL_EXPORT Engine {
    *
    * @param other An other Engine instance.
    */
-  Engine(const Engine& other) = delete;
+  Engine(const Engine &other) = delete;
 
   /**
    * @brief Forbidden assignment function.
@@ -549,7 +510,7 @@ class DECL_EXPORT Engine {
    * @param other An other Engine instance.
    * @return Reference of a Engine instance.
    */
-  Engine& operator=(const Engine& other) = delete;
+  Engine &operator=(const Engine &other) = delete;
 };
 
-}  // namespace sail
+} // namespace sail

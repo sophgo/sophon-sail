@@ -22,10 +22,10 @@ You may obtain a copy of the License at
 
 #pragma once
 #include <map>
-#include <set>
-#include <vector>
-#include <string>
 #include <memory>
+#include <set>
+#include <string>
+#include <vector>
 
 #include "tensor.h"
 
@@ -39,7 +39,7 @@ namespace sail {
  * input and output tensors between system memory and device memory.
  */
 class Graph {
- public:
+public:
   /**
    * @brief Constructor.
    *
@@ -47,10 +47,7 @@ class Graph {
    * @param p_bmrt Pointer of bmruntime
    * @param name   Name of the graph
    */
-  explicit Graph(
-      bm_handle_t        handle,
-      void*              p_bmrt,
-      const std::string& name);
+  explicit Graph(bm_handle_t handle, void *p_bmrt, const std::string &name);
 
   virtual ~Graph();
 
@@ -60,9 +57,8 @@ class Graph {
    * @param input_dtypes  Data types of input tensors
    * @param output_dtypes Data types of output tensors
    */
-  void init_dtypes(
-      std::map<std::string, bm_data_type_t>* input_dtypes,
-      std::map<std::string, bm_data_type_t>* output_dtypes);
+  void init_dtypes(std::map<std::string, bm_data_type_t> *input_dtypes,
+                   std::map<std::string, bm_data_type_t> *output_dtypes);
 
   /**
    * @brief Allocate system and device memory for all tensors.
@@ -73,10 +69,9 @@ class Graph {
    *     @retval O      Success
    *     @retval others Failure
    */
-  int alloc_tensors(
-      IOMode                                   io_mode,
-      std::map<std::string, std::vector<int>>* input_shapes,
-      std::map<std::string, std::vector<int>>* output_shapes);
+  int alloc_tensors(IOMode io_mode,
+                    std::map<std::string, std::vector<int>> *input_shapes,
+                    std::map<std::string, std::vector<int>> *output_shapes);
 
   /**
    * @brief Set IOMode.
@@ -96,7 +91,7 @@ class Graph {
    * @param tensor_name Tensor name
    * @param data        Pointer to data of tensor
    */
-  void reset_input_tensor(const std::string& tensor_name, void* data);
+  void reset_input_tensor(const std::string &tensor_name, void *data);
 
   /**
    * @brief Inference with builtin tensors.
@@ -113,11 +108,11 @@ class Graph {
    * @param core_list      Those cores will be used to inference
    * @return Real shapes of output tensors
    */
-  std::map<std::string, std::vector<int>> inference(
-      std::map<std::string, Tensor*>&          input,
-      std::map<std::string, std::vector<int>>& input_shapes,
-      std::map<std::string, Tensor*>&          output,
-      std::vector<int>                         core_list = {});
+  std::map<std::string, std::vector<int>>
+  inference(std::map<std::string, Tensor *> &input,
+            std::map<std::string, std::vector<int>> &input_shapes,
+            std::map<std::string, Tensor *> &output,
+            std::vector<int> core_list = {});
 
   /**
    * @brief Inference with provided input/output tensors for static models.
@@ -127,10 +122,10 @@ class Graph {
    * @param core_list      Those cores will be used to inference
    * @return Real shapes of output tensors
    */
-  std::map<std::string, std::vector<int>> inference(
-      std::map<std::string, Tensor*>& input,
-      std::map<std::string, Tensor*>& output,
-      std::vector<int>                core_list = {});
+  std::map<std::string, std::vector<int>>
+  inference(std::map<std::string, Tensor *> &input,
+            std::map<std::string, Tensor *> &output,
+            std::vector<int> core_list = {});
 
   /**
    * @brief Get pointer to a input tensor of specified name.
@@ -138,7 +133,7 @@ class Graph {
    * @param tensor_name Specified tensor name
    * @return Pointer to a Tensor instance
    */
-  Tensor* get_input_tensor(const std::string& name);
+  Tensor *get_input_tensor(const std::string &name);
 
   /**
    * @brief Get pointer to a output tensor of specified name.
@@ -146,14 +141,14 @@ class Graph {
    * @param tensor_name Specified tensor name
    * @return Pointer to a Tensor instance
    */
-  Tensor* get_output_tensor(const std::string& name);
+  Tensor *get_output_tensor(const std::string &name);
 
   /**
    * @brief Clear information of tensors and free device memory structs.
    */
   void free();
 
- private:
+private:
   /**
    * @brief Forbidden copy constructor.
    */
@@ -162,11 +157,12 @@ class Graph {
   /**
    * @brief Forbidden assignment function.
    */
-  Graph& operator=(const Graph &other) = delete;
+  Graph &operator=(const Graph &other) = delete;
 
   class Graph_CC;
-  class Graph_CC* const _impl;
+  class Graph_CC *const _impl;
 };
 
-  void dump_float32_data(const char* name, float *ptensor, int data_len, int data_w, int data_h);
-}  // namespace sail
+void dump_float32_data(const char *name, float *ptensor, int data_len,
+                       int data_w, int data_h);
+} // namespace sail

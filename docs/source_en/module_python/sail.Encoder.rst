@@ -24,6 +24,13 @@ video encoder init:
 
         def __init__(self, output_path: str, device_id: int, enc_fmt: str, pix_fmt: str, enc_params: str, cache_buffer_length: int=5, abort_policy: int=0)
 
+Memory mode encoder initialization (encode output to memory buffer, format is fragmented MP4):
+
+**Memory Mode Encoder Interface:**
+    .. code-block:: python
+
+        def __init__(self, device_id: int, enc_fmt: str, pix_fmt: str, enc_params: str, memory_mode: bool, cache_buffer_length: int=5, abort_policy: int=0)
+
 **Parameters:**
 
 * output_path: str
@@ -57,6 +64,10 @@ The internal cache queue length defaults to 5. sail.Encoder internally maintains
 * abort_policy: int
 
 The reject policy for video_write. 0 for returns -1 immediately. 1 for pop queue header. 2 for clear the queue. 3 for blocking.
+
+* memory_mode: bool
+
+Whether to enable memory mode. When set to True, encoded output goes to a memory buffer instead of a file or stream. The output format is fragmented MP4. No output_path is needed in this mode. Use ``get_encoded_data()`` to retrieve the encoded data after encoding is complete.
 
 is_opened
 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>
@@ -247,3 +258,100 @@ Successfully returned 0, failed to reconnect returned other values.
             encoder = sail.Encoder(out_path, handle, enc_fmt, pix_fmt, enc_params, cache_buffer_length, abort_policy)
             ret = encoder.reconnect()
             print(ret)
+
+get_encoded_data
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+Get encoded data from memory buffer. Must be called after ``release()``. Returns fragmented MP4 data.
+
+**Interface:**
+    .. code-block:: python
+
+        def get_encoded_data(self) -> bytes
+
+**return:**
+
+* data: bytes
+
+Encoded MP4 data. Can be used for network transmission, file saving, etc. Returns empty bytes if the buffer is empty.
+
+**Sample:**
+    .. code-block:: python
+
+        import sophon.sail as sail
+        if __name__ == '__main__':
+            dev_id = 0
+            handle = sail.Handle(dev_id)
+            enc_fmt = "h264_bm"
+            pix_fmt = "I420"
+            enc_params = "width=1920:height=1080:bitrate=2000:gop=32:gop_preset=2:framerate=25"
+            # Create memory mode encoder
+            encoder = sail.Encoder(dev_id, enc_fmt, pix_fmt, enc_params, True)
+            # Write frames...
+            # encoder.video_write(img)
+            # Release encoder (flush all buffered frames)
+            encoder.release()
+            # Get encoded data
+            mp4_data = encoder.get_encoded_data()
+            print(f"Encoded size: {len(mp4_data)} bytes")
+            # Save to file
+            with open("output.mp4", "wb") as f:
+                f.write(mp4_data)
+
+get_encoded_size
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+Get current size of the memory encoding buffer in bytes.
+
+**Interface:**
+    .. code-block:: python
+
+        def get_encoded_size(self) -> int
+
+**return:**
+
+* size: int
+
+Current buffer size in bytes. Returns 0 if not in memory mode.
+
+**Sample:**
+    .. code-block:: python
+
+        import sophon.sail as sail
+        if __name__ == '__main__':
+            dev_id = 0
+            enc_fmt = "h264_bm"
+            pix_fmt = "I420"
+            enc_params = "width=1920:height=1080:bitrate=2000:gop=32:framerate=25"
+            encoder = sail.Encoder(dev_id, enc_fmt, pix_fmt, enc_params, True)
+            # Check encoding progress after writing frames
+            # encoder.video_write(img)
+            print(f"Encoded so far: {encoder.get_encoded_size()} bytes")
+
+reset_encoded_data
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+Reset the memory encoding buffer for reuse with the same encoder instance.
+
+**Interface:**
+    .. code-block:: python
+
+        def reset_encoded_data(self) -> None
+
+**Sample:**
+    .. code-block:: python
+
+        import sophon.sail as sail
+        if __name__ == '__main__':
+            dev_id = 0
+            enc_fmt = "h264_bm"
+            pix_fmt = "I420"
+            enc_params = "width=1920:height=1080:bitrate=2000:gop=32:framerate=25"
+            encoder = sail.Encoder(dev_id, enc_fmt, pix_fmt, enc_params, True)
+            # ... encode first segment ...
+            encoder.release()
+            data1 = encoder.get_encoded_data()
+            # Reset buffer and reuse encoder for next segment
+            encoder.reset_encoded_data()
+            encoder.reconnect()
+            # ... encode second segment ...

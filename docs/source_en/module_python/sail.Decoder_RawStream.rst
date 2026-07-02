@@ -6,11 +6,15 @@ Original stream decoder for H264/H265 decoding。
 __init__
 >>>>>>>>>
 
-**Interface:**
+**Interface1:**
     .. code-block:: python
 
         def __init__(self, tpu_id: int, decformat: str)
 
+**Interface2:**
+    .. code-block:: python
+
+        def __init__(self, tpu_id: int, decformat: str, decode_order: int)
 
 **Parameters:**
 
@@ -22,6 +26,10 @@ The Tensor Computing Processor id that used, which defaults to 0.
 
 Input image format, supports h264 and h265.
 
+* decode_order: int
+
+Input parameter. The decoding order, 0 means presentation order, 1 means stream order. The default is 0.\
+If there are B-frames in the stream, please set this parameter to 0.
 
 read
 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>
@@ -148,7 +156,7 @@ Input parameter. Whether to flush the decoder buffer, the default is False.
 
 Returns 0 if the read is successful and 1 if the read needs to continue, and other values if failed.
 
-Returns 1 is normal for first frame, please continue to input the next frame data.
+While in presentation order, returns 1 is normal for first frame, please continue to input the next frame data.
 
 **Example code:**
     .. code-block:: python
