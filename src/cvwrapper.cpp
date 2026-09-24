@@ -19,6 +19,9 @@ You may obtain a copy of the License at
 #include "internal.h"
 #include "tensor.h"
 #include <fstream>
+#include <map>
+#include <memory>
+#include <mutex>
 #include <spdlog/spdlog.h>
 #include <stack>
 
@@ -86,6 +89,19 @@ bool get_decoder_env_int(std::string env_name, int &value);
 bool get_decoder_env_string(std::string env_name, std::string &env_value);
 
 #ifdef USE_BMCV
+
+namespace {
+std::mutex &decoder_rawstream_vpp_mutex(int device_id) {
+  static std::mutex registry_mutex;
+  static std::map<int, std::unique_ptr<std::mutex>> device_mutexes;
+  std::lock_guard<std::mutex> registry_lock(registry_mutex);
+  std::unique_ptr<std::mutex> &device_mutex = device_mutexes[device_id];
+  if (!device_mutex) {
+    device_mutex.reset(new std::mutex);
+  }
+  return *device_mutex;
+}
+} // namespace
 
 // Function to map AV format to BM format
 int map_avformat_to_bmformat(int avformat) {
@@ -1811,12 +1827,22 @@ int Decoder_RawStream::Decoder_RawStream_CC::fbc_to_bm_image(Handle &handle,
     }
   }
   bmcv_rect_t rect = {0, 0, in.width, in.height};
-  ret = bmcv_image_vpp_convert(handle_.data(), 1, fbc_bmimg, &out, &rect);
-  if (ret != BM_SUCCESS) {
-    SPDLOG_ERROR("Failed to convert FBC bm_image to output bm_image, ret: {}",
-                 ret);
-    bm_image_destroy(fbc_bmimg);
-    return ret;
+  {
+    std::lock_guard<std::mutex> device_lock(
+        decoder_rawstream_vpp_mutex(tpu_id_));
+    ret = bmcv_image_vpp_convert(handle_.data(), 1, fbc_bmimg, &out, &rect);
+    if (ret != BM_SUCCESS) {
+      SPDLOG_ERROR("Failed to convert FBC bm_image to output bm_image, ret: {}",
+                   ret);
+      bm_image_destroy(fbc_bmimg);
+      return ret;
+    }
+    ret = bm_device_sync(handle_.data());
+    if (ret != BM_SUCCESS) {
+      SPDLOG_ERROR("Failed to synchronize FBC conversion, ret: {}", ret);
+      bm_image_destroy(fbc_bmimg);
+      return ret;
+    }
   }
   return 0;
 }
