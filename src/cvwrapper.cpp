@@ -1762,63 +1762,74 @@ int Decoder_RawStream::Decoder_RawStream_CC::fbc_to_bm_image(Handle &handle,
   int fbc_width = dec_ctx_->coded_width;
   ret = bm_image_create(handle_.data(), fbc_height, fbc_width,
                         FORMAT_COMPRESSED, DATA_TYPE_EXT_1N_BYTE, &fbc_bmimg);
-  using ull = unsigned long long;
-  bm_device_mem_t fbc_addr[4];
-  ull device_addr[4] = {0};
-  int plane_nbytes[4] = {0};
-  device_addr[0] = static_cast<ull>(reinterpret_cast<uintptr_t>(in.data[6]));
-  device_addr[1] = static_cast<ull>(reinterpret_cast<uintptr_t>(in.data[4]));
-  device_addr[2] = static_cast<ull>(reinterpret_cast<uintptr_t>(in.data[7]));
-  device_addr[3] = static_cast<ull>(reinterpret_cast<uintptr_t>(in.data[5]));
-  plane_nbytes[0] = in.height * in.linesize[4];
-  plane_nbytes[1] = static_cast<int>(in.height * in.linesize[5] / 2);
-  plane_nbytes[2] = in.linesize[6];
-  plane_nbytes[3] = in.linesize[7];
-  fbc_addr[0] = bm_mem_from_device(device_addr[0], plane_nbytes[0]);
-  fbc_addr[1] = bm_mem_from_device(device_addr[1], plane_nbytes[1]);
-  fbc_addr[2] = bm_mem_from_device(device_addr[2], plane_nbytes[2]);
-  fbc_addr[3] = bm_mem_from_device(device_addr[3], plane_nbytes[3]);
-  bm_image_attach(fbc_bmimg, fbc_addr);
   if (ret != BM_SUCCESS) {
-    SPDLOG_ERROR("Failed to attach device memory to bm_image, ret: {}", ret);
-    bm_image_destroy(fbc_bmimg);
+    SPDLOG_ERROR("Failed to create FBC bm_image, ret: {}", ret);
     return ret;
   }
-  if (out.image_private == nullptr) {
-    ret = bm_image_create(handle_.data(), in.height, in.width, out_format_,
-                          DATA_TYPE_EXT_1N_BYTE, &out);
+
+  // fbc_bmimg owns a temporary image descriptor from this point. Keep all
+  // exits after creation behind one cleanup point so success and failure paths
+  // both destroy it exactly once.
+  do {
+    using ull = unsigned long long;
+    bm_device_mem_t fbc_addr[4];
+    ull device_addr[4] = {0};
+    int plane_nbytes[4] = {0};
+    device_addr[0] = static_cast<ull>(reinterpret_cast<uintptr_t>(in.data[6]));
+    device_addr[1] = static_cast<ull>(reinterpret_cast<uintptr_t>(in.data[4]));
+    device_addr[2] = static_cast<ull>(reinterpret_cast<uintptr_t>(in.data[7]));
+    device_addr[3] = static_cast<ull>(reinterpret_cast<uintptr_t>(in.data[5]));
+    plane_nbytes[0] = in.height * in.linesize[4];
+    plane_nbytes[1] = static_cast<int>(in.height * in.linesize[5] / 2);
+    plane_nbytes[2] = in.linesize[6];
+    plane_nbytes[3] = in.linesize[7];
+    fbc_addr[0] = bm_mem_from_device(device_addr[0], plane_nbytes[0]);
+    fbc_addr[1] = bm_mem_from_device(device_addr[1], plane_nbytes[1]);
+    fbc_addr[2] = bm_mem_from_device(device_addr[2], plane_nbytes[2]);
+    fbc_addr[3] = bm_mem_from_device(device_addr[3], plane_nbytes[3]);
+
+    ret = bm_image_attach(fbc_bmimg, fbc_addr);
     if (ret != BM_SUCCESS) {
-      SPDLOG_ERROR("Failed to create bm_image, ret: {}", ret);
-      bm_image_destroy(fbc_bmimg);
-      return ret;
+      SPDLOG_ERROR("Failed to attach device memory to bm_image, ret: {}", ret);
+      break;
     }
-  }
-  if (!bm_image_is_attached(out)) {
-    unsigned int chip_id = -1;
-    ret = bm_get_chipid(handle_.data(), &chip_id);
-    if (ret != BM_SUCCESS) {
-      SPDLOG_ERROR("Failed to get chip ID, ret: {}", ret);
-      bm_image_destroy(fbc_bmimg);
-      return ret;
+
+    if (out.image_private == nullptr) {
+      ret = bm_image_create(handle_.data(), in.height, in.width, out_format_,
+                            DATA_TYPE_EXT_1N_BYTE, &out);
+      if (ret != BM_SUCCESS) {
+        SPDLOG_ERROR("Failed to create bm_image, ret: {}", ret);
+        break;
+      }
     }
-    int heap_mask = chip_id == 0x1686A200 ? 2 : 6;
-    ret = bm_image_alloc_dev_mem_heap_mask(out, heap_mask);
+
+    if (!bm_image_is_attached(out)) {
+      unsigned int chip_id = -1;
+      ret = bm_get_chipid(handle_.data(), &chip_id);
+      if (ret != BM_SUCCESS) {
+        SPDLOG_ERROR("Failed to get chip ID, ret: {}", ret);
+        break;
+      }
+      int heap_mask = chip_id == 0x1686A200 ? 2 : 6;
+      ret = bm_image_alloc_dev_mem_heap_mask(out, heap_mask);
+      if (ret != BM_SUCCESS) {
+        SPDLOG_ERROR("Failed to allocate device memory for bm_image, ret: {}",
+                     ret);
+        break;
+      }
+    }
+
+    bmcv_rect_t rect = {0, 0, in.width, in.height};
+    ret = bmcv_image_vpp_convert(handle_.data(), 1, fbc_bmimg, &out, &rect);
     if (ret != BM_SUCCESS) {
-      SPDLOG_ERROR("Failed to allocate device memory for bm_image, ret: {}",
+      SPDLOG_ERROR("Failed to convert FBC bm_image to output bm_image, ret: {}",
                    ret);
-      bm_image_destroy(fbc_bmimg);
-      return ret;
+      break;
     }
-  }
-  bmcv_rect_t rect = {0, 0, in.width, in.height};
-  ret = bmcv_image_vpp_convert(handle_.data(), 1, fbc_bmimg, &out, &rect);
-  if (ret != BM_SUCCESS) {
-    SPDLOG_ERROR("Failed to convert FBC bm_image to output bm_image, ret: {}",
-                 ret);
-    bm_image_destroy(fbc_bmimg);
-    return ret;
-  }
-  return 0;
+  } while (0);
+
+  bm_image_destroy(fbc_bmimg);
+  return ret;
 }
 
 int Decoder_RawStream::Decoder_RawStream_CC::flush_decoder() {
